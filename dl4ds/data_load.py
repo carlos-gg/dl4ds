@@ -5,23 +5,7 @@ import sys
 sys.path.append('/esarchive/scratch/cgomez/pkgs/ecubevis/')
 import ecubevis as ecv
 
-
-def get_coords(hr_size, lr_size, scale):
-    """ 
-    for METASR. move to another file
-    """
-    # scaling factor between the sizes of the LR and HR images
-    scale_y = float(hr_size[0])/lr_size[0]
-    scale_x = float(hr_size[1])/lr_size[1]
-    # multi-dimensional grid of coordinates, with the size of the HR image
-    coords = np.mgrid[0:hr_size[0], 0:hr_size[1]]    
-    coords = coords.astype("float32")
-    coords = np.transpose(coords, [1, 2, 0])  ## transposing   
-    coords[:,:,0] = (coords[:,:,0]/scale_y) % 1
-    coords[:,:,1] = (coords[:,:,1]/scale_x) % 1    
-    coords = np.concatenate([coords, np.ones((hr_size[0], hr_size[1],1),"float32") / scale], 
-                            axis=-1)   
-    return coords
+from .metasr import get_coords
 
 
 def create_pair_hr_lr(array, index, scale, patch_size, array_predictors=None, 
