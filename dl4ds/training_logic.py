@@ -1,3 +1,4 @@
+from builtins import ValueError
 import os
 import livelossplot
 import numpy as np
@@ -7,17 +8,32 @@ from tensorflow.keras.optimizers import Adam
 from tensorflow.keras.optimizers.schedules import PiecewiseConstantDecay
 from tensorflow.keras.callbacks import EarlyStopping
 from matplotlib.pyplot import show
-from .utils import Timing
+from .utils import Timing, list_devices
 from .data_load import data_loader, get_coords
 
 
-def training(model_architecture, x_train, x_val, x_test, model='edsr', scale=20, 
-             interpolation='nearest', patch_size=40, batch_size=64, epochs=60, 
-             steps_per_epoch=1000, validation_steps=100, test_steps=1000,
-             learning_rate=1e-4, lr_decay_after=1e5,
-             early_stopping=False, patience=6, min_delta=0, 
-             savetoh5_name=None, savetoh5_dir='./models/', 
-             plot='plt', verbosity='max', **architecture_params):
+def training(model_function, 
+             x_train, x_val, x_test,  
+             scale=20, 
+             interpolation='nearest', 
+             patch_size=40, 
+             batch_size=64, 
+             epochs=60, 
+             steps_per_epoch=1000, 
+             validation_steps=100, 
+             test_steps=1000,
+             learning_rate=1e-4, 
+             lr_decay_after=1e5,
+             early_stopping=False, 
+             patience=6, 
+             min_delta=0, 
+             savetoh5_name=None, 
+             savetoh5_dir='./models/', 
+             device='GPU', 
+             plot='plt', 
+             show_plot=True, 
+             verbosity='max', 
+             **architecture_params):
     """    
     TO-DO:
     * add other losses (SSIM, SSIM+MAE)
@@ -26,7 +42,6 @@ def training(model_architecture, x_train, x_val, x_test, model='edsr', scale=20,
     
     """
     timing = Timing()
-    which_model = model
     
     if verbosity == 'max':
         verbose = 1
@@ -34,18 +49,28 @@ def training(model_architecture, x_train, x_val, x_test, model='edsr', scale=20,
         verbose = 2
     else:
         verbose = 0
-        
-    strategy = tf.distribute.MirroredStrategy()  
+    
+    if device == 'GPU':
+        devices = list_devices('logical', gpu=True, verbose=True)
+    elif device == 'CPU':
+        devices = list_devices('logical', gpu=False, verbose=True)
+    else:
+        raise ValueError('device not recognized')
+    strategy = tf.distribute.MirroredStrategy(devices)  
     print ('Number of devices: {}'.format(strategy.num_replicas_in_sync))
     batch_size_per_replica = batch_size
     global_batch_size = batch_size_per_replica * strategy.num_replicas_in_sync
     
+    model_architecture = model_function.__name__
+    if model_architecture not in ['edsr', 'metasr']:
+        raise ValueError('`model_function` must be EDSR or METASR')
+
     ds_train = data_loader(x_train, scale=scale, batch_size=global_batch_size, 
-                           patch_size=patch_size, model=which_model, interpolation=interpolation)
+                           patch_size=patch_size, model=model_architecture, interpolation=interpolation)
     ds_val = data_loader(x_val, scale=scale, batch_size=global_batch_size, 
-                         patch_size=patch_size, model=which_model, interpolation=interpolation)
+                         patch_size=patch_size, model=model_architecture, interpolation=interpolation)
     ds_test = data_loader(x_test, scale=scale, batch_size=global_batch_size, 
-                          patch_size=patch_size, model=which_model, interpolation=interpolation)
+                          patch_size=patch_size, model=model_architecture, interpolation=interpolation)
 
     n_channels = x_train.shape[-1]
     
@@ -58,11 +83,18 @@ def training(model_architecture, x_train, x_val, x_test, model='edsr', scale=20,
         plotlosses = livelossplot.PlotLossesKerasTF()
         callbacks.append(plotlosses) 
 
+    # mean and std for standardization
+    x_train_mean = np.mean(x_train, axis=(0,1,2))
+    x_train_std = np.std(x_train, axis=(0))
+    x_train_std = np.mean(x_train_std, axis=(0,1))
+    architecture_params['x_train_mean'] = x_train_mean
+    architecture_params['x_train_std'] = x_train_std
+
     with strategy.scope():
-        if which_model == 'edsr':
-            model = model_architecture(scale=scale, n_channels=n_channels, **architecture_params)
-        elif which_model == 'metasr':
-            model = model_architecture(n_channels=n_channels, **architecture_params)
+        if model_architecture == 'edsr':
+            model = model_function(scale=scale, n_channels=n_channels, **architecture_params)
+        elif model_architecture == 'metasr':
+            model = model_function(n_channels=n_channels, **architecture_params)
         if verbose == 1:
             model.summary(line_length=150)
 
@@ -81,24 +113,18 @@ def training(model_architecture, x_train, x_val, x_test, model='edsr', scale=20,
         print(f'\nScore on the test set: {score}')
         
         if plot == 'plt':
-            plot_history(fithist.history)
-            show()
+            if savetoh5_name is not None and savetoh5_dir is not None:
+                learning_curve_name = os.path.join(savetoh5_dir, savetoh5_name) + '_learncurve.png'
+            else:
+                learning_curve_name = None
+            plot_history(fithist.history, path=learning_curve_name)
+            if show_plot:
+                show()
         
         if savetoh5_name is not None and savetoh5_dir is not None:
-            # Saving model weights
             os.makedirs(savetoh5_dir, exist_ok=True)
-            model.save(os.path.join(savetoh5_dir, savetoh5_name))
+            model.save(os.path.join(savetoh5_dir, savetoh5_name) + '.h5')
 
-            if which_model == 'edsr':
-                x_test_pred = model.predict(x_test)
-            elif which_model == 'metasr':
-                hr_y, hr_x = np.squeeze(x_test[0]).shape
-                lr_x = int(hr_x / scale)
-                lr_y = int(hr_y / scale)
-                coords = np.asarray(len(x_test) * [get_coords((hr_y, hr_x), (lr_y, lr_x), scale)])
-                x_test_pred = model.predict((x_test, coords))
-            np.save(os.path.join(savetoh5_dir, savetoh5_name) + '.npy', x_test_pred)
-            
         timing.runtime()
         
         return model
