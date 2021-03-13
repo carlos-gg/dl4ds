@@ -2,25 +2,31 @@ import tensorflow as tf
 from datetime import datetime
 
 
-def gpu_memory_growth(verbose=True):
-    physical_devices = gpu_get_devices() 
+def set_gpu_memory_growth(verbose=True):
+    physical_devices = list_devices(verbose=verbose) 
     for gpu in physical_devices:
         tf.config.experimental.set_memory_growth(gpu, True)
     print(physical_devices)
 
 
-def gpu_get_devices(which='physical'):
+def list_devices(which='physical', gpu=True, verbose=True):
+    if gpu:
+        dev = 'GPU'
+    else:
+        dev = 'CPU'
     if which == 'physical':
-        devices = tf.config.list_physical_devices('GPU')
+        devices = tf.config.list_physical_devices(dev)
     elif which == 'logical':
-        devices = tf.config.list_logical_devices('GPU')
+        devices = tf.config.list_logical_devices(dev)
+    if verbose:
+        print(devices)
     return devices
 
 
-def gpu_set_visible(indices=(0)):
-    physical_devices = gpu_get_devices('physical')
+def set_visible_gpu(indices=(0)):
+    physical_devices = list_devices('physical')
     tf.config.set_visible_devices(physical_devices[indices], 'GPU') 
-    print(gpu_get_devices('logical'))
+    print(list_devices('logical'))
 
 
 class Timing():
