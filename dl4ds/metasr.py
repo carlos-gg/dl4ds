@@ -1,3 +1,4 @@
+import numpy as np
 import tensorflow as tf
 from tensorflow.keras.models import Model
 from tensorflow.keras.layers import Layer, Dense, Conv2D, Input, Add, Lambda
@@ -5,7 +6,7 @@ from tensorflow.keras.layers import Layer, Dense, Conv2D, Input, Add, Lambda
 from .blocks import normalize, denormalize, residual_block
 
 
-def metasr_model(n_channels, n_filters, n_res_blocks, x_train_mean, x_train_std, meta_ksize=(3,3)):
+def metasr(n_channels, n_filters, n_res_blocks, x_train_mean, x_train_std, meta_ksize=(3,3)):
     """
     EDSR with MetaUpsample module
     """
