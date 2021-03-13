@@ -1,3 +1,4 @@
+from builtins import ValueError
 import cv2
 import tensorflow as tf
 import numpy as np
@@ -5,12 +6,16 @@ from matplotlib import interactive, pyplot as plt
 from sklearn.metrics import mean_squared_error
 from mpl_toolkits.axes_grid1 import make_axes_locatable
 from scipy.stats import spearmanr, pearsonr
+import os
 import seaborn as sns
 sns.set(style="white")
 
 import sys
 sys.path.append('/esarchive/scratch/cgomez/pkgs/ecubevis/')
 import ecubevis as ecv
+
+from .metasr import get_coords
+
 
 
 def compute_corr(y_t, y_that, mode='spearman'):
@@ -35,7 +40,7 @@ def compute_corr(y_t, y_that, mode='spearman'):
     return corrmap
 
 
-def pxwise_metrics(y_test, y_test_hat, dpi=100):
+def pxwise_metrics(y_test, y_test_hat, dpi=100, savepath=None):
     """ 
     MSE
     https://keras.io/api/losses/regression_losses/#mean_squared_error-function
@@ -79,45 +84,49 @@ def pxwise_metrics(y_test, y_test_hat, dpi=100):
 
     ### Plotting the MSE map
     subpti = f'MSE map ($\mu$ = {global_mse:.6f})'
-    ecv.plot_ndarray(pxwise_mse, dpi=dpi, subplot_titles=(subpti), cmap='viridis', interactive=False)
+    ecv.plot_ndarray(pxwise_mse, dpi=dpi, subplot_titles=(subpti), cmap='viridis', 
+                     interactive=False, save=os.path.join(savepath, 'mse.png'))
 
     ### Plotting the Spearman correlation coefficient
     spearman_corrmap = compute_corr(y_test, y_test_hat)
     mean_spcorr = np.mean(spearman_corrmap)
     subpti = f'Spearman correlation map ($\mu$ = {mean_spcorr:.6f})'
-    ecv.plot_ndarray(spearman_corrmap, dpi=dpi, subplot_titles=(subpti), cmap='magma', interactive=False)
+    ecv.plot_ndarray(spearman_corrmap, dpi=dpi, subplot_titles=(subpti), cmap='magma', 
+                     interactive=False, save=os.path.join(savepath, 'corr_spear.png'))
 
     # ### Plotting the Pearson correlation coefficient
     pearson_corrmap = compute_corr(y_test, y_test_hat, mode='pearson')
     mean_pecorr = np.mean(pearson_corrmap)
     subpti = f'Pearson correlation map ($\mu$ = {mean_pecorr:.6f})'
-    ecv.plot_ndarray(pearson_corrmap, dpi=dpi, subplot_titles=(subpti), cmap='magma', interactive=False)
-        
-    ### Plotting violin plots
-    f, ax = plt.subplots(1, 5, figsize=(12, 4))
+    ecv.plot_ndarray(pearson_corrmap, dpi=dpi, subplot_titles=(subpti), cmap='magma', 
+                     interactive=False, save=os.path.join(savepath, 'corr_pears.png'))
 
-    ax_ = sns.violinplot(x=psnr, ax=ax[0], orient='v')
-    plt.setp(ax_.collections, alpha=0.5)
-    ax_.set_title('PSNR')
-    ax_.set_xlabel(f'$\mu$ = {mean_psnr:.6f} \n$\sigma$ = {std_psnr:.6f}')
+    if savepath is None:      
+        ### Plotting violin plots
+        f, ax = plt.subplots(1, 5, figsize=(12, 4))
 
-    ax_ = sns.violinplot(x=ssim, ax=ax[1], orient='v')
-    plt.setp(ax_.collections, alpha=0.5)
-    ax_.set_title('SSIM')
-    ax_.set_xlabel(f'$\mu$ = {mean_ssim:.6f} \n$\sigma$ = {std_ssim:.6f}')
+        ax_ = sns.violinplot(x=psnr, ax=ax[0], orient='v')
+        plt.setp(ax_.collections, alpha=0.5)
+        ax_.set_title('PSNR')
+        ax_.set_xlabel(f'$\mu$ = {mean_psnr:.6f} \n$\sigma$ = {std_psnr:.6f}')
 
-    ax_ = sns.violinplot(x=maes_pairs, ax=ax[2], orient='v')
-    plt.setp(ax_.collections, alpha=0.5)
-    ax_.set_title('MAE')
-    ax_.set_xlabel(f'$\mu$ = {mean_mae:.6f} \n$\sigma$ = {std_mae:.6f}')
+        ax_ = sns.violinplot(x=ssim, ax=ax[1], orient='v')
+        plt.setp(ax_.collections, alpha=0.5)
+        ax_.set_title('SSIM')
+        ax_.set_xlabel(f'$\mu$ = {mean_ssim:.6f} \n$\sigma$ = {std_ssim:.6f}')
 
-    ax_ = sns.violinplot(x=mses_pairs, ax=ax[3], orient='v')
-    plt.setp(ax_.collections, alpha=0.5)
-    ax_.set_title('MSE')
-    ax_.set_xlabel(f'$\mu$ = {mean_mse:.6f} \n$\sigma$ = {std_mse:.6f}')
+        ax_ = sns.violinplot(x=maes_pairs, ax=ax[2], orient='v')
+        plt.setp(ax_.collections, alpha=0.5)
+        ax_.set_title('MAE')
+        ax_.set_xlabel(f'$\mu$ = {mean_mae:.6f} \n$\sigma$ = {std_mae:.6f}')
 
-    f.tight_layout()
-    plt.show()
+        ax_ = sns.violinplot(x=mses_pairs, ax=ax[3], orient='v')
+        plt.setp(ax_.collections, alpha=0.5)
+        ax_.set_title('MSE')
+        ax_.set_xlabel(f'$\mu$ = {mean_mse:.6f} \n$\sigma$ = {std_mse:.6f}')
+
+        f.tight_layout()
+        plt.show()
 
     print('Metrics on y_test and y_test_hat:\n')
     print(f'PSNR \tmu = {mean_psnr:.6f} \tsigma = {std_psnr:.8f}')
@@ -130,112 +139,70 @@ def pxwise_metrics(y_test, y_test_hat, dpi=100):
     return pxwise_mse, spearman_corrmap, pearson_corrmap
 
 
-def plot_sample(model, lr_image, dpi=150):
+def plot_sample(model, lr_image, dpi=150, model_architecture='edsr', scale=None, savepath=None):
+    model_architecture = model.name
     input_image = np.expand_dims(np.asarray(lr_image, "float32"), axis=0)
-    pred_image = model.predict(input_image, batch_size=1)
+    if model_architecture == 'edsr':
+        pred_image = model.predict(input_image, batch_size=1)
+    elif model_architecture == 'metasr':
+        if scale is None:
+            raise ValueError('`scale` must be set for `metasr` model')
+        lr_y, lr_x = np.squeeze(lr_image).shape
+        hr_y, hr_x = int(lr_y * scale), int(lr_x * scale)
+        coords = get_coords((hr_y, hr_x), (lr_y, lr_x), scale)
+        coords = np.asarray([coords])
+        pred_image = model.predict((input_image, coords))
     ecv.plot_ndarray((np.squeeze(lr_image), np.squeeze(pred_image)), interactive=False, 
-                     subplot_titles=('LR image', 'SR image'), dpi=dpi)
+                     subplot_titles=('LR image', 'SR image'), dpi=dpi,
+                     save=os.path.join(savepath, 'sample_nogt.png'))
     return pred_image
 
-def plot_sample_with_gt(model, hr_image, scale, dpi=150): 
+def plot_sample_with_gt(model, hr_image, scale, dpi=150, savepath=None): 
+    model_architecture = model.name
     lr_image = hr_image.copy()
     hr_y, hr_x, _ = lr_image.shape
     lr_x = int(hr_x / scale)
     lr_y = int(hr_y / scale) 
     lr_image = cv2.resize(lr_image, (lr_x, lr_y), interpolation=cv2.INTER_NEAREST)
-    lr_image = np.expand_dims(lr_image, -1)
-    lr_image = tf.convert_to_tensor(lr_image, np.float32)
-    
-    pred_image = model.predict(np.expand_dims(lr_image, 0), batch_size=1)
-    
+    lr_image = np.expand_dims(lr_image, -1)    
+    if model_architecture == 'edsr':
+        pred_image = model.predict(np.expand_dims(lr_image, 0), batch_size=1)
+    elif model_architecture == 'metasr':
+        coords = get_coords((hr_y, hr_x), (lr_y, lr_x), scale)
+        coords = np.asarray([coords])
+        pred_image = model.predict((np.expand_dims(lr_image, 0), coords), batch_size=1)
     residuals = np.squeeze(hr_image)- np.squeeze(pred_image)
     half_range = (hr_image.max() - hr_image.min()) / 2
-
-    ecv.plot_ndarray((np.squeeze(lr_image), np.squeeze(pred_image), np.squeeze(hr_image), residuals), interactive=False,
+    ecv.plot_ndarray((np.squeeze(lr_image), np.squeeze(pred_image), np.squeeze(hr_image), residuals), 
+                     interactive=False, dpi=dpi, axis=False, 
                      subplot_titles=('LR image', 'SR image (Yhat)', 'Ground truth (GT)', 'Residuals (GT - Yhat)'), 
-                     dpi=dpi, axis=False)
-
+                     save=os.path.join(savepath, 'sample_gt.png'), subplots_horpadding=0.05)
     return pred_image
 
 
-# def plot_sample(x_test, y_test, y_test_hat, index=None, xvar=['Geopotential 100'], 
-#                 yvar='Precipitation', dynamicrange='yhat', cmap='viridis', 
-#                 vmin=None, vmax=None):
-#     """ 
-#     """     
-#     if y_test.ndim == 5:
-#         y_test = np.squeeze(y_test, -1)
-#         y_test_hat = np.squeeze(y_test_hat, -1)
-#         x_test = np.squeeze(x_test, -1)
+def predict_with_gt(model, x_test, scale, savepath=None):
+    """
+    """
+    model_architecture = model.name
+    _, hr_y, hr_x, _ = x_test.shape
+    lr_x = int(hr_x / scale)
+    lr_y = int(hr_y / scale) 
+    x_test_lr = np.zeros((x_test.shape[0], lr_y, lr_x, 1))
+    for i in range(x_test.shape[0]):
+        x_test_lr[i, :, :, 0] = cv2.resize(x_test[i], (lr_x, lr_y), interpolation=cv2.INTER_NEAREST)
+    
+    print('Downsampled x_test shape: ', x_test_lr.shape)
 
-#     ### Grabbing the test sample and the model prediction
-#     if index is None:
-#         index = np.random.randint(y_test.shape[0])
-#     print(f'\nShowing test sample with index: {index} \n')
-#     x = x_test[index]
-#     yhat = y_test_hat[index,:,:,0].copy()
-#     y = y_test[index,:,:,0].copy()
+    if model_architecture == 'edsr':
+        x_test_pred = model.predict(x_test_lr)
+    elif model_architecture == 'metasr':
+        hr_y, hr_x = np.squeeze(x_test[0]).shape
+        lr_x = int(hr_x / scale)
+        lr_y = int(hr_y / scale)
+        coords = np.asarray(len(x_test) * [get_coords((hr_y, hr_x), (lr_y, lr_x), scale)])
+        x_test_pred = model.predict((x_test, coords))
 
-#     f, ax = plt.subplots(1, len(xvar), figsize=(4 * len(xvar), 3), dpi=100,
-#                          sharey=True)
-#     for i, label in enumerate(xvar):
-#         ax[i].imshow(x[:,:,i], origin='lower', cmap=cmap)
-#         ax[i].set_title(f'{label}, test sample', fontsize=8)
-#         ax[i].set_xticks([])
-#         ax[i].set_yticks([])
-#         # if i == 0:
-#             # ax[i].set_ylabel("$\it{lat}$", fontsize=10)
-#         # ax[i].set_xlabel("$\it{lon}$", fontsize=10)
-#     f.subplots_adjust(wspace=0.003)
-
-#     if vmin is None:
-#         vmin = dict()
-#     if vmax is None:
-#         vmax = dict()
-
-#     f, ax = plt.subplots(1, 3, figsize=(20, 8), dpi=100, sharey=True)
-
-#     if dynamicrange == 'yhat':
-#         vminy = vminyhat = vmindif = yhat.min()
-#         vmaxy = vmaxyhat = vmaxdif = yhat.max() 
-#     elif dynamicrange == 'y':
-#         vminy = vminyhat = vmindif = y.min()
-#         vmaxy = vmaxyhat = vmaxdif = y.max()
-#     elif dynamicrange is None:
-#         if isinstance(vmin, dict):
-#             vminy = vmin.get('y')
-#             vminyhat = vmin.get('yhat')
-#             vmindif = vmin.get('dif')
-#         else:
-#             vminy = vminyhat = vmindif = None  
-#         if isinstance(vmax, dict):
-#             vmaxy = vmax.get('y')
-#             vmaxyhat = vmax.get('yhat')
-#             vmaxdif = vmax.get('dif')
-#         else:
-#             vmaxy = vmaxyhat = vmaxdif = None
-
-#     imprlr0 = ax[0].imshow(y, origin='ĺower', vmin=vminy, vmax=vmaxy, cmap=cmap)
-#     # ax[0].set_title(f'{yvar}, ground truth', fontsize=10)
-#     ax[0].set_title(f'Ground truth', fontsize=12)
-#     ax[0].set_xticks([])
-#     ax[0].set_yticks([])
-#     # ax[0].set_ylabel("$\it{lat}$", fontsize=10)
-#     # ax[0].set_xlabel("$\it{lon}$", fontsize=10)
-#     plot_cbar(f, ax[0], imprlr0)
-
-#     imprlr1 = ax[1].imshow(yhat, origin='ĺower', vmin=vminyhat, vmax=vmaxyhat, 
-#                            cmap=cmap)
-#     ax[1].set_title(f'Model output', fontsize=12)
-#     ax[1].set_xticks([])
-#     ax[1].set_yticks([])
-#     # ax[1].set_xlabel("$\it{lon}$", fontsize=10)
-#     plot_cbar(f, ax[1], imprlr1)
-
-#     imprlr1 = ax[2].imshow(y - yhat, origin='ĺower', cmap=cmap, 
-#                            vmin=vmindif, vmax=vmaxdif)
-#     ax[2].set_title(f'Residuals', fontsize=12)
-#     ax[2].set_xticks([])
-#     ax[2].set_yticks([])
-#     # ax[2].set_xlabel("$\it{lon}$", fontsize=10)
-#     plot_cbar(f, ax[2], imprlr1)
+    if savepath is not None:
+        name = os.path.join(savepath, 'x_test_pred.npy')
+        np.save(name, x_test_pred)
+    return x_test_pred
