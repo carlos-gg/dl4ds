@@ -6,13 +6,12 @@ from tensorflow.keras.layers import Layer, Dense, Conv2D, Input, Add, Lambda
 from .blocks import normalize, denormalize, residual_block
 
 
-def metasr(n_channels, n_filters, n_res_blocks, x_train_mean, x_train_std, meta_ksize=(3,3)):
+def metasr(n_channels, n_filters, n_res_blocks, meta_ksize=(3,3)):
     """
     EDSR with MetaUpsample module
     """
     x_in = Input(shape=(None, None, n_channels))
-    x = Lambda(normalize)((x_in, x_train_mean, x_train_std))
-    x = b = Conv2D(n_filters, 3, padding='same')(x)
+    x = b = Conv2D(n_filters, 3, padding='same')(x_in)
     for i in range(n_res_blocks):
         b = residual_block(b, n_filters)
     b = Conv2D(n_filters, 3, padding='same')(b)
@@ -21,10 +20,29 @@ def metasr(n_channels, n_filters, n_res_blocks, x_train_mean, x_train_std, meta_
     coord = Input((None, None, 3))
     meta_w = Dense(256, activation="relu")(coord)
     meta_w = Dense(meta_ksize[0] * meta_ksize[1] * n_filters * n_channels)(meta_w)
-    x = MetaUpSample(n_channels, meta_ksize)([x, meta_w])
+    x = MetaUpSample(1, meta_ksize)([x, meta_w])
     
-    x = Lambda(denormalize)((x, x_train_mean, x_train_std))
     return Model([x_in, coord], [x], name='metasr')
+
+# def metasr(n_channels, n_filters, n_res_blocks, x_train_mean, x_train_std, meta_ksize=(3,3)):
+#     """
+#     EDSR with MetaUpsample module
+#     """
+#     x_in = Input(shape=(None, None, n_channels))
+#     x = Lambda(normalize)((x_in, x_train_mean, x_train_std))
+#     x = b = Conv2D(n_filters, 3, padding='same')(x)
+#     for i in range(n_res_blocks):
+#         b = residual_block(b, n_filters)
+#     b = Conv2D(n_filters, 3, padding='same')(b)
+#     x = Add()([x, b])
+
+#     coord = Input((None, None, 3))
+#     meta_w = Dense(256, activation="relu")(coord)
+#     meta_w = Dense(meta_ksize[0] * meta_ksize[1] * n_filters * n_channels)(meta_w)
+#     x = MetaUpSample(n_channels, meta_ksize)([x, meta_w])
+    
+#     x = Lambda(denormalize)((x, x_train_mean, x_train_std))
+#     return Model([x_in, coord], [x], name='metasr')
 
 
 class MetaUpSample(Layer):
