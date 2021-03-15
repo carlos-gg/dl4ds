@@ -1,4 +1,3 @@
-from builtins import ValueError
 import cv2
 import tensorflow as tf
 import numpy as np
@@ -139,11 +138,25 @@ def pxwise_metrics(y_test, y_test_hat, dpi=100, savepath=None):
     return pxwise_mse, spearman_corrmap, pearson_corrmap
 
 
-def plot_sample(model, lr_image, dpi=150, model_architecture='edsr', scale=None, savepath=None):
+def plot_sample(model, lr_image, topography=None, landocean=None, dpi=150, 
+                scale=None, savepath=None, plot=True):
     model_architecture = model.name
-    input_image = np.expand_dims(np.asarray(lr_image, "float32"), axis=0)
+    if lr_image.ndim == 2:
+        input_image = np.expand_dims(np.asarray(lr_image, "float32"), axis=-1)
+    elif lr_image.ndim == 3:
+        input_image = np.asarray(lr_image, "float32")
+    if topography is not None: 
+        topography = cv2.resize(topography, (lr_image.shape[1], lr_image.shape[0]), 
+                                interpolation=cv2.INTER_CUBIC)
+        input_image = np.concatenate([input_image, np.expand_dims(topography, -1)], axis=2)
+    if landocean is not None: 
+        landocean = cv2.resize(landocean, (lr_image.shape[1], lr_image.shape[0]), 
+                               interpolation=cv2.INTER_NEAREST)
+        input_image = np.concatenate([input_image, np.expand_dims(landocean, -1)], axis=2)
+    
+    input_image = np.expand_dims(input_image, 0)
     if model_architecture == 'edsr':
-        pred_image = model.predict(input_image, batch_size=1)
+        pred_image = model.predict(input_image)
     elif model_architecture == 'metasr':
         if scale is None:
             raise ValueError('`scale` must be set for `metasr` model')
@@ -152,57 +165,47 @@ def plot_sample(model, lr_image, dpi=150, model_architecture='edsr', scale=None,
         coords = get_coords((hr_y, hr_x), (lr_y, lr_x), scale)
         coords = np.asarray([coords])
         pred_image = model.predict((input_image, coords))
-    ecv.plot_ndarray((np.squeeze(lr_image), np.squeeze(pred_image)), interactive=False, 
-                     subplot_titles=('LR image', 'SR image'), dpi=dpi,
-                     save=os.path.join(savepath, 'sample_nogt.png'))
+    
+    if plot:
+        if savepath is not None:
+            savepath = os.path.join(savepath, 'sample_nogt.png')
+        else:
+            savepath = None
+
+        ecv.plot_ndarray((np.squeeze(lr_image), np.squeeze(pred_image)), interactive=False, 
+                        subplot_titles=('LR image', 'SR image'), dpi=dpi,
+                        save=savepath)
     return pred_image
 
-def plot_sample_with_gt(model, hr_image, scale, dpi=150, savepath=None): 
-    model_architecture = model.name
-    lr_image = hr_image.copy()
-    hr_y, hr_x, _ = lr_image.shape
+
+def plot_sample_with_gt(model, hr_image, scale, topography=None, landocean=None, 
+                        dpi=150, interpolation='nearest', savepath=None):
+    if interpolation == 'nearest':
+        interp = cv2.INTER_NEAREST
+    elif interpolation == 'bicubic':
+        interp = cv2.INTER_CUBIC
+    elif interpolation == 'bilinear':
+        interp = cv2.INTER_LINEAR 
+
+    hr_y, hr_x, _ = hr_image.shape
     lr_x = int(hr_x / scale)
     lr_y = int(hr_y / scale) 
-    lr_image = cv2.resize(lr_image, (lr_x, lr_y), interpolation=cv2.INTER_NEAREST)
-    lr_image = np.expand_dims(lr_image, -1)    
-    if model_architecture == 'edsr':
-        pred_image = model.predict(np.expand_dims(lr_image, 0), batch_size=1)
-    elif model_architecture == 'metasr':
-        coords = get_coords((hr_y, hr_x), (lr_y, lr_x), scale)
-        coords = np.asarray([coords])
-        pred_image = model.predict((np.expand_dims(lr_image, 0), coords), batch_size=1)
+    lr_image = cv2.resize(hr_image, (lr_x, lr_y), interpolation=interp)
+    pred_image = plot_sample(model, lr_image, topography=topography, 
+                             landocean=landocean, scale=scale, plot=False)
+    
     residuals = np.squeeze(hr_image)- np.squeeze(pred_image)
     half_range = (hr_image.max() - hr_image.min()) / 2
+
+    if savepath is not None:
+        savepath = os.path.join(savepath, 'sample_gt.png')
+    else:
+        savepath = None
     ecv.plot_ndarray((np.squeeze(lr_image), np.squeeze(pred_image), np.squeeze(hr_image), residuals), 
                      interactive=False, dpi=dpi, axis=False, 
                      subplot_titles=('LR image', 'SR image (Yhat)', 'Ground truth (GT)', 'Residuals (GT - Yhat)'), 
-                     save=os.path.join(savepath, 'sample_gt.png'), subplots_horpadding=0.05)
+                     save=savepath, subplots_horpadding=0.05)
     return pred_image
 
 
-def predict_with_gt(model, x_test, scale, savepath=None):
-    """
-    """
-    model_architecture = model.name
-    _, hr_y, hr_x, _ = x_test.shape
-    lr_x = int(hr_x / scale)
-    lr_y = int(hr_y / scale) 
-    x_test_lr = np.zeros((x_test.shape[0], lr_y, lr_x, 1))
-    for i in range(x_test.shape[0]):
-        x_test_lr[i, :, :, 0] = cv2.resize(x_test[i], (lr_x, lr_y), interpolation=cv2.INTER_NEAREST)
-    
-    print('Downsampled x_test shape: ', x_test_lr.shape)
 
-    if model_architecture == 'edsr':
-        x_test_pred = model.predict(x_test_lr)
-    elif model_architecture == 'metasr':
-        hr_y, hr_x = np.squeeze(x_test[0]).shape
-        lr_x = int(hr_x / scale)
-        lr_y = int(hr_y / scale)
-        coords = np.asarray(len(x_test) * [get_coords((hr_y, hr_x), (lr_y, lr_x), scale)])
-        x_test_pred = model.predict((x_test, coords))
-
-    if savepath is not None:
-        name = os.path.join(savepath, 'x_test_pred.npy')
-        np.save(name, x_test_pred)
-    return x_test_pred
