@@ -14,6 +14,9 @@ from .data_load import data_loader, get_coords
 
 def training(model_function, 
              x_train, x_val, x_test,  
+             array_predictors=None,
+             topography=None, 
+             landocean=None,
              scale=20, 
              interpolation='nearest', 
              patch_size=40, 
@@ -65,14 +68,29 @@ def training(model_function,
     if model_architecture not in ['edsr', 'metasr']:
         raise ValueError('`model_function` must be EDSR or METASR')
 
-    ds_train = data_loader(x_train, scale=scale, batch_size=global_batch_size, 
-                           patch_size=patch_size, model=model_architecture, interpolation=interpolation)
+    ds_train = data_loader(x_train, scale=scale, batch_size=global_batch_size,
+                           array_predictors=array_predictors, 
+                           topography=topography, landocean=landocean,
+                           patch_size=patch_size, model=model_architecture, 
+                           interpolation=interpolation)
     ds_val = data_loader(x_val, scale=scale, batch_size=global_batch_size, 
-                         patch_size=patch_size, model=model_architecture, interpolation=interpolation)
+                         array_predictors=array_predictors, 
+                         topography=topography, landocean=landocean,
+                         patch_size=patch_size, model=model_architecture, 
+                         interpolation=interpolation)
     ds_test = data_loader(x_test, scale=scale, batch_size=global_batch_size, 
-                          patch_size=patch_size, model=model_architecture, interpolation=interpolation)
+                          array_predictors=array_predictors, 
+                          topography=topography, landocean=landocean,
+                          patch_size=patch_size, model=model_architecture, 
+                          interpolation=interpolation)
 
     n_channels = x_train.shape[-1]
+    if topography is not None:
+        n_channels += 1
+    if landocean is not None:
+        n_channels += 1
+    if array_predictors is not None:
+        n_channels += array_predictors.shape[-1]
     
     callbacks = []
     if early_stopping:
@@ -82,13 +100,6 @@ def training(model_function,
     if plot == 'llp':
         plotlosses = livelossplot.PlotLossesKerasTF()
         callbacks.append(plotlosses) 
-
-    # mean and std for standardization
-    x_train_mean = np.mean(x_train, axis=(0,1,2))
-    x_train_std = np.std(x_train, axis=(0))
-    x_train_std = np.mean(x_train_std, axis=(0,1))
-    architecture_params['x_train_mean'] = x_train_mean
-    architecture_params['x_train_std'] = x_train_std
 
     with strategy.scope():
         if model_architecture == 'edsr':
@@ -107,8 +118,11 @@ def training(model_function,
 
         # Compile and train model with L1 pixel loss
         model.compile(optimizer=optimizer, loss='mean_absolute_error')
-        fithist = model.fit(ds_train, epochs=epochs, steps_per_epoch=steps_per_epoch,validation_data=ds_val, 
-                            validation_steps=validation_steps, verbose=verbose, callbacks=callbacks)
+        fithist = model.fit(ds_train, epochs=epochs, 
+                            steps_per_epoch=steps_per_epoch,
+                            validation_data=ds_val, 
+                            validation_steps=validation_steps, 
+                            verbose=verbose, callbacks=callbacks)
         score = model.evaluate(ds_test, steps=test_steps, verbose=verbose)
         print(f'\nScore on the test set: {score}')
         
