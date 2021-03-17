@@ -35,13 +35,11 @@ def create_pair_hr_lr(array, index, scale, patch_size, array_predictors=None,
         topo_crop_hr = crop_image(np.squeeze(topography), patch_size, yx=(crop_y, crop_x))
         topo_crop_lr = cv2.resize(topo_crop_hr, (lr_x, lr_y), interpolation=interp)
         lr_array = np.concatenate([lr_array, np.expand_dims(topo_crop_lr, -1)], axis=2)
-        hr_array = np.concatenate([np.expand_dims(hr_array, -1), np.expand_dims(topo_crop_hr, -1)], axis=2)
             
     if landocean is not None:
         landocean_crop_hr = crop_image(np.squeeze(landocean), patch_size, yx=(crop_y, crop_x))
         landocean_crop_lr = cv2.resize(landocean_crop_hr, (lr_x, lr_y), interpolation=interp)
         lr_array = np.concatenate([lr_array, np.expand_dims(landocean_crop_lr, -1)], axis=2)
-        hr_array = np.concatenate([hr_array, np.expand_dims(landocean_crop_hr, -1)], axis=2)
 
     # if array_predictors is not None:
     #     pred_channels = array_predictors[index] 
