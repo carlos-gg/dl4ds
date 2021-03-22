@@ -3,10 +3,10 @@ import tensorflow as tf
 from tensorflow.keras.layers import Add, Conv2D, Input, Lambda
 from tensorflow.keras.models import Model
 
-from .blocks import residual_block, normalize, denormalize
+from .blocks import residual_block
 
 
-def edsr(scale, n_channels, n_filters, n_res_blocks):
+def edsr(scale, n_channels, n_filters, n_res_blocks, n_channels_out=1):
     """
     EDSR model with pixel shuffle upscaling
     """
@@ -18,27 +18,9 @@ def edsr(scale, n_channels, n_filters, n_res_blocks):
     x = Add()([x, b])
     
     x = upsample(x, scale, n_filters)
-    x = Conv2D(1, 3, padding='same')(x)
+    x = Conv2D(n_channels_out, 3, padding='same')(x)
 
     return Model(x_in, x, name="edsr")
-
-# def edsr(scale, n_channels, n_filters, n_res_blocks, x_train_mean, x_train_std):
-#     """
-#     EDSR model with pixel shuffle upscaling
-#     """
-#     x_in = Input(shape=(None, None, n_channels))
-#     x = Lambda(normalize)((x_in, x_train_mean, x_train_std))
-#     x = b = Conv2D(n_filters, 3, padding='same')(x)
-#     for i in range(n_res_blocks):
-#         b = residual_block(b, n_filters)
-#     b = Conv2D(n_filters, 3, padding='same')(b)
-#     x = Add()([x, b])
-    
-#     x = upsample(x, scale, n_filters)
-#     x = Conv2D(n_channels, 3, padding='same')(x)
-
-#     x = Lambda(denormalize)((x, x_train_mean, x_train_std))
-#     return Model(x_in, x, name="edsr")
 
 
 def upsample(x, scale, n_filters):
