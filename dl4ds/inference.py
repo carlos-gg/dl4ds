@@ -47,5 +47,5 @@ def predict_with_gt(model, x_test, scale, topography=None,
 
     if savepath is not None:
         name = os.path.join(savepath, 'x_test_pred.npy')
-        np.save(name, x_test_pred)
+        np.save(name, x_test_pred.astype('float32'))
     return x_test_pred
