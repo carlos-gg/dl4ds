@@ -99,33 +99,29 @@ def crop_image(array, size, yx=None, position=False, get_copy=False):
     y, x : int
         [position=True] Y,X coordinates.
     """
-    size_init_y = array.shape[0]
-    size_init_x = array.shape[1]
+    array_size_y = array.shape[0]
+    array_size_x = array.shape[1]
     
     if array.ndim != 2:
         raise TypeError('Input array is not a 2d array.')
     if not isinstance(size, int):
         raise TypeError('`Size` must be integer')
-    if size >= size_init_y or size >= size_init_x: 
+    if size >= array_size_y or size >= array_size_x: 
         msg = "`Size` is equal to or bigger than the initial frame size"
         raise ValueError(msg)
 
-    # wing is added to the sides of the subframe center
-    wing = (size - 1) / 2
-
+    wing = int(size / 2)
     if yx is not None and isinstance(yx, tuple):
         y, x = yx
     else:
         # random location
-        y = np.random.randint(wing + 1, size_init_y - wing + 1)
-        x = np.random.randint(wing + 1, size_init_x - wing + 1)
+        y = np.random.randint(wing + 1, array_size_y - wing - 1)
+        x = np.random.randint(wing + 1, array_size_x - wing - 1)
 
-    y0 = int(y - wing)
-    y1 = int(y + wing + 1)  # +1 cause endpoint is excluded when slicing
-    x0 = int(x - wing)
-    x1 = int(x + wing + 1)
+    y0, y1 = int(y - wing), int(y + wing)
+    x0, x1 = int(x - wing), int(x + wing)
 
-    if y0 < 0 or x0 < 0 or y1 > size_init_y or x1 > size_init_x:
+    if y0 < 0 or x0 < 0 or y1 > array_size_y or x1 > array_size_x:
         raise RuntimeError(f'Cropped image cannot be obtained with size={size}, y={y}, x={x}')
 
     if get_copy:
