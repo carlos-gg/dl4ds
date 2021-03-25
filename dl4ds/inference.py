@@ -6,7 +6,7 @@ from .metasr import get_coords
 
 
 def predict_with_gt(model, x_test, scale, topography=None, 
-                    landocean=None,interpolation='nearest', savepath=None):
+                    landocean=None, interpolation='nearest', savepath=None):
     """
     """
     if interpolation == 'nearest':
@@ -32,7 +32,8 @@ def predict_with_gt(model, x_test, scale, topography=None,
         if topography is not None:
             x_test_lr[:, :, :, 1] = topo_interp
         if landocean is not None:
-            x_test_lr[:, :, :, 2] = lando_interp
+            ind = 1 if topography is None else 2
+            x_test_lr[:, :, :, ind] = lando_interp
     
     print('Downsampled x_test shape: ', x_test_lr.shape)
 
