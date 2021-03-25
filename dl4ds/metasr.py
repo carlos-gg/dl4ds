@@ -21,14 +21,15 @@ def metasr(n_channels, n_filters, n_res_blocks, n_channels_out=1, meta_ksize=(3,
     meta_w = Dense(meta_ksize[0] * meta_ksize[1] * n_filters * n_channels)(meta_w)
     x = MetaUpSample(n_channels_out, meta_ksize)([x, meta_w])
 
-    return Model([x_in, coord], [x], name='metasr')
+    model = Model([x_in, coord], [x], name='metasr')
+    return model
 
 
 class MetaUpSample(Layer):
     def __init__(self, filters, ksize, **kwargs):
-        super().__init__(**kwargs)
         self.filters = filters
         self.ksize = ksize
+        super(MetaUpSample, self).__init__(**kwargs)
 
     def get_config(self):
         """ 
@@ -42,7 +43,7 @@ class MetaUpSample(Layer):
         return config
         
     def build(self, input_shape):
-        super().build(input_shape)
+        super(MetaUpSample, self).build(input_shape)
 
     def call(self, inputs):
         x, meta_w = inputs
@@ -61,7 +62,8 @@ class MetaUpSample(Layer):
 
         meta_w = tf.reshape(meta_w,[w_shape[0],w_shape[1],w_shape[2],w_shape[3]//self.filters,self.filters])
 
-        y = tf.image.extract_patches(x, sizes=[1, self.ksize[0], self.ksize[1], 1], strides=[1, 1, 1, 1], rates=[1, 1, 1, 1], padding='SAME')
+        y = tf.image.extract_patches(x, sizes=[1, self.ksize[0], self.ksize[1], 1], 
+                                     strides=[1, 1, 1, 1], rates=[1, 1, 1, 1], padding='SAME')
         y = tf.gather_nd(y, indices)
         y = tf.reshape(y, [w_shape[0], w_shape[1], w_shape[2], w_shape[3]//self.filters, 1])
         # Matrix multiplication
