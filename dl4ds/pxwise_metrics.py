@@ -140,21 +140,29 @@ def pxwise_metrics(y_test, y_test_hat, dpi=100, savepath=None):
 
 def plot_sample(model, lr_image, topography=None, landocean=None, dpi=150, 
                 scale=None, savepath=None, plot=True):
-    model_architecture = model.name
-    if lr_image.ndim == 2:
-        input_image = np.expand_dims(np.asarray(lr_image, "float32"), axis=-1)
-    elif lr_image.ndim == 3:
-        input_image = np.asarray(lr_image, "float32")
-    if topography is not None: 
-        topography = cv2.resize(topography, (lr_image.shape[1], lr_image.shape[0]), 
-                                interpolation=cv2.INTER_CUBIC)
-        input_image = np.concatenate([input_image, np.expand_dims(topography, -1)], axis=2)
-    if landocean is not None: 
-        landocean = cv2.resize(landocean, (lr_image.shape[1], lr_image.shape[0]), 
-                               interpolation=cv2.INTER_NEAREST)
-        input_image = np.concatenate([input_image, np.expand_dims(landocean, -1)], axis=2)
+    """
+    """
+    def check_image_dims_for_inference(image):
+        """ Output is a 4d array, where first and last are unitary """
+        image = np.squeeze(image)
+        image = np.expand_dims(np.asarray(image, "float32"), axis=-1)
+        image = np.expand_dims(image, 0)
+        return image
     
-    input_image = np.expand_dims(input_image, 0)
+    model_architecture = model.name
+    input_image = check_image_dims_for_inference(lr_image)
+
+    if topography is not None: 
+        topography = cv2.resize(topography, (input_image.shape[2], input_image.shape[1]), 
+                                interpolation=cv2.INTER_CUBIC)
+        topography = check_image_dims_for_inference(topography)
+        input_image = np.concatenate([input_image, topography], axis=3)
+    if landocean is not None: 
+        landocean = cv2.resize(landocean, (input_image.shape[2], input_image.shape[1]), 
+                               interpolation=cv2.INTER_NEAREST)
+        landocean = check_image_dims_for_inference(landocean)
+        input_image = np.concatenate([input_image, landocean], axis=3)
+    
     if model_architecture == 'edsr':
         pred_image = model.predict(input_image)
     elif model_architecture == 'metasr':
@@ -187,21 +195,22 @@ def plot_sample_with_gt(model, hr_image, scale, topography=None, landocean=None,
     elif interpolation == 'bilinear':
         interp = cv2.INTER_LINEAR 
 
-    hr_y, hr_x, _ = hr_image.shape
+    hr_image = np.squeeze(hr_image)
+    hr_y, hr_x = hr_image.shape
     lr_x = int(hr_x / scale)
     lr_y = int(hr_y / scale) 
     lr_image = cv2.resize(hr_image, (lr_x, lr_y), interpolation=interp)
     pred_image = plot_sample(model, lr_image, topography=topography, 
                              landocean=landocean, scale=scale, plot=False)
     
-    residuals = np.squeeze(hr_image)- np.squeeze(pred_image)
+    residuals = hr_image - np.squeeze(pred_image)
     half_range = (hr_image.max() - hr_image.min()) / 2
 
     if savepath is not None:
         savepath = os.path.join(savepath, 'sample_gt.png')
     else:
         savepath = None
-    ecv.plot_ndarray((np.squeeze(lr_image), np.squeeze(pred_image), np.squeeze(hr_image), residuals), 
+    ecv.plot_ndarray((np.squeeze(lr_image), np.squeeze(pred_image), hr_image, residuals), 
                      interactive=False, dpi=dpi, axis=False, 
                      subplot_titles=('LR image', 'SR image (Yhat)', 'Ground truth (GT)', 'Residuals (GT - Yhat)'), 
                      save=savepath, subplots_horpadding=0.05)
