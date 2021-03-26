@@ -86,10 +86,13 @@ def crop_image(array, size, yx=None, position=False, get_copy=False):
     size : int
         Size of the cropped image.
     yx : tuple of int or None, optional
-        Y,X coordinate of the center of the cropped image. If None then a random
+        Y,X coordinate of the bottom-left corner. If None then a random
         position will be chosen.
     position : bool, optional
-        If set to True return also the coordinates of the bottom-left vertex.
+        If set to True return also the coordinates of the bottom-left corner.
+    get_copy : bool, optional
+        If True a cropped copy of the intial array is returned. By default a
+        sliced view of the array is returned.
     
     Returns
     -------
@@ -106,20 +109,19 @@ def crop_image(array, size, yx=None, position=False, get_copy=False):
         raise TypeError('Input array is not a 2d array.')
     if not isinstance(size, int):
         raise TypeError('`Size` must be integer')
-    if size >= array_size_y or size >= array_size_x: 
-        msg = "`Size` is equal to or bigger than the initial frame size"
+    if size > array_size_y or size > array_size_x: 
+        msg = "`Size` larger than the input image size"
         raise ValueError(msg)
 
-    wing = int(size / 2)
     if yx is not None and isinstance(yx, tuple):
         y, x = yx
     else:
         # random location
-        y = np.random.randint(wing + 1, array_size_y - wing - 1)
-        x = np.random.randint(wing + 1, array_size_x - wing - 1)
+        y = np.random.randint(0, array_size_y - size - 1)
+        x = np.random.randint(0, array_size_x - size - 1)
 
-    y0, y1 = int(y - wing), int(y + wing)
-    x0, x1 = int(x - wing), int(x + wing)
+    y0, y1 = y, int(y + size)
+    x0, x1 = x, int(x + size)
 
     if y0 < 0 or x0 < 0 or y1 > array_size_y or x1 > array_size_x:
         raise RuntimeError(f'Cropped image cannot be obtained with size={size}, y={y}, x={x}')
