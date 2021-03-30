@@ -7,3 +7,4 @@ from .utils import *
 from .data_load import *
 from .edsr import *
 from .metasr import *
+from .resnet_presupsampling import *
