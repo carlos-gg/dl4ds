@@ -10,9 +10,115 @@ from .metasr import get_coords
 from .utils import crop_image
 
 
-def create_pair_hr_lr(array, index, scale, patch_size, array_predictors=None, 
-                      topography=None, landocean=None, debug=False, 
-                      interpolation='nearest'):
+def create_pair_hr_lr_preupsampling(
+    array, 
+    index, 
+    scale,
+    patch_size, 
+    topography=None, 
+    landocean=None, 
+    debug=False, 
+    interpolation='bicubic'):
+    """
+    """
+    if interpolation == 'nearest':
+        interp = cv2.INTER_NEAREST
+    elif interpolation == 'bicubic':
+        interp = cv2.INTER_CUBIC
+    elif interpolation == 'bilinear':
+        interp = cv2.INTER_LINEAR
+
+    hr_array = np.squeeze(array[index])
+    hr_y, hr_x = hr_array.shape     
+    lr_x = int(hr_x / scale)
+    lr_y = int(hr_y / scale)          
+    lr_array_resized = cv2.resize(hr_array, (lr_x, lr_y), interpolation=interp)
+    lr_array_resized = cv2.resize(lr_array_resized, (hr_x, hr_y), interpolation=interp)
+    hr_array, crop_y, crop_x = crop_image(np.squeeze(hr_array), patch_size, 
+                                          yx=None, position=True)
+    lr_array = crop_image(np.squeeze(lr_array_resized), patch_size, 
+                                     yx=(crop_y, crop_x))
+       
+    hr_array = hr_array[:,:, np.newaxis]
+    lr_array = lr_array[:,:, np.newaxis]
+
+    if topography is not None:
+        # there is no need to downsize and upsize the topography if already given
+        # in the HR image size 
+        topography = crop_image(np.squeeze(topography), patch_size, yx=(crop_y, crop_x))
+        lr_array = np.concatenate([lr_array, np.expand_dims(topography, -1)], axis=2)
+            
+    if landocean is not None:
+        landocean = crop_image(np.squeeze(landocean), patch_size, yx=(crop_y, crop_x))
+        lr_array = np.concatenate([lr_array, np.expand_dims(landocean, -1)], axis=2)
+    
+    hr_array = np.asarray(hr_array, 'float32')
+    lr_array = np.asarray(lr_array, 'float32')
+
+    if debug:
+        print(f'HR image: {hr_array.shape}, LR image resized {lr_array.shape}')
+        print(f'Crop X,Y: {crop_x}, {crop_y}')
+
+        ecv.plot_ndarray((array[index,:,:,0]), dpi=60, interactive=False)
+        
+        ecv.plot_ndarray((np.squeeze(hr_array), np.squeeze(lr_array)), 
+                         dpi=80, interactive=False, 
+                         subplot_titles=('HR cropped image', 'LR cropped/resized image'))
+        
+        if topography is not None:
+            ecv.plot_ndarray(topography, interactive=False, dpi=80, 
+                             subplot_titles=('Topography'))
+        
+        if landocean is not None:
+            ecv.plot_ndarray(landocean, interactive=False, dpi=80, 
+                             subplot_titles=('Land Ocean mask'))
+
+    return hr_array, lr_array
+
+
+def data_loader_preupsampling(
+    array, 
+    scale,
+    batch_size=32, 
+    patch_size=40,
+    topography=None, 
+    landocean=None, 
+    interpolation='nearest'):
+    """
+    instead of the in-memory array, we could input the path and load the netcdf 
+    files lazily or memmap a numpy array
+    """
+    while True:
+        batch_rand_idx = np.random.permutation(array.shape[0])[:batch_size]
+        batch_hr_images = []
+        batch_lr_images = []
+        
+        for i in batch_rand_idx:
+            res = create_pair_hr_lr_preupsampling(
+                    array=array, 
+                    index=i, 
+                    scale=scale,
+                    patch_size=patch_size, 
+                    topography=topography, 
+                    landocean=landocean, 
+                    interpolation=interpolation)
+            batch_hr_images.append(res[0])
+            batch_lr_images.append(res[1])
+
+        batch_lr_images = np.asarray(batch_lr_images)
+        batch_hr_images = np.asarray(batch_hr_images) 
+        yield [batch_lr_images], [batch_hr_images]
+
+
+def create_pair_hr_lr(
+    array, 
+    index, 
+    scale, 
+    patch_size, 
+    topography=None, 
+    landocean=None, 
+    debug=False, 
+    interpolation='nearest'):
     """
     """
     if interpolation == 'nearest':
@@ -23,7 +129,6 @@ def create_pair_hr_lr(array, index, scale, patch_size, array_predictors=None,
         interp = cv2.INTER_LINEAR
 
     hr_array = array[index]                
-    full_hr_y, full_hr_x, _ = hr_array.shape
     hr_array, crop_y, crop_x = crop_image(np.squeeze(hr_array), patch_size, 
                                           yx=None, position=True)
     hr_y, hr_x = hr_array.shape
@@ -41,13 +146,6 @@ def create_pair_hr_lr(array, index, scale, patch_size, array_predictors=None,
         landocean_crop_hr = crop_image(np.squeeze(landocean), patch_size, yx=(crop_y, crop_x))
         landocean_crop_lr = cv2.resize(landocean_crop_hr, (lr_x, lr_y), interpolation=interp)
         lr_array = np.concatenate([lr_array, np.expand_dims(landocean_crop_lr, -1)], axis=2)
-
-    # if array_predictors is not None:
-    #     pred_channels = array_predictors[index] 
-    #     pred_channels = cv2.resize(pred_channels, (full_hr_x, full_hr_y), interpolation=cv2.INTER_CUBIC)
-    #     pred_channels = crop_image(pred_channels, patch_size, yx=None)
-    #     pred_channels = cv2.resize(pred_channels, (lr_x, lr_y), interpolation=interp)
-    #     lr_array = np.concatenate([lr_array, pred_channels], axis=2)
     
     hr_array = np.asarray(hr_array, 'float32')
     lr_array = np.asarray(lr_array, 'float32')
@@ -72,12 +170,14 @@ def create_pair_hr_lr(array, index, scale, patch_size, array_predictors=None,
                              interactive=False, dpi=80, 
                              subplot_titles=('HR Land Ocean mask', 'LR  Land Ocean mask'))
 
-        # ecv.plot_ndarray(pred_channels, interactive=False)
-
     return hr_array, lr_array
 
 
-def data_loader_metasr(array, max_scale, batch_size, patch_size):
+def data_loader_metasr(
+    array, 
+    max_scale, 
+    batch_size, 
+    patch_size):
     """
     instead of the array, pass the path and load the netcdf files lazily
     """
@@ -108,9 +208,15 @@ def data_loader_metasr(array, max_scale, batch_size, patch_size):
         yield [batch_lr_images, batch_coords], [batch_hr_images]
   
 
-def data_loader(array, scale=4, batch_size=32, patch_size=40,
-                array_predictors=None, topography=None, landocean=None, 
-                model='edsr', interpolation='nearest'):
+def data_loader(
+    array, 
+    scale=4, 
+    batch_size=32, 
+    patch_size=40,
+    topography=None, 
+    landocean=None, 
+    model='edsr', 
+    interpolation='nearest'):
     """
     instead of the in-memory array, we could input the path and load the netcdf 
     files lazily or memmap a numpy array
@@ -129,14 +235,14 @@ def data_loader(array, scale=4, batch_size=32, patch_size=40,
                                          int(patch_size / scale)), scale=scale)
         
         for i in batch_rand_idx:
-            res = create_pair_hr_lr(array=array, 
-                                    index=i, 
-                                    scale=scale, 
-                                    patch_size=patch_size, 
-                                    array_predictors=array_predictors,
-                                    topography=topography, 
-                                    landocean=landocean, 
-                                    interpolation=interpolation)
+            res = create_pair_hr_lr(
+                    array=array, 
+                    index=i, 
+                    scale=scale, 
+                    patch_size=patch_size, 
+                    topography=topography, 
+                    landocean=landocean, 
+                    interpolation=interpolation)
             hr_array, lr_array = res
             batch_lr_images.append(lr_array)
             batch_hr_images.append(hr_array)
