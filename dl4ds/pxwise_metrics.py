@@ -150,30 +150,45 @@ def plot_sample(model, lr_image, topography=None, landocean=None, dpi=150,
         return image
     
     model_architecture = model.name
-    input_image = check_image_dims_for_inference(lr_image)
-
-    if topography is not None: 
-        topography = cv2.resize(topography, (input_image.shape[2], input_image.shape[1]), 
-                                interpolation=cv2.INTER_CUBIC)
-        topography = check_image_dims_for_inference(topography)
-        input_image = np.concatenate([input_image, topography], axis=3)
-    if landocean is not None: 
-        landocean = cv2.resize(landocean, (input_image.shape[2], input_image.shape[1]), 
-                               interpolation=cv2.INTER_NEAREST)
-        landocean = check_image_dims_for_inference(landocean)
-        input_image = np.concatenate([input_image, landocean], axis=3)
-    
-    if model_architecture == 'edsr':
+    if model_architecture in ('edsr', 'metasr'):
+        input_image = check_image_dims_for_inference(lr_image)
+        if topography is not None: 
+            topography = cv2.resize(topography, (input_image.shape[2], 
+                                    input_image.shape[1]), 
+                                    interpolation=cv2.INTER_CUBIC)
+            topography = check_image_dims_for_inference(topography)
+            input_image = np.concatenate([input_image, topography], axis=3)
+        if landocean is not None: 
+            landocean = cv2.resize(landocean, (input_image.shape[2], 
+                                  input_image.shape[1]), 
+                                  interpolation=cv2.INTER_NEAREST)
+            landocean = check_image_dims_for_inference(landocean)
+            input_image = np.concatenate([input_image, landocean], axis=3)
+        
+        if model_architecture == 'edsr':
+            pred_image = model.predict(input_image)
+        elif model_architecture == 'metasr':
+            if scale is None:
+                raise ValueError('`scale` must be set for `metasr` model')
+            lr_y, lr_x = np.squeeze(lr_image).shape
+            hr_y, hr_x = int(lr_y * scale), int(lr_x * scale)
+            coords = get_coords((hr_y, hr_x), (lr_y, lr_x), scale)
+            coords = np.asarray([coords])
+            pred_image = model.predict((input_image, coords))
+    elif model_architecture == 'resnet_preupsampling':
+        lr_y, lr_x = np.squeeze(lr_image).shape    
+        hr_x = int(lr_x * scale)
+        hr_y = int(lr_y * scale) 
+        input_image = cv2.resize(np.squeeze(lr_image), (hr_x, hr_y), interpolation=cv2.INTER_CUBIC)
+        input_image = check_image_dims_for_inference(input_image)
+        if topography is not None: 
+            topography = check_image_dims_for_inference(topography)
+            input_image = np.concatenate([input_image, topography], axis=3)
+        if landocean is not None:
+            landocean = check_image_dims_for_inference(landocean)
+            input_image = np.concatenate([input_image, landocean], axis=3)
         pred_image = model.predict(input_image)
-    elif model_architecture == 'metasr':
-        if scale is None:
-            raise ValueError('`scale` must be set for `metasr` model')
-        lr_y, lr_x = np.squeeze(lr_image).shape
-        hr_y, hr_x = int(lr_y * scale), int(lr_x * scale)
-        coords = get_coords((hr_y, hr_x), (lr_y, lr_x), scale)
-        coords = np.asarray([coords])
-        pred_image = model.predict((input_image, coords))
-    
+
     if plot:
         if savepath is not None:
             savepath = os.path.join(savepath, 'sample_nogt.png')
@@ -198,11 +213,10 @@ def plot_sample_with_gt(model, hr_image, scale, topography=None, landocean=None,
     hr_image = np.squeeze(hr_image)
     hr_y, hr_x = hr_image.shape
     lr_x = int(hr_x / scale)
-    lr_y = int(hr_y / scale) 
+    lr_y = int(hr_y / scale)
     lr_image = cv2.resize(hr_image, (lr_x, lr_y), interpolation=interp)
     pred_image = plot_sample(model, lr_image, topography=topography, 
-                             landocean=landocean, scale=scale, plot=False)
-    
+                            landocean=landocean, scale=scale, plot=False)
     residuals = hr_image - np.squeeze(pred_image)
     half_range = (hr_image.max() - hr_image.min()) / 2
 
@@ -211,9 +225,10 @@ def plot_sample_with_gt(model, hr_image, scale, topography=None, landocean=None,
     else:
         savepath = None
     ecv.plot_ndarray((np.squeeze(lr_image), np.squeeze(pred_image), hr_image, residuals), 
-                     interactive=False, dpi=dpi, axis=False, 
-                     subplot_titles=('LR image', 'SR image (Yhat)', 'Ground truth (GT)', 'Residuals (GT - Yhat)'), 
-                     save=savepath, subplots_horpadding=0.05)
+                     interactive=False, dpi=dpi, show_axis=False, 
+                     subplot_titles=('LR image', 'SR image (Yhat)', 
+                                     'Ground truth (GT)', 'Residuals (GT - Yhat)'), 
+                     save=savepath, horizontal_padding=0.1)
     return pred_image
 
 
