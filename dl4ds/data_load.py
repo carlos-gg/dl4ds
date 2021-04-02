@@ -129,7 +129,9 @@ def create_pair_hr_lr(
         interp = cv2.INTER_LINEAR
 
     hr_array = array
-    lr_x, lr_y = int(patch_size / scale), int(patch_size / scale)
+    if not patch_size % scale == 0:
+        raise ValueError('`patch_size` must be divisible by `scale`')
+    lr_x, lr_y = int(patch_size / scale), int(patch_size / scale)  
 
     if array_predictors is None:
         hr_array, crop_y, crop_x = crop_image(np.squeeze(hr_array), patch_size, 
@@ -137,24 +139,25 @@ def create_pair_hr_lr(
         lr_array = cv2.resize(hr_array, (lr_x, lr_y), interpolation=interp)
         lr_array = lr_array[:,:, np.newaxis]
     else:
-        # cropping first the LR predictors
-        lr_array, crop_y, crop_x = crop_image(np.squeeze(array_predictors[:,:,0]), 
-                                                         lr_x, yx=None, position=True)
-        lr_array=np.expand_dims(lr_array, -1)
-        if array_predictors.shape[2]>1:
-            for i in range(array_predictors.shape[2]-1):
-                lr_array2= crop_image(np.squeeze(array_predictors[:,:,i+1]), lr_x, yx=(crop_y, crop_x))
-                lr_array=np.concatenate([lr_array, np.expand_dims(lr_array2, -1)], axis=2)
+        if array_predictors.ndim == 2:
+            array_predictors = np.expand_dims(array_predictors, -1)
+        n_predictors = array_predictors.shape[-1]
+        # cropping first the LR predictors (using lr_x instead of patch_size)
+        lr_array_predictors, crop_y, crop_x = crop_image(np.squeeze(array_predictors[:, :, 0]), 
+                                                                    lr_x, yx=None, position=True)
+        lr_array_predictors = np.expand_dims(lr_array_predictors, -1)
+        if n_predictors > 1:
+            for i in range(n_predictors - 1):
+                temp = crop_image(np.squeeze(array_predictors[:, :, i+1]), lr_x, yx=(crop_y, crop_x))
+                temp = np.expand_dims(temp, -1)
+                lr_array_predictors = np.concatenate([lr_array_predictors, temp], axis=2)
 
         crop_y, crop_x = int(crop_y * scale), int(crop_x * scale)
-        hr_array = crop_image(np.squeeze(hr_array), patch_size, yx=(crop_y, crop_x))  
-        
-        lr_y, lr_x = lr_array.shape[:2]
-        
-        resized_to_lr = cv2.resize(hr_array, (lr_x, lr_y), interpolation=interp)
-        lr_array = np.concatenate([np.expand_dims(resized_to_lr, -1),lr_array ], axis=2)
-        
-        hr_array=np.expand_dims(hr_array, -1) 
+        hr_array = crop_image(np.squeeze(hr_array), patch_size, yx=(crop_y, crop_x))          
+        lr_array = cv2.resize(hr_array, (lr_x, lr_y), interpolation=interp)
+        hr_array = np.expand_dims(hr_array, -1)
+        lr_array = np.expand_dims(lr_array, -1) 
+        lr_array = np.concatenate([lr_array, lr_array_predictors], axis=2)
 
     if topography is not None:
         topo_crop_hr = crop_image(np.squeeze(topography), patch_size, yx=(crop_y, crop_x))
@@ -194,10 +197,8 @@ def create_pair_hr_lr(
                              subplot_titles=('HR Land Ocean mask', 'LR  Land Ocean mask'))
 
         if array_predictors is not None:
-            for i in range(array_predictors.shape[2]):
-                ecv.plot_ndarray(lr_array[:,:,i+1], 
-                         dpi=80, interactive=False, 
-                         subplot_titles=(f'LR cropped predictor {i + 1}'))
+            ecv.plot_ndarray(np.rollaxis(lr_array_predictors, 2, 0), dpi=80, interactive=False, 
+                             subplot_titles=('LR cropped predictors'), multichannel4d=True)
 
     return hr_array, lr_array
 
