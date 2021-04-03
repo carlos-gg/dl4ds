@@ -5,8 +5,15 @@ import numpy as np
 from .metasr import get_coords
 
 
-def predict_with_gt(model, x_test, scale, topography=None, 
-                    landocean=None, interpolation='nearest', savepath=None):
+def predict_with_gt(
+    model, 
+    x_test, 
+    scale, 
+    topography=None, 
+    landocean=None, 
+    array_predictors=None, 
+    interpolation='nearest', 
+    savepath=None):
     """
     """
     if interpolation == 'nearest':
@@ -20,9 +27,17 @@ def predict_with_gt(model, x_test, scale, topography=None,
     _, hr_y, hr_x, _ = x_test.shape
     lr_x = int(hr_x / scale)
     lr_y = int(hr_y / scale)
+    
     n_channels = 1
+    pos = {'pred':1, 'topo':1,'laoc':1}
+    if array_predictors is not None:
+        n_predictors = array_predictors.shape[3]
+        n_channels += n_predictors   
+        pos['topo'] += n_predictors  
+        pos['laoc'] += n_predictors 
     if topography is not None:
         n_channels += 1
+        pos['laoc'] += 1
     if landocean is not None:
         n_channels += 1
     
@@ -33,11 +48,12 @@ def predict_with_gt(model, x_test, scale, topography=None,
     
         for i in range(x_test.shape[0]):
             x_test_lr[i, :, :, 0] = cv2.resize(x_test[i], (lr_x, lr_y), interpolation=interp)
+            if array_predictors is not None:
+                x_test_lr[i, :, :, pos['pred']:n_predictors+1] = array_predictors[i]
             if topography is not None:
-                x_test_lr[:, :, :, 1] = topo_interp
+                x_test_lr[:, :, :, pos['topo']] = topo_interp
             if landocean is not None:
-                ind = 1 if topography is None else 2
-                x_test_lr[:, :, :, ind] = lando_interp
+                x_test_lr[:, :, :, pos['laoc']] = lando_interp
     
         print('Downsampled x_test shape: ', x_test_lr.shape)
 
