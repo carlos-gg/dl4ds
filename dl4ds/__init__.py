@@ -1,10 +1,10 @@
-__version__ = "0.0.2"
+__version__ = "0.0.3"
 
 from .pxwise_metrics import *
 from .training_logic import *
 from .inference import *
 from .utils import *
-from .data_load import *
-from .edsr import *
-from .metasr import *
-from .resnet_presupsampling import *
+from .dataloader import *
+from .resnet_int import *
+from .resnet_mup import *
+from .resnet_spc import *

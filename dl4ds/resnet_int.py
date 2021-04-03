@@ -4,7 +4,7 @@ from tensorflow.keras.models import Model
 from .blocks import residual_block
 
 
-def resnet_preupsampling(n_channels, n_filters, n_res_blocks, n_channels_out=1):
+def resnet_int(n_channels, n_filters, n_res_blocks, n_channels_out=1):
     """
     Resnet (EDSR model) with preupsampling
     """
@@ -17,5 +17,5 @@ def resnet_preupsampling(n_channels, n_filters, n_res_blocks, n_channels_out=1):
     
     x = Conv2D(n_channels_out, 3, padding='same')(x)
 
-    return Model(x_in, x, name="resnet_preupsampling")
+    return Model(x_in, x, name="rint")
 

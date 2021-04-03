@@ -6,7 +6,7 @@ from tensorflow.keras.models import Model
 from .blocks import residual_block
 
 
-def edsr(scale, n_channels, n_filters, n_res_blocks, n_channels_out=1):
+def resnet_spc(scale, n_channels, n_filters, n_res_blocks, n_channels_out=1):
     """
     EDSR model with pixel shuffle upscaling
     """
@@ -20,7 +20,7 @@ def edsr(scale, n_channels, n_filters, n_res_blocks, n_channels_out=1):
     x = upsample(x, scale, n_filters)
     x = Conv2D(n_channels_out, 3, padding='same')(x)
 
-    return Model(x_in, x, name="edsr")
+    return Model(x_in, x, name="rspc")
 
 
 def upsample(x, scale, n_filters):

@@ -6,7 +6,7 @@ from tensorflow.keras.layers import Layer, Dense, Conv2D, Input, Add, Lambda
 from .blocks import residual_block
 
 
-def metasr(n_channels, n_filters, n_res_blocks, n_channels_out=1, meta_ksize=(3,3)):
+def resnet_mup(n_channels, n_filters, n_res_blocks, n_channels_out=1, meta_ksize=(3,3)):
     """
     EDSR with MetaUpsample module
     """
@@ -21,7 +21,7 @@ def metasr(n_channels, n_filters, n_res_blocks, n_channels_out=1, meta_ksize=(3,
     meta_w = Dense(meta_ksize[0] * meta_ksize[1] * n_filters * n_channels)(meta_w)
     x = MetaUpSample(n_channels_out, meta_ksize)([x, meta_w])
 
-    model = Model([x_in, coord], [x], name='metasr')
+    model = Model([x_in, coord], [x], name='rmup')
     return model
 
 

@@ -1,4 +1,3 @@
-from builtins import ValueError
 import os
 import livelossplot
 import numpy as np
@@ -10,7 +9,7 @@ from tensorflow.keras.callbacks import EarlyStopping
 from tensorflow.keras.losses import mean_absolute_error
 from matplotlib.pyplot import show
 from .utils import Timing, list_devices
-from .data_load import data_loader, data_loader_metasr, data_loader_preupsampling
+from .dataloader import data_loader
 
 
 def training(model_function, 
@@ -18,7 +17,7 @@ def training(model_function,
              array_predictors=None,
              topography=None, 
              landocean=None,
-             scale=20, 
+             scale=5, 
              interpolation='nearest', 
              patch_size=40, 
              batch_size=64, 
@@ -75,79 +74,38 @@ def training(model_function,
 
     ### checking model
     model_architecture = model_function.__name__
-    if model_architecture not in ['edsr', 'metasr', 'resnet_preupsampling']:
-        raise ValueError('`model_function` must be `edsr`, `resnet_preupsampling` or `metasr`')
+    if model_architecture not in ['rspc', 'rint', 'rmup']:
+        raise ValueError('`model_function` not recognized. Must be one of the '
+                         'following: rspc, rint, rmup')
 
-    ### data loaders
-    if model_architecture == 'edsr':
-        ds_train = data_loader(
-            x_train, 
-            scale=scale, 
-            batch_size=global_batch_size,
-            topography=topography, 
-            landocean=landocean, 
-            patch_size=patch_size, 
-            model=model_architecture, 
-            interpolation=interpolation)
-        ds_val = data_loader(
-            x_val, 
-            scale=scale, 
-            batch_size=global_batch_size, 
-            topography=topography, 
-            landocean=landocean, 
-            patch_size=patch_size, 
-            model=model_architecture, 
-            interpolation=interpolation)
-        ds_test = data_loader(
-            x_test, 
-            scale=scale, 
-            batch_size=global_batch_size, 
-            topography=topography, 
-            landocean=landocean, 
-            patch_size=patch_size, 
-            model=model_architecture, 
-            interpolation=interpolation)
-    elif model_architecture == 'resnet_preupsampling':
-        ds_train = data_loader_preupsampling(
-            x_train, 
-            scale=scale,
-            batch_size=global_batch_size,
-            topography=topography, 
-            landocean=landocean, 
-            patch_size=patch_size, 
-            interpolation=interpolation)
-        ds_val = data_loader_preupsampling(
-            x_val, 
-            scale=scale,
-            batch_size=global_batch_size, 
-            topography=topography, 
-            landocean=landocean,
-            patch_size=patch_size, 
-            interpolation=interpolation)
-        ds_test = data_loader_preupsampling(
-            x_test, 
-            scale=scale,
-            batch_size=global_batch_size, 
-            topography=topography, 
-            landocean=landocean,
-            patch_size=patch_size, 
-            interpolation=interpolation)
-    elif model_architecture == 'metasr':
-        ds_train = data_loader_metasr(
-            x_train, 
-            max_scale=scale, 
-            batch_size=global_batch_size, 
-            patch_size=patch_size)
-        ds_val = data_loader_metasr(
-            x_val, 
-            max_scale=scale, 
-            batch_size=global_batch_size, 
-            patch_size=patch_size)
-        ds_test = data_loader_metasr(
-            x_test, 
-            max_scale=scale, 
-            batch_size=global_batch_size, 
-            patch_size=patch_size)
+    ### data loader
+    ds_train = data_loader(
+        x_train, 
+        scale=scale, 
+        batch_size=global_batch_size,
+        topography=topography, 
+        landocean=landocean, 
+        patch_size=patch_size, 
+        model=model_architecture, 
+        interpolation=interpolation)
+    ds_val = data_loader(
+        x_val, 
+        scale=scale, 
+        batch_size=global_batch_size, 
+        topography=topography, 
+        landocean=landocean, 
+        patch_size=patch_size, 
+        model=model_architecture, 
+        interpolation=interpolation)
+    ds_test = data_loader(
+        x_test, 
+        scale=scale, 
+        batch_size=global_batch_size, 
+        topography=topography, 
+        landocean=landocean, 
+        patch_size=patch_size, 
+        model=model_architecture, 
+        interpolation=interpolation)
 
     ### number of channels
     n_channels = x_train.shape[-1]
@@ -171,9 +129,9 @@ def training(model_function,
 
     ### instantiating and fitting the model
     with strategy.scope():
-        if model_architecture == 'edsr':
+        if model_architecture == 'rspc':
             model = model_function(scale=scale, n_channels=n_channels, **architecture_params)
-        elif model_architecture in ('metasr', 'resnet_preupsampling'):
+        elif model_architecture in ('rmup', 'rint'):
             model = model_function(n_channels=n_channels, **architecture_params)
         if verbose == 1:
             model.summary(line_length=150)
