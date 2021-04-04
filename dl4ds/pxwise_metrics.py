@@ -138,8 +138,8 @@ def pxwise_metrics(y_test, y_test_hat, dpi=100, savepath=None):
     return pxwise_mse, spearman_corrmap, pearson_corrmap
 
 
-def plot_sample(model, lr_image, topography=None, landocean=None, dpi=150, 
-                scale=None, savepath=None, plot=True):
+def plot_sample(model, lr_image, topography=None, landocean=None, 
+                predictors=None, dpi=150, scale=None, savepath=None, plot=True):
     """
     """
     def check_image_dims_for_inference(image):
@@ -150,8 +150,13 @@ def plot_sample(model, lr_image, topography=None, landocean=None, dpi=150,
         return image
     
     model_architecture = model.name
-    if model_architecture in ('edsr', 'metasr'):
+    if model_architecture in ('rspc', 'rmup'):
         input_image = check_image_dims_for_inference(lr_image)
+        
+        # expecting a 3d ndarray, [lat, lon, variables]
+        if predictors is not None:
+            predictors = np.expand_dims(predictors, 0)
+            input_image = np.concatenate([input_image, predictors], axis=3)
         if topography is not None: 
             topography = cv2.resize(topography, (input_image.shape[2], 
                                     input_image.shape[1]), 
@@ -165,9 +170,9 @@ def plot_sample(model, lr_image, topography=None, landocean=None, dpi=150,
             landocean = check_image_dims_for_inference(landocean)
             input_image = np.concatenate([input_image, landocean], axis=3)
         
-        if model_architecture == 'edsr':
+        if model_architecture == 'rspc':
             pred_image = model.predict(input_image)
-        elif model_architecture == 'metasr':
+        elif model_architecture == 'rmup':
             if scale is None:
                 raise ValueError('`scale` must be set for `metasr` model')
             lr_y, lr_x = np.squeeze(lr_image).shape
@@ -175,7 +180,8 @@ def plot_sample(model, lr_image, topography=None, landocean=None, dpi=150,
             coords = get_coords((hr_y, hr_x), (lr_y, lr_x), scale)
             coords = np.asarray([coords])
             pred_image = model.predict((input_image, coords))
-    elif model_architecture == 'resnet_preupsampling':
+    
+    elif model_architecture == 'rint':
         lr_y, lr_x = np.squeeze(lr_image).shape    
         hr_x = int(lr_x * scale)
         hr_y = int(lr_y * scale) 
@@ -201,8 +207,9 @@ def plot_sample(model, lr_image, topography=None, landocean=None, dpi=150,
     return pred_image
 
 
-def plot_sample_with_gt(model, hr_image, scale, topography=None, landocean=None, 
-                        dpi=150, interpolation='nearest', savepath=None):
+def plot_sample_with_gt(model, hr_image, scale, topography=None, landocean=None,
+                        predictors=None, dpi=150, interpolation='nearest', 
+                        savepath=None):
     if interpolation == 'nearest':
         interp = cv2.INTER_NEAREST
     elif interpolation == 'bicubic':
@@ -216,7 +223,8 @@ def plot_sample_with_gt(model, hr_image, scale, topography=None, landocean=None,
     lr_y = int(hr_y / scale)
     lr_image = cv2.resize(hr_image, (lr_x, lr_y), interpolation=interp)
     pred_image = plot_sample(model, lr_image, topography=topography, 
-                            landocean=landocean, scale=scale, plot=False)
+                            predictors=predictors, landocean=landocean, 
+                            scale=scale, plot=False)
     residuals = hr_image - np.squeeze(pred_image)
     half_range = (hr_image.max() - hr_image.min()) / 2
 
