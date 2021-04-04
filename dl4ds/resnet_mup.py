@@ -6,9 +6,9 @@ from tensorflow.keras.layers import Layer, Dense, Conv2D, Input, Add, Lambda
 from .blocks import residual_block
 
 
-def resnet_mup(n_channels, n_filters, n_res_blocks, n_channels_out=1, meta_ksize=(3,3)):
+def rmup(n_channels, n_filters, n_res_blocks, n_channels_out=1, meta_ksize=(3,3)):
     """
-    EDSR with MetaUpsample module
+    ResNet-MUP. EDSR with MetaUpsample module
     """
     x_in = Input(shape=(None, None, n_channels))
     x = b = Conv2D(n_filters, (1, 1), padding='same')(x_in)

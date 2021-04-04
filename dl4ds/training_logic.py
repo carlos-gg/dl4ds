@@ -12,32 +12,52 @@ from .utils import Timing, list_devices
 from .dataloader import data_loader
 
 
-def training(model_function, 
-             x_train, x_val, x_test,  
-             array_predictors=None,
-             topography=None, 
-             landocean=None,
-             scale=5, 
-             interpolation='nearest', 
-             patch_size=40, 
-             batch_size=64, 
-             epochs=60, 
-             steps_per_epoch=1000, 
-             validation_steps=100, 
-             test_steps=1000,
-             learning_rate=1e-4, 
-             lr_decay_after=1e5,
-             early_stopping=False, 
-             patience=6, 
-             min_delta=0, 
-             savetoh5_name=None, 
-             savetoh5_dir='./models/', 
-             device='GPU', 
-             plot='plt', 
-             show_plot=True, 
-             verbosity='max', 
-             **architecture_params):
-    """    
+def training(
+    model_function, 
+    x_train, 
+    x_val, 
+    x_test,  
+    predictors_train=None,
+    predictors_val=None,
+    predictors_test=None,
+    topography=None, 
+    landocean=None,
+    scale=5, 
+    interpolation='nearest', 
+    patch_size=40, 
+    batch_size=64, 
+    epochs=60, 
+    steps_per_epoch=1000, 
+    validation_steps=100, 
+    test_steps=1000,
+    learning_rate=1e-4, 
+    lr_decay_after=1e5,
+    early_stopping=False, 
+    patience=6, 
+    min_delta=0, 
+    savetoh5_name=None, 
+    savetoh5_dir='./models/', 
+    device='GPU', 
+    plot='plt', 
+    show_plot=True, 
+    verbosity='max', 
+    **architecture_params):
+    """  
+
+    Parameters
+    ----------
+    predictors_train : tuple of 4D ndarray, optional
+        Predictor variables for trianing. Given as tuple of 4D ndarray with dims 
+        [nsamples, lat, lon, 1]. 
+    predictors_val : tuple of 4D ndarray, optional
+        Predictor variables for validation. Given as tuple of 4D ndarray with dims 
+        [nsamples, lat, lon, 1]. 
+    predictors_test : tuple of 4D ndarray, optional
+        Predictor variables for testing. Given as tuple of 4D ndarray with dims 
+        [nsamples, lat, lon, 1]. 
+    steps_per_epoch : int, optional
+        batch_size * steps_per_epoch samples are passed per epoch.
+
     TO-DO:
     * add other losses (SSIM, SSIM+MAE)
     * Chosing GPUs: strategy = tf.distribute.MirroredStrategy(['/gpu:0', '/gpu:1'])
@@ -70,9 +90,9 @@ def training(model_function,
     batch_size_per_replica = batch_size
     global_batch_size = batch_size_per_replica * strategy.num_replicas_in_sync
     if verbose in [1 ,2]:
-        print(f'Gloabl batch size: {global_batch_size}, per replica: {batch_size_per_replica}')
+        print(f'Global batch size: {global_batch_size}, per replica: {batch_size_per_replica}')
 
-    ### checking model
+    ### checking model name from function name (should be equal to keras model name)
     model_architecture = model_function.__name__
     if model_architecture not in ['rspc', 'rint', 'rmup']:
         raise ValueError('`model_function` not recognized. Must be one of the '
@@ -83,6 +103,7 @@ def training(model_function,
         x_train, 
         scale=scale, 
         batch_size=global_batch_size,
+        predictors=predictors_train,
         topography=topography, 
         landocean=landocean, 
         patch_size=patch_size, 
@@ -92,6 +113,7 @@ def training(model_function,
         x_val, 
         scale=scale, 
         batch_size=global_batch_size, 
+        predictors=predictors_val,
         topography=topography, 
         landocean=landocean, 
         patch_size=patch_size, 
@@ -101,6 +123,7 @@ def training(model_function,
         x_test, 
         scale=scale, 
         batch_size=global_batch_size, 
+        predictors=predictors_test,
         topography=topography, 
         landocean=landocean, 
         patch_size=patch_size, 
@@ -113,8 +136,8 @@ def training(model_function,
         n_channels += 1
     if landocean is not None:
         n_channels += 1
-    if array_predictors is not None:
-        n_channels += array_predictors.shape[-1]
+    if predictors_train is not None:
+        n_channels += len(predictors_train)
     
     ### callbacks: early stopping and loss plotting
     callbacks = []

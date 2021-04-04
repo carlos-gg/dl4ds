@@ -4,9 +4,9 @@ from tensorflow.keras.models import Model
 from .blocks import residual_block
 
 
-def resnet_int(n_channels, n_filters, n_res_blocks, n_channels_out=1):
+def rint(n_channels, n_filters, n_res_blocks, n_channels_out=1):
     """
-    Resnet (EDSR model) with preupsampling
+    ResNet-INT. Resnet (EDSR model) with preupsampling
     """
     x_in = Input(shape=(None, None, n_channels))
     x = b = Conv2D(n_filters, 3, padding='same')(x_in)
