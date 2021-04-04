@@ -75,14 +75,14 @@ class Timing():
             print(self.sep)
 
 
-def crop_image(array, size, yx=None, position=False, get_copy=False):
+def crop_array(array, size, yx=None, position=False, get_copy=False):
     """
-    Return an square cropped version of a 2D ndarray.
+    Return an square cropped version of a 2D or 3D ndarray.
     
     Parameters
     ----------
-    array : 2d numpy ndarray
-        Input image.
+    array : numpy ndarray
+        Input image (2D ndarray) or cube (3D ndarray).
     size : int
         Size of the cropped image.
     yx : tuple of int or None, optional
@@ -102,11 +102,12 @@ def crop_image(array, size, yx=None, position=False, get_copy=False):
     y, x : int
         [position=True] Y,X coordinates.
     """
+    # assuming 3D ndarray as multichannel image [lat, lon, vars]
     array_size_y = array.shape[0]
-    array_size_x = array.shape[1]
+    array_size_x = array.shape[1] 
     
-    if array.ndim != 2:
-        raise TypeError('Input array is not a 2d array.')
+    if array.ndim not in [2, 3]:
+        raise TypeError('Input array is not a 2D or 3D ndarray.')
     if not isinstance(size, int):
         raise TypeError('`Size` must be integer')
     if size > array_size_y or size > array_size_x: 
@@ -127,9 +128,15 @@ def crop_image(array, size, yx=None, position=False, get_copy=False):
         raise RuntimeError(f'Cropped image cannot be obtained with size={size}, y={y}, x={x}')
 
     if get_copy:
-        cropped_array = array[y0: y1, x0: x1].copy()
+        if array.ndim == 2:
+            cropped_array = array[y0: y1, x0: x1].copy()
+        elif array.ndim == 3:
+            cropped_array = array[y0: y1, x0: x1, :].copy()
     else:
-        cropped_array = array[y0: y1, x0: x1]
+        if array.ndim == 2:
+            cropped_array = array[y0: y1, x0: x1]
+        elif array.ndim == 3:
+            cropped_array = array[y0: y1, x0: x1, :].copy()
 
     if position:
         return cropped_array, y, x

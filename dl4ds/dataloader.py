@@ -6,8 +6,8 @@ import sys
 sys.path.append('/esarchive/scratch/cgomez/pkgs/ecubevis/')
 import ecubevis as ecv
 
-from .metasr import get_coords
-from .utils import crop_image
+from .resnet_mup import get_coords
+from .utils import crop_array
 
 
 def create_pair_hr_lr_preupsampling(
@@ -33,9 +33,9 @@ def create_pair_hr_lr_preupsampling(
     lr_y = int(hr_y / scale)          
     lr_array_resized = cv2.resize(hr_array, (lr_x, lr_y), interpolation=interp)
     lr_array_resized = cv2.resize(lr_array_resized, (hr_x, hr_y), interpolation=interp)
-    hr_array, crop_y, crop_x = crop_image(np.squeeze(hr_array), patch_size, 
+    hr_array, crop_y, crop_x = crop_array(np.squeeze(hr_array), patch_size, 
                                           yx=None, position=True)
-    lr_array = crop_image(np.squeeze(lr_array_resized), patch_size, 
+    lr_array = crop_array(np.squeeze(lr_array_resized), patch_size, 
                                      yx=(crop_y, crop_x))
        
     hr_array = hr_array[:,:, np.newaxis]
@@ -44,11 +44,11 @@ def create_pair_hr_lr_preupsampling(
     if topography is not None:
         # there is no need to downsize and upsize the topography if already given
         # in the HR image size 
-        topography = crop_image(np.squeeze(topography), patch_size, yx=(crop_y, crop_x))
+        topography = crop_array(np.squeeze(topography), patch_size, yx=(crop_y, crop_x))
         lr_array = np.concatenate([lr_array, np.expand_dims(topography, -1)], axis=2)
             
     if landocean is not None:
-        landocean = crop_image(np.squeeze(landocean), patch_size, yx=(crop_y, crop_x))
+        landocean = crop_array(np.squeeze(landocean), patch_size, yx=(crop_y, crop_x))
         lr_array = np.concatenate([lr_array, np.expand_dims(landocean, -1)], axis=2)
     
     hr_array = np.asarray(hr_array, 'float32')
@@ -81,7 +81,7 @@ def create_pair_hr_lr(
     patch_size, 
     topography=None, 
     landocean=None, 
-    array_predictors=None, 
+    tuple_predictors=None, 
     debug=False, 
     interpolation='nearest'):
     """
@@ -98,39 +98,34 @@ def create_pair_hr_lr(
         raise ValueError('`patch_size` must be divisible by `scale`')
     lr_x, lr_y = int(patch_size / scale), int(patch_size / scale)  
 
-    if array_predictors is None:
-        hr_array, crop_y, crop_x = crop_image(np.squeeze(hr_array), patch_size, 
-                                            yx=None, position=True)
+    if tuple_predictors is None:
+        hr_array, crop_y, crop_x = crop_array(np.squeeze(hr_array), patch_size, 
+                                              yx=None, position=True)
         lr_array = cv2.resize(hr_array, (lr_x, lr_y), interpolation=interp)
         lr_array = lr_array[:,:, np.newaxis]
     else:
-        if array_predictors.ndim == 2:
-            array_predictors = np.expand_dims(array_predictors, -1)
-        n_predictors = array_predictors.shape[-1]
-        # cropping first the LR predictors (using lr_x instead of patch_size)
-        lr_array_predictors, crop_y, crop_x = crop_image(np.squeeze(array_predictors[:, :, 0]), 
-                                                                    lr_x, yx=None, position=True)
-        lr_array_predictors = np.expand_dims(lr_array_predictors, -1)
-        if n_predictors > 1:
-            for i in range(n_predictors - 1):
-                temp = crop_image(np.squeeze(array_predictors[:, :, i+1]), lr_x, yx=(crop_y, crop_x))
-                temp = np.expand_dims(temp, -1)
-                lr_array_predictors = np.concatenate([lr_array_predictors, temp], axis=2)
+        # expecting a tuple of 3D ndarrays [lat, lon, 1], in LR
+        # turned into a 3d ndarray, [lat, lon, variables]
+        array_predictors = np.asarray(tuple_predictors)
+        array_predictors = np.rollaxis(np.squeeze(array_predictors), 0, 3)
 
+        # cropping predictors (using lr_x instead of patch_size)
+        lr_array_predictors, crop_y, crop_x = crop_array(array_predictors, lr_x, 
+                                                         yx=None, position=True)
         crop_y, crop_x = int(crop_y * scale), int(crop_x * scale)
-        hr_array = crop_image(np.squeeze(hr_array), patch_size, yx=(crop_y, crop_x))          
+        hr_array = crop_array(np.squeeze(hr_array), patch_size, yx=(crop_y, crop_x))          
         lr_array = cv2.resize(hr_array, (lr_x, lr_y), interpolation=interp)
         hr_array = np.expand_dims(hr_array, -1)
         lr_array = np.expand_dims(lr_array, -1) 
         lr_array = np.concatenate([lr_array, lr_array_predictors], axis=2)
 
     if topography is not None:
-        topo_crop_hr = crop_image(np.squeeze(topography), patch_size, yx=(crop_y, crop_x))
+        topo_crop_hr = crop_array(np.squeeze(topography), patch_size, yx=(crop_y, crop_x))
         topo_crop_lr = cv2.resize(topo_crop_hr, (lr_x, lr_y), interpolation=interp)
         lr_array = np.concatenate([lr_array, np.expand_dims(topo_crop_lr, -1)], axis=2)
             
     if landocean is not None:
-        landocean_crop_hr = crop_image(np.squeeze(landocean), patch_size, yx=(crop_y, crop_x))
+        landocean_crop_hr = crop_array(np.squeeze(landocean), patch_size, yx=(crop_y, crop_x))
         landocean_crop_lr = cv2.resize(landocean_crop_hr, (lr_x, lr_y), interpolation=interp)
         lr_array = np.concatenate([lr_array, np.expand_dims(landocean_crop_lr, -1)], axis=2)
     
@@ -175,6 +170,7 @@ def data_loader(
     patch_size=40,
     topography=None, 
     landocean=None, 
+    predictors=None,
     model='rspc', 
     interpolation='nearest'):
     """
@@ -182,6 +178,8 @@ def data_loader(
     ----------
     model : {'rspc', 'rint', 'rmup'}
         rspc = ResNet-SPC, rint = ResNet-INT, rmup = ResNet-MUP
+    predictors : tuple of 4D ndarray 
+        Tuple of predictor ndarrays with dims [nsamples, lat, lon, 1].
 
     TO-DO: instead of the in-memory array, we could input the path and load the 
     netcdf files lazily or memmap a numpy array
@@ -199,14 +197,21 @@ def data_loader(
             batch_rand_idx = np.random.permutation(array.shape[0])[:batch_size]
             batch_hr_images = []
             batch_lr_images = []
-            
-            for i in batch_rand_idx:
+
+            for i in batch_rand_idx:   
+                if predictors is not None:
+                    # we pass a tuple of 3D ndarrays [lat, lon, 1]
+                    tuple_predictors = tuple([var[i] for var in predictors])
+                else:
+                    tuple_predictors = None
+
                 res = create_sample_pair(
                         array=array[i], 
                         scale=scale, 
                         patch_size=patch_size, 
                         topography=topography, 
                         landocean=landocean, 
+                        tuple_predictors=tuple_predictors,
                         interpolation=interpolation)
                 hr_array, lr_array = res
                 batch_lr_images.append(lr_array)
