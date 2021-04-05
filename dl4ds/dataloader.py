@@ -16,6 +16,7 @@ def create_pair_hr_lr_preupsampling(
     patch_size, 
     topography=None, 
     landocean=None, 
+    tuple_predictors=None, 
     debug=False, 
     interpolation='nearest'):
     """
@@ -31,15 +32,28 @@ def create_pair_hr_lr_preupsampling(
     hr_y, hr_x = hr_array.shape     
     lr_x = int(hr_x / scale)
     lr_y = int(hr_y / scale)          
+
+    # whole image is downsampled and upsampled via interpolation
     lr_array_resized = cv2.resize(hr_array, (lr_x, lr_y), interpolation=interp)
     lr_array_resized = cv2.resize(lr_array_resized, (hr_x, hr_y), interpolation=interp)
+    # cropping both hr_array and lr_array (same sizes)
     hr_array, crop_y, crop_x = crop_array(np.squeeze(hr_array), patch_size, 
-                                          yx=None, position=True)
+                                        yx=None, position=True)
     lr_array = crop_array(np.squeeze(lr_array_resized), patch_size, 
-                                     yx=(crop_y, crop_x))
-       
-    hr_array = hr_array[:,:, np.newaxis]
-    lr_array = lr_array[:,:, np.newaxis]
+                                    yx=(crop_y, crop_x))
+    hr_array = np.expand_dims(hr_array, -1)
+    lr_array = np.expand_dims(lr_array, -1)
+
+    if tuple_predictors is not None:
+        # expecting a tuple of 3D ndarrays [lat, lon, 1], in LR
+        # turned into a 3d ndarray, [lat, lon, variables]
+        lr_predictors = np.asarray(tuple_predictors)
+        lr_predictors = np.rollaxis(np.squeeze(lr_predictors), 0, 3)
+        # upsampling the lr predictors
+        lr_predictors_resized = cv2.resize(lr_predictors, (hr_x, hr_y), interpolation=interp)
+        # cropping predictors 
+        lr_predictors_cropped = crop_array(lr_predictors_resized, patch_size, yx=(crop_y, crop_x))        
+        lr_array = np.concatenate([lr_array, lr_predictors_cropped], axis=2)
 
     if topography is not None:
         # there is no need to downsize and upsize the topography if already given
@@ -48,6 +62,8 @@ def create_pair_hr_lr_preupsampling(
         lr_array = np.concatenate([lr_array, np.expand_dims(topography, -1)], axis=2)
             
     if landocean is not None:
+        # there is no need to downsize and upsize the land-ocean mask if already given
+        # in the HR image size
         landocean = crop_array(np.squeeze(landocean), patch_size, yx=(crop_y, crop_x))
         lr_array = np.concatenate([lr_array, np.expand_dims(landocean, -1)], axis=2)
     
@@ -60,7 +76,11 @@ def create_pair_hr_lr_preupsampling(
 
         ecv.plot_ndarray((array[:,:,0]), dpi=60, interactive=False)
         
-        ecv.plot_ndarray((np.squeeze(hr_array), np.squeeze(lr_array)), 
+        if topography is not None or landocean is not None or tuple_predictors is not None:
+            lr_array_plot = np.squeeze(lr_array)[:,:,0]
+        else:
+            lr_array_plot = np.squeeze(lr_array)
+        ecv.plot_ndarray((np.squeeze(hr_array), np.squeeze(lr_array_plot)), 
                          dpi=80, interactive=False, 
                          subplot_titles=('HR cropped image', 'LR cropped/resized image'))
         
@@ -71,6 +91,10 @@ def create_pair_hr_lr_preupsampling(
         if landocean is not None:
             ecv.plot_ndarray(landocean, interactive=False, dpi=80, 
                              subplot_titles=('Land Ocean mask'))
+
+        if tuple_predictors is not None:
+            ecv.plot_ndarray(np.rollaxis(lr_predictors_cropped, 2, 0), dpi=80, interactive=False, 
+                             subplot_titles=('LR cropped predictors'), multichannel4d=True)
 
     return hr_array, lr_array
 
@@ -93,17 +117,12 @@ def create_pair_hr_lr(
     elif interpolation == 'bilinear':
         interp = cv2.INTER_LINEAR
 
-    hr_array = array
+    hr_array = np.squeeze(array)
     if not patch_size % scale == 0:
         raise ValueError('`patch_size` must be divisible by `scale`')
     lr_x, lr_y = int(patch_size / scale), int(patch_size / scale)  
 
-    if tuple_predictors is None:
-        hr_array, crop_y, crop_x = crop_array(np.squeeze(hr_array), patch_size, 
-                                              yx=None, position=True)
-        lr_array = cv2.resize(hr_array, (lr_x, lr_y), interpolation=interp)
-        lr_array = lr_array[:,:, np.newaxis]
-    else:
+    if tuple_predictors is not None:
         # expecting a tuple of 3D ndarrays [lat, lon, 1], in LR
         # turned into a 3d ndarray, [lat, lon, variables]
         array_predictors = np.asarray(tuple_predictors)
@@ -118,6 +137,12 @@ def create_pair_hr_lr(
         hr_array = np.expand_dims(hr_array, -1)
         lr_array = np.expand_dims(lr_array, -1) 
         lr_array = np.concatenate([lr_array, lr_array_predictors], axis=2)
+    else:
+        # cropping and downsampling the image to get lr_array
+        hr_array, crop_y, crop_x = crop_array(np.squeeze(hr_array), patch_size, 
+                                               yx=None, position=True)
+        lr_array = cv2.resize(hr_array, (lr_x, lr_y), interpolation=interp)
+        lr_array = np.expand_dims(lr_array, -1)
 
     if topography is not None:
         topo_crop_hr = crop_array(np.squeeze(topography), patch_size, yx=(crop_y, crop_x))
@@ -138,7 +163,7 @@ def create_pair_hr_lr(
 
         ecv.plot_ndarray((array[:,:,0]), dpi=60, interactive=False)
         
-        if topography is not None or landocean is not None:
+        if topography is not None or landocean is not None or tuple_predictors is not None:
             lr_array_plot = np.squeeze(lr_array)[:,:,0]
         else:
             lr_array_plot = np.squeeze(lr_array)
@@ -156,7 +181,7 @@ def create_pair_hr_lr(
                              interactive=False, dpi=80, 
                              subplot_titles=('HR Land Ocean mask', 'LR  Land Ocean mask'))
 
-        if array_predictors is not None:
+        if tuple_predictors is not None:
             ecv.plot_ndarray(np.rollaxis(lr_array_predictors, 2, 0), dpi=80, interactive=False, 
                              subplot_titles=('LR cropped predictors'), multichannel4d=True)
 
