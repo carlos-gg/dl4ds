@@ -80,9 +80,18 @@ def predict_with_gt(
         x_test_lr = np.zeros((x_test.shape[0], hr_y, hr_x, n_channels))
 
         for i in range(x_test.shape[0]):
+            # downsampling and upsampling via interpolation
             x_test_resized = cv2.resize(x_test[i], (lr_x, lr_y), interpolation=interp)
             x_test_resized = cv2.resize(x_test_resized, (hr_x, hr_y), interpolation=interp)
             x_test_lr[i, :, :, 0] = x_test_resized
+            if predictors is not None:
+                # we create a tuple of 3D ndarrays [lat, lon, 1]
+                tuple_predictors = tuple([var[i] for var in predictors])
+                # turned into a 3d ndarray, [lat, lon, variables]
+                array_predictors = np.asarray(tuple_predictors)
+                array_predictors = np.rollaxis(np.squeeze(array_predictors), 0, 3)
+                array_predictors = cv2.resize(array_predictors, (hr_x, hr_y), interpolation=interp)
+                x_test_lr[i, :, :, pos['pred']:n_predictors+1] = array_predictors
             if topography is not None:
                 x_test_lr[:, :, :, 1] = topography
             if landocean is not None:

@@ -141,6 +141,7 @@ def pxwise_metrics(y_test, y_test_hat, dpi=100, savepath=None):
 def plot_sample(model, lr_image, topography=None, landocean=None, 
                 predictors=None, dpi=150, scale=None, savepath=None, plot=True):
     """
+    Check the model prediction for a single LR image/grid. 
     """
     def check_image_dims_for_inference(image):
         """ Output is a 4d array, where first and last are unitary """
@@ -174,7 +175,7 @@ def plot_sample(model, lr_image, topography=None, landocean=None,
             pred_image = model.predict(input_image)
         elif model_architecture == 'rmup':
             if scale is None:
-                raise ValueError('`scale` must be set for `metasr` model')
+                raise ValueError('`scale` must be set for `rmup` model')
             lr_y, lr_x = np.squeeze(lr_image).shape
             hr_y, hr_x = int(lr_y * scale), int(lr_x * scale)
             coords = get_coords((hr_y, hr_x), (lr_y, lr_x), scale)
@@ -182,11 +183,19 @@ def plot_sample(model, lr_image, topography=None, landocean=None,
             pred_image = model.predict((input_image, coords))
     
     elif model_architecture == 'rint':
+        if scale is None:
+            raise ValueError('`scale` must be set for `rint` model')
         lr_y, lr_x = np.squeeze(lr_image).shape    
         hr_x = int(lr_x * scale)
         hr_y = int(lr_y * scale) 
+        # upscaling the lr image via interpolation
         input_image = cv2.resize(np.squeeze(lr_image), (hr_x, hr_y), interpolation=cv2.INTER_CUBIC)
         input_image = check_image_dims_for_inference(input_image)
+        if predictors is not None:
+            predictors = np.expand_dims(predictors, 0)
+            predictors = cv2.resize(np.squeeze(predictors), (hr_x, hr_y), interpolation=cv2.INTER_CUBIC)
+            predictors = np.expand_dims(predictors, 0)
+            input_image = np.concatenate([input_image, predictors], axis=3)
         if topography is not None: 
             topography = check_image_dims_for_inference(topography)
             input_image = np.concatenate([input_image, topography], axis=3)
