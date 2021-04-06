@@ -48,7 +48,8 @@ def predict_with_gt(
     
     if model_architecture in ('rspc', 'rmup'):
         topo_interp = cv2.resize(topography, (lr_x, lr_y), interpolation=interp)
-        lando_interp = cv2.resize(landocean, (lr_x, lr_y), interpolation=interp)
+        # integer array can only be interpolated with nearest method
+        lando_interp = cv2.resize(landocean, (lr_x, lr_y), interpolation=cv2.INTER_NEAREST)
         x_test_lr = np.zeros((x_test.shape[0], lr_y, lr_x, n_channels))
     
         for i in range(x_test.shape[0]):

@@ -151,7 +151,8 @@ def create_pair_hr_lr(
             
     if landocean is not None:
         landocean_crop_hr = crop_array(np.squeeze(landocean), patch_size, yx=(crop_y, crop_x))
-        landocean_crop_lr = cv2.resize(landocean_crop_hr, (lr_x, lr_y), interpolation=interp)
+        # integer array can only be interpolated with nearest method
+        landocean_crop_lr = cv2.resize(landocean_crop_hr, (lr_x, lr_y), interpolation=cv2.INTER_NEAREST)
         lr_array = np.concatenate([lr_array, np.expand_dims(landocean_crop_lr, -1)], axis=2)
     
     hr_array = np.asarray(hr_array, 'float32')
