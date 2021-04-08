@@ -7,7 +7,7 @@ sys.path.append('/esarchive/scratch/cgomez/pkgs/ecubevis/')
 import ecubevis as ecv
 
 from .resnet_mup import get_coords
-from .utils import crop_array
+from .utils import crop_array, reshape_array
 
 
 def create_pair_hr_lr_preupsampling(
@@ -116,8 +116,6 @@ def create_pair_hr_lr(
         interp = cv2.INTER_LINEAR
 
     hr_array = np.squeeze(array)
-    if not patch_size % scale == 0:
-        raise ValueError('`patch_size` must be divisible by `scale`')
     lr_x, lr_y = int(patch_size / scale), int(patch_size / scale)  
 
     if tuple_predictors is not None:
@@ -125,10 +123,12 @@ def create_pair_hr_lr(
         # turned into a 3d ndarray, [lat, lon, variables]
         array_predictors = np.asarray(tuple_predictors)
         array_predictors = np.rollaxis(np.squeeze(array_predictors), 0, 3)
+        lr_array_predictors, crop_y, crop_x = crop_array(array_predictors, int(patch_size / 5),yx=None, position=True)
 
-        # cropping predictors (using lr_x instead of patch_size)
-        lr_array_predictors, crop_y, crop_x = crop_array(array_predictors, lr_x, yx=None, position=True)
-        crop_y, crop_x = int(crop_y * scale), int(crop_x * scale)
+        # if scale is not 5, array predictors must be adapted to lr_x, lr_y size
+        if scale != 5:
+            lr_array_predictors=reshape_array(lr_array_predictors,(lr_x, lr_y),interp)
+        crop_y, crop_x = int(crop_y * 5), int(crop_x * 5)
         hr_array = crop_array(np.squeeze(hr_array), patch_size, yx=(crop_y, crop_x))          
         lr_array = cv2.resize(hr_array, (lr_x, lr_y), interpolation=interp)
         hr_array = np.expand_dims(hr_array, -1)
@@ -211,6 +211,8 @@ def data_loader(
 
     if model in ['rspc', 'rint']:
         if model == 'rspc':
+            if not patch_size % scale == 0:
+    		    raise ValueError('`patch_size` must be divisible by `scale`')
             create_sample_pair = create_pair_hr_lr
         else:
             create_sample_pair = create_pair_hr_lr_preupsampling
@@ -250,22 +252,29 @@ def data_loader(
             batch_hr_images = []
             batch_lr_images = []
             rand_scale = np.random.uniform(1.0, max_scale)
-            lr_x = int(patch_size / rand_scale)
-            lr_y = int(patch_size / rand_scale)
-            coords = get_coords((patch_size, patch_size), (lr_y, lr_x), rand_scale)
-            batch_coords = batch_size * [coords]
-
             for i in rand_idx:
-                hr_image = array[i]
-                crop_y = np.random.randint(0, hr_image.shape[0] - patch_size - 1)
-                crop_x = np.random.randint(0, hr_image.shape[1] - patch_size - 1)
-                hr_image = hr_image[crop_y: crop_y + patch_size, crop_x: crop_x + patch_size]
-                lr_image = cv2.resize(hr_image,(lr_x, lr_y), interpolation=cv2.INTER_CUBIC)
-                hr_image = np.asarray(hr_image, 'float32')
-                lr_image = np.asarray(lr_image, 'float32')[:,:, np.newaxis]
-                batch_lr_images.append(lr_image)
-                batch_hr_images.append(hr_image)
+                if predictors is not None:
+                    # we pass a tuple of 3D ndarrays [lat, lon, 1]
+                    tuple_predictors = tuple([var[i] for var in predictors])
+                else:
+                    tuple_predictors = None
 
+                res = create_pair_hr_lr(
+                        array=array[i],
+                        scale=rand_scale,
+                        patch_size=patch_size,
+                        topography=topography,
+                        landocean=landocean,
+                        tuple_predictors=tuple_predictors,
+                        interpolation=interpolation)
+                hr_array, lr_array = res
+                batch_lr_images.append(lr_array)
+                batch_hr_images.append(hr_array)
+
+            patch_size_lr = int(patch_size / rand_scale)
+            rand_scale=patch_size/patch_size_lr
+            coords = get_coords((patch_size, patch_size), (patch_size_lr, patch_size_lr), rand_scale)
+            batch_coords = batch_size * [coords]
             batch_lr_images = np.asarray(batch_lr_images)
             batch_hr_images = np.asarray(batch_hr_images)
             batch_coords = np.asarray(batch_coords)
