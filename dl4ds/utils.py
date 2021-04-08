@@ -1,5 +1,6 @@
 import numpy as np
 import tensorflow as tf
+import cv2
 from datetime import datetime
 
 
@@ -142,3 +143,21 @@ def crop_array(array, size, yx=None, position=False, get_copy=False):
         return cropped_array, y, x
     else:
         return cropped_array
+
+def reshape_array(array, sizes,interp):
+    """
+    Return an reshaped version of a [x,y,channels] 3D array.
+    
+    Parameters
+    ----------
+    array : numpy ndarray cube (3D ndarray).
+    sizes : tuple size_x,size_yof the new sizes
+    interp : interpolation mode
+
+    """
+    size_x,size_y=sizes
+    n_channels=array.shape[-1]
+    resized_array=np.zeros([size_x,size_y,n_channels])
+        for i in range(n_channels):
+        resized_array[:,:,i]=cv2.resize(array[:,:,i], (size_x,size_y), interpolation=interp)
+    return resized_array

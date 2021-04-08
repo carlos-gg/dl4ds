@@ -18,7 +18,7 @@ def rmup(n_channels, n_filters, n_res_blocks, n_channels_out=1, meta_ksize=(3,3)
 
     coord = Input((None, None, 3))
     meta_w = Dense(256, activation="relu")(coord)
-    meta_w = Dense(meta_ksize[0] * meta_ksize[1] * n_filters * n_channels)(meta_w)
+    meta_w = Dense(meta_ksize[0] * meta_ksize[1] * n_filters * n_channels_out)(meta_w)
     x = MetaUpSample(n_channels_out, meta_ksize)([x, meta_w])
 
     model = Model([x_in, coord], [x], name='rmup')

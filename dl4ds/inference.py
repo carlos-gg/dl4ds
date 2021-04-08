@@ -75,7 +75,7 @@ def predict_with_gt(
             lr_x = int(hr_x / scale)
             lr_y = int(hr_y / scale)
             coords = np.asarray(len(x_test) * [get_coords((hr_y, hr_x), (lr_y, lr_x), scale)])
-            x_test_pred = model.predict((x_test, coords))
+            x_test_pred = model.predict((x_test_lr, coords))
 
     elif model_architecture == 'rint':
         x_test_lr = np.zeros((x_test.shape[0], hr_y, hr_x, n_channels))
