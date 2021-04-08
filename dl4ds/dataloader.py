@@ -37,10 +37,8 @@ def create_pair_hr_lr_preupsampling(
     lr_array_resized = cv2.resize(hr_array, (lr_x, lr_y), interpolation=interp)
     lr_array_resized = cv2.resize(lr_array_resized, (hr_x, hr_y), interpolation=interp)
     # cropping both hr_array and lr_array (same sizes)
-    hr_array, crop_y, crop_x = crop_array(np.squeeze(hr_array), patch_size, 
-                                        yx=None, position=True)
-    lr_array = crop_array(np.squeeze(lr_array_resized), patch_size, 
-                                    yx=(crop_y, crop_x))
+    hr_array, crop_y, crop_x = crop_array(np.squeeze(hr_array), patch_size, yx=None, position=True)
+    lr_array = crop_array(np.squeeze(lr_array_resized), patch_size, yx=(crop_y, crop_x))
     hr_array = np.expand_dims(hr_array, -1)
     lr_array = np.expand_dims(lr_array, -1)
 
@@ -129,8 +127,7 @@ def create_pair_hr_lr(
         array_predictors = np.rollaxis(np.squeeze(array_predictors), 0, 3)
 
         # cropping predictors (using lr_x instead of patch_size)
-        lr_array_predictors, crop_y, crop_x = crop_array(array_predictors, lr_x, 
-                                                         yx=None, position=True)
+        lr_array_predictors, crop_y, crop_x = crop_array(array_predictors, lr_x, yx=None, position=True)
         crop_y, crop_x = int(crop_y * scale), int(crop_x * scale)
         hr_array = crop_array(np.squeeze(hr_array), patch_size, yx=(crop_y, crop_x))          
         lr_array = cv2.resize(hr_array, (lr_x, lr_y), interpolation=interp)
@@ -139,8 +136,7 @@ def create_pair_hr_lr(
         lr_array = np.concatenate([lr_array, lr_array_predictors], axis=2)
     else:
         # cropping and downsampling the image to get lr_array
-        hr_array, crop_y, crop_x = crop_array(np.squeeze(hr_array), patch_size, 
-                                               yx=None, position=True)
+        hr_array, crop_y, crop_x = crop_array(np.squeeze(hr_array), patch_size, yx=None, position=True)
         lr_array = cv2.resize(hr_array, (lr_x, lr_y), interpolation=interp)
         lr_array = np.expand_dims(lr_array, -1)
 

@@ -13,7 +13,7 @@ import sys
 sys.path.append('/esarchive/scratch/cgomez/pkgs/ecubevis/')
 import ecubevis as ecv
 
-from .metasr import get_coords
+from .resnet_mup import get_coords
 
 
 
@@ -43,9 +43,6 @@ def pxwise_metrics(y_test, y_test_hat, dpi=100, savepath=None):
     """ 
     MSE
     https://keras.io/api/losses/regression_losses/#mean_squared_error-function
-
-    MSLE
-    https://peltarion.com/knowledge-center/documentation/modeling-view/build-an-ai-model/loss-functions/mean-squared-logarithmic-error-(msle)
 
     """
     if y_test.ndim == 5:
