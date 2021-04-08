@@ -138,6 +138,7 @@ def create_pair_hr_lr(
         # cropping and downsampling the image to get lr_array
         hr_array, crop_y, crop_x = crop_array(np.squeeze(hr_array), patch_size, yx=None, position=True)
         lr_array = cv2.resize(hr_array, (lr_x, lr_y), interpolation=interp)
+        hr_array = np.expand_dims(hr_array, -1)
         lr_array = np.expand_dims(lr_array, -1)
 
     if topography is not None:
