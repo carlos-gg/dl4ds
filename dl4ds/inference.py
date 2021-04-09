@@ -3,6 +3,7 @@ import os
 import numpy as np
 
 from .resnet_mup import get_coords
+from .utils import resize_array
 
 
 def predict_with_gt(
@@ -60,6 +61,10 @@ def predict_with_gt(
                 # turned into a 3d ndarray, [lat, lon, variables]
                 array_predictors = np.asarray(tuple_predictors)
                 array_predictors = np.rollaxis(np.squeeze(array_predictors), 0, 3)
+                ratio_hrsize_predictorsize = int(hr_y / array_predictors.shape[0])
+                # for r-mup array predictors must be adapted to lr_x, lr_y size
+                if scale != ratio_hrsize_predictorsize:
+                    lr_array_predictors = resize_array(lr_array_predictors,(lr_x, lr_y),interp)
                 x_test_lr[i, :, :, pos['pred']:n_predictors+1] = array_predictors
             if topography is not None:
                 x_test_lr[:, :, :, pos['topo']] = topo_interp

@@ -14,7 +14,7 @@ sys.path.append('/esarchive/scratch/cgomez/pkgs/ecubevis/')
 import ecubevis as ecv
 
 from .resnet_mup import get_coords
-
+from .utils import resize_array
 
 
 def compute_corr(y_t, y_that, mode='spearman'):
@@ -228,6 +228,10 @@ def plot_sample_with_gt(model, hr_image, scale, topography=None, landocean=None,
     lr_x = int(hr_x / scale)
     lr_y = int(hr_y / scale)
     lr_image = cv2.resize(hr_image, (lr_x, lr_y), interpolation=interp)
+    ratio_hrsize_predictorsize = int(hr_y / predictors.shape[0])
+    # for r-mup array predictors must be adapted to lr_x, lr_y size
+    if scale != ratio_hrsize_predictorsize:
+        predictors = resize_array(predictors, (lr_x, lr_y), interp)
     pred_image = plot_sample(model, lr_image, topography=topography, 
                             predictors=predictors, landocean=landocean, 
                             scale=scale, plot=False)

@@ -111,8 +111,8 @@ def create_pair_hr_lr(
     ----------
     tuple_predictors : tuple of ndarrays, optional
         Tuple of 3D ndarrays [lat, lon, 1] corresponding to predictor variables,
-        in low (target) resolution. To be concatenated to the LR version of 
-        `array`.
+        in low (target) resolution. Assumed to be in LR for r-spc, not important 
+        for r-mup. To be concatenated to the LR version of `array`.
     
     """
     if interpolation == 'nearest':
@@ -129,12 +129,16 @@ def create_pair_hr_lr(
         # turned into a 3d ndarray, [lat, lon, variables]
         array_predictors = np.asarray(tuple_predictors)
         array_predictors = np.rollaxis(np.squeeze(array_predictors), 0, 3)
-        lr_array_predictors, crop_y, crop_x = crop_array(array_predictors, int(patch_size / 5),yx=None, position=True)
+        ratio_hrsize_predictorsize = int(hr_array.shape[0] / array_predictors.shape[0])
+        lr_array_predictors, crop_y, crop_x = crop_array(array_predictors, 
+                                                         int(patch_size / ratio_hrsize_predictorsize),
+                                                         yx=None, position=True)
 
-        # if scale is not 5, array predictors must be adapted to lr_x, lr_y size
-        if scale != 5:
-            lr_array_predictors=resize_array(lr_array_predictors,(lr_x, lr_y),interp)
-        crop_y, crop_x = int(crop_y * 5), int(crop_x * 5)
+        # for r-mup array predictors must be adapted to lr_x, lr_y size
+        if scale != ratio_hrsize_predictorsize:
+            lr_array_predictors = resize_array(lr_array_predictors,(lr_x, lr_y),interp)
+        crop_y = int(crop_y * ratio_hrsize_predictorsize)
+        crop_x = int(crop_x * ratio_hrsize_predictorsize)
         hr_array = crop_array(np.squeeze(hr_array), patch_size, yx=(crop_y, crop_x))          
         lr_array = cv2.resize(hr_array, (lr_x, lr_y), interpolation=interp)
         hr_array = np.expand_dims(hr_array, -1)
@@ -219,7 +223,7 @@ def data_loader(
     if model in ['rspc', 'rint']:
         if model == 'rspc':
             if not patch_size % scale == 0:
-    		    raise ValueError('`patch_size` must be divisible by `scale`')
+                raise ValueError('`patch_size` must be divisible by `scale`')
             create_sample_pair = create_pair_hr_lr
         else:
             create_sample_pair = create_pair_hr_lr_preupsampling
