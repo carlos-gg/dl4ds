@@ -7,7 +7,7 @@ sys.path.append('/esarchive/scratch/cgomez/pkgs/ecubevis/')
 import ecubevis as ecv
 
 from .resnet_mup import get_coords
-from .utils import crop_array, reshape_array
+from .utils import crop_array, resize_array
 
 
 def create_pair_hr_lr_preupsampling(
@@ -107,6 +107,13 @@ def create_pair_hr_lr(
     debug=False, 
     interpolation='nearest'):
     """
+    Parameters
+    ----------
+    tuple_predictors : tuple of ndarrays, optional
+        Tuple of 3D ndarrays [lat, lon, 1] corresponding to predictor variables,
+        in low (target) resolution. To be concatenated to the LR version of 
+        `array`.
+    
     """
     if interpolation == 'nearest':
         interp = cv2.INTER_NEAREST
@@ -119,7 +126,6 @@ def create_pair_hr_lr(
     lr_x, lr_y = int(patch_size / scale), int(patch_size / scale)  
 
     if tuple_predictors is not None:
-        # expecting a tuple of 3D ndarrays [lat, lon, 1], in LR
         # turned into a 3d ndarray, [lat, lon, variables]
         array_predictors = np.asarray(tuple_predictors)
         array_predictors = np.rollaxis(np.squeeze(array_predictors), 0, 3)
@@ -127,7 +133,7 @@ def create_pair_hr_lr(
 
         # if scale is not 5, array predictors must be adapted to lr_x, lr_y size
         if scale != 5:
-            lr_array_predictors=reshape_array(lr_array_predictors,(lr_x, lr_y),interp)
+            lr_array_predictors=resize_array(lr_array_predictors,(lr_x, lr_y),interp)
         crop_y, crop_x = int(crop_y * 5), int(crop_x * 5)
         hr_array = crop_array(np.squeeze(hr_array), patch_size, yx=(crop_y, crop_x))          
         lr_array = cv2.resize(hr_array, (lr_x, lr_y), interpolation=interp)
