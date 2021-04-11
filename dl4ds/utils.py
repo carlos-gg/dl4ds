@@ -144,20 +144,28 @@ def crop_array(array, size, yx=None, position=False, get_copy=False):
     else:
         return cropped_array
 
-def resize_array(array, sizes,interp):
+
+def resize_array(array, newsize, interpolation='bicubic'):
     """
-    Return an reshaped version of a [x,y,channels] 3D array.
+    Return an reshaped version of a 2D or [x,y] 3D ndarray [x,y,channels].
     
     Parameters
     ----------
-    array : numpy ndarray cube (3D ndarray).
-    sizes : tuple size_x,size_yof the new sizes
-    interp : interpolation mode
+    array : numpy ndarray 
+        Ndarray.
+    newsize : tuple of int
+        Size_x,size_y used for resizing.
+    interpolation : 
+        Interpolation mode.
 
     """
-    size_x,size_y=sizes
-    n_channels=array.shape[-1]
-    resized_array=np.zeros([size_x,size_y,n_channels])
-    for i in range(n_channels):
-        resized_array[:,:,i]=cv2.resize(array[:,:,i], (size_x,size_y), interpolation=interp)
+    if interpolation == 'nearest':
+        interp = cv2.INTER_NEAREST
+    elif interpolation == 'bicubic':
+        interp = cv2.INTER_CUBIC
+    elif interpolation == 'bilinear':
+        interp = cv2.INTER_LINEAR
+
+    size_x, size_y = newsize
+    resized_array = cv2.resize(array, (size_x,size_y), interpolation=interp)
     return resized_array
