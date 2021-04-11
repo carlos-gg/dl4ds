@@ -148,7 +148,7 @@ def plot_sample(model, lr_image, topography=None, landocean=None,
         return image
     
     model_architecture = model.name
-    if model_architecture in ('rspc', 'rmup'):
+    if model_architecture == 'rspc':
         input_image = check_image_dims_for_inference(lr_image)
         
         # expecting a 3d ndarray, [lat, lon, variables]
@@ -168,16 +168,7 @@ def plot_sample(model, lr_image, topography=None, landocean=None,
             landocean = check_image_dims_for_inference(landocean)
             input_image = np.concatenate([input_image, landocean], axis=3)
         
-        if model_architecture == 'rspc':
-            pred_image = model.predict(input_image)
-        elif model_architecture == 'rmup':
-            if scale is None:
-                raise ValueError('`scale` must be set for `rmup` model')
-            lr_y, lr_x = np.squeeze(lr_image).shape
-            hr_y, hr_x = int(lr_y * scale), int(lr_x * scale)
-            coords = get_coords((hr_y, hr_x), (lr_y, lr_x), scale)
-            coords = np.asarray([coords])
-            pred_image = model.predict((input_image, coords))
+        pred_image = model.predict(input_image)
     
     elif model_architecture == 'rint':
         if scale is None:
@@ -214,24 +205,14 @@ def plot_sample(model, lr_image, topography=None, landocean=None,
 
 
 def plot_sample_with_gt(model, hr_image, scale, topography=None, landocean=None,
-                        predictors=None, dpi=150, interpolation='nearest', 
+                        predictors=None, dpi=150, interpolation='bicubic', 
                         savepath=None):
-    if interpolation == 'nearest':
-        interp = cv2.INTER_NEAREST
-    elif interpolation == 'bicubic':
-        interp = cv2.INTER_CUBIC
-    elif interpolation == 'bilinear':
-        interp = cv2.INTER_LINEAR 
-
+    """ """
     hr_image = np.squeeze(hr_image)
     hr_y, hr_x = hr_image.shape
     lr_x = int(hr_x / scale)
     lr_y = int(hr_y / scale)
-    lr_image = cv2.resize(hr_image, (lr_x, lr_y), interpolation=interp)
-    ratio_hrsize_predictorsize = int(hr_y / predictors.shape[0])
-    # for r-mup array predictors must be adapted to lr_x, lr_y size
-    if scale != ratio_hrsize_predictorsize:
-        predictors = resize_array(predictors, (lr_x, lr_y), interp)
+    lr_image = resize_array(hr_image, (lr_x, lr_y), interpolation)
     pred_image = plot_sample(model, lr_image, topography=topography, 
                             predictors=predictors, landocean=landocean, 
                             scale=scale, plot=False)
