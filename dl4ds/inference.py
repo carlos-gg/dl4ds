@@ -2,7 +2,6 @@ import cv2
 import os
 import numpy as np
 
-from .resnet_mup import get_coords
 from .utils import resize_array
 
 
@@ -13,7 +12,7 @@ def predict_with_gt(
     topography=None, 
     landocean=None, 
     predictors=None, 
-    interpolation='nearest', 
+    interpolation='bicubic', 
     savepath=None):
     """
 
@@ -21,14 +20,7 @@ def predict_with_gt(
     ----------
     predictors : tuple of 4D ndarrays 
         Predictor variables, with dimensions [nsamples, lat, lon, 1].
-    """
-    if interpolation == 'nearest':
-        interp = cv2.INTER_NEAREST
-    elif interpolation == 'bicubic':
-        interp = cv2.INTER_CUBIC
-    elif interpolation == 'bilinear':
-        interp = cv2.INTER_LINEAR
-   
+    """ 
     model_architecture = model.name
     _, hr_y, hr_x, _ = x_test.shape
     lr_x = int(hr_x / scale)
@@ -47,24 +39,22 @@ def predict_with_gt(
     if landocean is not None:
         n_channels += 1
     
-    if model_architecture in ('rspc', 'rmup'):
-        topo_interp = cv2.resize(topography, (lr_x, lr_y), interpolation=interp)
-        # integer array can only be interpolated with nearest method
-        lando_interp = cv2.resize(landocean, (lr_x, lr_y), interpolation=cv2.INTER_NEAREST)
+    if model_architecture == 'rspc':
+        if topography is not None:
+            topo_interp = resize_array(topography, (lr_x, lr_y), interpolation)
+        if landocean is not None:
+            # integer array can only be interpolated with nearest method
+            lando_interp = resize_array(landocean, (lr_x, lr_y), interpolation='nearest')
         x_test_lr = np.zeros((x_test.shape[0], lr_y, lr_x, n_channels))
     
         for i in range(x_test.shape[0]):
-            x_test_lr[i, :, :, 0] = cv2.resize(x_test[i], (lr_x, lr_y), interpolation=interp)
+            x_test_lr[i, :, :, 0] = resize_array(x_test[i], (lr_x, lr_y), interpolation)
             if predictors is not None:
                 # we create a tuple of 3D ndarrays [lat, lon, 1]
                 tuple_predictors = tuple([var[i] for var in predictors])
                 # turned into a 3d ndarray, [lat, lon, variables]
                 array_predictors = np.asarray(tuple_predictors)
                 array_predictors = np.rollaxis(np.squeeze(array_predictors), 0, 3)
-                ratio_hrsize_predictorsize = int(hr_y / array_predictors.shape[0])
-                # for r-mup array predictors must be adapted to lr_x, lr_y size
-                if scale != ratio_hrsize_predictorsize:
-                    lr_array_predictors = resize_array(lr_array_predictors,(lr_x, lr_y),interp)
                 x_test_lr[i, :, :, pos['pred']:n_predictors+1] = array_predictors
             if topography is not None:
                 x_test_lr[:, :, :, pos['topo']] = topo_interp
@@ -73,22 +63,15 @@ def predict_with_gt(
     
         print('Downsampled x_test shape: ', x_test_lr.shape)
 
-        if model_architecture == 'rspc':
-            x_test_pred = model.predict(x_test_lr)
-        elif model_architecture == 'rmup':
-            hr_y, hr_x = np.squeeze(x_test[0]).shape
-            lr_x = int(hr_x / scale)
-            lr_y = int(hr_y / scale)
-            coords = np.asarray(len(x_test) * [get_coords((hr_y, hr_x), (lr_y, lr_x), scale)])
-            x_test_pred = model.predict((x_test_lr, coords))
+        x_test_pred = model.predict(x_test_lr)
 
     elif model_architecture == 'rint':
         x_test_lr = np.zeros((x_test.shape[0], hr_y, hr_x, n_channels))
 
         for i in range(x_test.shape[0]):
             # downsampling and upsampling via interpolation
-            x_test_resized = cv2.resize(x_test[i], (lr_x, lr_y), interpolation=interp)
-            x_test_resized = cv2.resize(x_test_resized, (hr_x, hr_y), interpolation=interp)
+            x_test_resized = resize_array(x_test[i], (lr_x, lr_y), interpolation)
+            x_test_resized = resize_array(x_test_resized, (hr_x, hr_y), interpolation)
             x_test_lr[i, :, :, 0] = x_test_resized
             if predictors is not None:
                 # we create a tuple of 3D ndarrays [lat, lon, 1]
@@ -96,13 +79,12 @@ def predict_with_gt(
                 # turned into a 3d ndarray, [lat, lon, variables]
                 array_predictors = np.asarray(tuple_predictors)
                 array_predictors = np.rollaxis(np.squeeze(array_predictors), 0, 3)
-                array_predictors = cv2.resize(array_predictors, (hr_x, hr_y), interpolation=interp)
+                array_predictors = resize_array(array_predictors, (hr_x, hr_y), interpolation)
                 x_test_lr[i, :, :, pos['pred']:n_predictors+1] = array_predictors
             if topography is not None:
-                x_test_lr[:, :, :, 1] = topography
+                x_test_lr[:, :, :, pos['topo']] = topography
             if landocean is not None:
-                ind = 1 if topography is None else 2
-                x_test_lr[:, :, :, ind] = landocean
+                x_test_lr[:, :, :, pos['laoc']] = landocean
     
         print('Downsampled x_test shape: ', x_test_lr.shape)
         x_test_pred = model.predict(x_test_lr)
