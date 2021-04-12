@@ -78,7 +78,7 @@ class Timing():
 
 def crop_array(array, size, yx=None, position=False, get_copy=False):
     """
-    Return an square cropped version of a 2D or 3D ndarray.
+    Return a square cropped version of a 2D or 3D ndarray.
     
     Parameters
     ----------
@@ -147,17 +147,22 @@ def crop_array(array, size, yx=None, position=False, get_copy=False):
 
 def resize_array(array, newsize, interpolation='bicubic'):
     """
-    Return an reshaped version of a 2D or [x,y] 3D ndarray [x,y,channels].
+    Return a resized version of a 2D or [x,y] 3D ndarray [x,y,channels], via
+    interpolation.
     
     Parameters
     ----------
     array : numpy ndarray 
         Ndarray.
     newsize : tuple of int
-        Size_x,size_y used for resizing.
+        New size in X,Y.
     interpolation : 
         Interpolation mode.
 
+    Returns
+    -------
+    resized_array : numpy ndarray
+        Interpolated array with size ``newsize``.
     """
     if interpolation == 'nearest':
         interp = cv2.INTER_NEAREST

@@ -3,7 +3,6 @@ import tensorflow as tf
 import numpy as np
 from matplotlib import interactive, pyplot as plt
 from sklearn.metrics import mean_squared_error
-from mpl_toolkits.axes_grid1 import make_axes_locatable
 from scipy.stats import spearmanr, pearsonr
 import os
 import seaborn as sns
@@ -13,7 +12,6 @@ import sys
 sys.path.append('/esarchive/scratch/cgomez/pkgs/ecubevis/')
 import ecubevis as ecv
 
-from .resnet_mup import get_coords
 from .utils import resize_array
 
 
