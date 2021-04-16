@@ -25,7 +25,7 @@ def training(
     topography=None, 
     landocean=None,
     scale=5, 
-    interpolation='nearest', 
+    interpolation='bicubic', 
     patch_size=40, 
     batch_size=64, 
     epochs=60, 
@@ -39,6 +39,7 @@ def training(
     min_delta=0, 
     savetoh5_name='', 
     savetoh5_dir='./', 
+    savecheckpoint_dir='./checkpoints/',
     device='GPU', 
     gpu_memory_growth=False,
     plot='plt', 
@@ -65,8 +66,7 @@ def training(
 
     TO-DO
     -----
-    * add other losses (SSIM, SSIM+MAE)
-    * Chosing GPUs: strategy = tf.distribute.MirroredStrategy(['/gpu:0', '/gpu:1'])
+    add other losses (SSIM, SSIM+MAE)
     
     """
     timing = Timing()
@@ -133,17 +133,6 @@ def training(
     if predictors_train is not None:
         n_channels += len(predictors_train)
     
-    ### callbacks: early stopping and loss plotting
-    callbacks = []
-    if early_stopping:
-        earlystop = EarlyStopping(monitor='val_loss', mode='min', 
-                                  patience=patience, min_delta=min_delta, 
-                                  verbose=verbose)
-        callbacks.append(earlystop)
-    if plot == 'llp':
-        plotlosses = livelossplot.PlotLossesKerasTF()
-        callbacks.append(plotlosses) 
-
     ### instantiating and fitting the model
     if model_architecture == 'rspc':
         model = model_function(scale=scale, n_channels=n_channels, **architecture_params)
@@ -157,6 +146,20 @@ def training(
         learning_rate = PiecewiseConstantDecay(boundaries=[lr_decay_after], 
                                                 values=[learning_rate[0], learning_rate[1]])
     optimizer = Adam(learning_rate=learning_rate)
+
+    ### Callbacks
+    # early stopping
+    callbacks = []
+    if early_stopping:
+        earlystop = EarlyStopping(monitor='val_loss', mode='min', 
+                                  patience=patience, min_delta=min_delta, 
+                                  verbose=verbose)
+        callbacks.append(earlystop)
+    # loss plotting
+    if plot == 'llp':
+        plotlosses = livelossplot.PlotLossesKerasTF()
+        callbacks.append(plotlosses) 
+
     # Horovod: add Horovod DistributedOptimizer.
     optimizer = hvd.DistributedOptimizer(optimizer)
     # Horovod: broadcast initial variable states from rank 0 to all other processes.
@@ -167,9 +170,23 @@ def training(
     if verbose in [1 ,2]:
         verbose=1 if hvd.rank() == 0 else 0
 
-    steps_per_epoch = steps_per_epoch // hvd.size()
+    # Model checkopoints are saved at the end of every epoch, if it's the best seen so far.
+    if savecheckpoint_dir is not None:
+        os.makedirs(savecheckpoint_dir, exist_ok=True)
+        model_checkpoint_callback = tf.keras.callbacks.ModelCheckpoint(
+            os.path.join(savecheckpoint_dir, './checkpoint_epoch-{epoch:02d}_val-loss-{val_loss:.2f}.h5'),
+            save_weights_only=False,
+            monitor='val_loss',
+            mode='min',
+            save_best_only=True)
+        # Horovod: save checkpoints only on worker 0 to prevent other workers from corrupting them.
+        if device=='GPU' and hvd.rank() == 0:
+            callbacks.append(model_checkpoint_callback)
+        elif device=='CPU':
+            callbacks.append(model_checkpoint_callback)
 
     ### compiling and training the model with L1 pixel loss
+    steps_per_epoch = steps_per_epoch // hvd.size()
     model.compile(optimizer=optimizer, loss=mean_absolute_error)
     fithist = model.fit(ds_train, 
                         epochs=epochs, 
@@ -197,7 +214,7 @@ def training(
     if savetoh5_dir is not None:
         os.makedirs(savetoh5_dir, exist_ok=True)
         model.save(savetoh5_path + '.h5')
-
+    
     timing.runtime()
     
     return model
