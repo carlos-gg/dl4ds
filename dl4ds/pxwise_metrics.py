@@ -1,6 +1,7 @@
 import cv2
 import tensorflow as tf
 import numpy as np
+from joblib import Parallel, delayed
 from matplotlib import interactive, pyplot as plt
 from sklearn.metrics import mean_squared_error
 from scipy.stats import spearmanr, pearsonr
@@ -21,23 +22,28 @@ def compute_corr(y_t, y_that, mode='spearman'):
 
     https://docs.scipy.org/doc/scipy/reference/generated/scipy.stats.pearsonr.html
     """
+    def corr_per_px(tupyx):
+        if mode == 'spearman':
+            f = spearmanr
+        elif mode == 'pearson':
+            f = pearsonr
+        y, x = tupyx
+        return y, x, f(y_t[:,y,x,0], y_that[:,y,x,0])[0]
+
     corrmap = np.zeros_like(y_t[0,:,:,0]) 
-    lenx = y_t[0,:,:,0].shape[1]
-    leny = y_t[0,:,:,0].shape[0]
+    yy, xx = np.where(y_t[0,:,:,0])
+    coords = zip(yy, xx)
 
-    if mode == 'spearman':
-        f = spearmanr
-    elif mode == 'pearson':
-        f = pearsonr
+    out = Parallel(n_jobs=40, verbose=False)(delayed(corr_per_px)(i) for i in coords) 
 
-    for x in range(lenx):
-        for y in range(leny):
-            corrmap[y, x] = f(y_t[:,y,x,0], y_that[:,y,x,0])[0]
+    for i in range(len(out)):
+        y, x, val = out[i]
+        corrmap[y, x] = val
 
     return corrmap
 
 
-def pxwise_metrics(y_test, y_test_hat, dpi=100, savepath=None):
+def pxwise_metrics(y_test, y_test_hat, dpi=150, savepath=None):
     """ 
     MSE
     https://keras.io/api/losses/regression_losses/#mean_squared_error-function
@@ -79,21 +85,24 @@ def pxwise_metrics(y_test, y_test_hat, dpi=100, savepath=None):
     ### Plotting the MSE map
     subpti = f'MSE map ($\mu$ = {global_mse:.6f})'
     ecv.plot_ndarray(pxwise_mse, dpi=dpi, subplot_titles=(subpti), cmap='viridis', 
-                     interactive=False, save=os.path.join(savepath, 'mse.png'))
+                     plot_size_px=800, interactive=False, 
+                     save=os.path.join(savepath, 'mse.png'))
 
     ### Plotting the Spearman correlation coefficient
     spearman_corrmap = compute_corr(y_test, y_test_hat)
     mean_spcorr = np.mean(spearman_corrmap)
     subpti = f'Spearman correlation map ($\mu$ = {mean_spcorr:.6f})'
     ecv.plot_ndarray(spearman_corrmap, dpi=dpi, subplot_titles=(subpti), cmap='magma', 
-                     interactive=False, save=os.path.join(savepath, 'corr_spear.png'))
+                     plot_size_px=800, interactive=False, 
+                     save=os.path.join(savepath, 'corr_spear.png'))
 
     # ### Plotting the Pearson correlation coefficient
     pearson_corrmap = compute_corr(y_test, y_test_hat, mode='pearson')
     mean_pecorr = np.mean(pearson_corrmap)
     subpti = f'Pearson correlation map ($\mu$ = {mean_pecorr:.6f})'
     ecv.plot_ndarray(pearson_corrmap, dpi=dpi, subplot_titles=(subpti), cmap='magma', 
-                     interactive=False, save=os.path.join(savepath, 'corr_pears.png'))
+                     plot_size_px=800, interactive=False, 
+                     save=os.path.join(savepath, 'corr_pears.png'))
 
     if savepath is None:      
         ### Plotting violin plots
@@ -197,8 +206,8 @@ def plot_sample(model, lr_image, topography=None, landocean=None,
             savepath = None
 
         ecv.plot_ndarray((np.squeeze(lr_image), np.squeeze(pred_image)), interactive=False, 
-                        subplot_titles=('LR image', 'SR image'), dpi=dpi,
-                        save=savepath)
+                        subplot_titles=('LR image', 'SR image'), dpi=dpi, plot_size_px=800,
+                        horizontal_padding=0.2, save=savepath)
     return pred_image
 
 
@@ -225,7 +234,7 @@ def plot_sample_with_gt(model, hr_image, scale, topography=None, landocean=None,
                      interactive=False, dpi=dpi, show_axis=False, 
                      subplot_titles=('LR image', 'SR image (Yhat)', 
                                      'Ground truth (GT)', 'Residuals (GT - Yhat)'), 
-                     save=savepath, horizontal_padding=0.1)
+                     save=savepath, horizontal_padding=0.1, plot_size_px=800)
     return pred_image
 
 
