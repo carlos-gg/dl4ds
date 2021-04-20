@@ -29,9 +29,9 @@ def training(
     patch_size=40, 
     batch_size=64, 
     epochs=60, 
-    steps_per_epoch=1000, 
-    validation_steps=100, 
-    test_steps=1000,
+    steps_per_epoch=None, 
+    validation_steps=None, 
+    test_steps=None,
     learning_rate=1e-4, 
     lr_decay_after=1e5,
     early_stopping=False, 
@@ -41,7 +41,7 @@ def training(
     savetoh5_dir='./', 
     savecheckpoint_dir='./checkpoints/',
     device='GPU', 
-    gpu_memory_growth=False,
+    gpu_memory_growth=True,
     plot='plt', 
     show_plot=True, 
     verbosity='max', 
@@ -139,7 +139,8 @@ def training(
     elif model_architecture == 'rint':
         model = model_function(n_channels=n_channels, **architecture_params)
     if verbose == 1:
-        model.summary(line_length=150)
+        if (device == 'GPU' and hvd.rank() == 0) or device == 'CPU':
+            model.summary(line_length=150)
 
     if isinstance(learning_rate, tuple):
         ### Adam optimizer with a scheduler 
@@ -174,19 +175,18 @@ def training(
     if savecheckpoint_dir is not None:
         os.makedirs(savecheckpoint_dir, exist_ok=True)
         model_checkpoint_callback = tf.keras.callbacks.ModelCheckpoint(
-            os.path.join(savecheckpoint_dir, './checkpoint_epoch-{epoch:02d}_val-loss-{val_loss:.2f}.h5'),
+            os.path.join(savecheckpoint_dir, './checkpoint_epoch-{epoch:02d}_val-loss-{val_loss:.6f}.h5'),
             save_weights_only=False,
             monitor='val_loss',
             mode='min',
             save_best_only=True)
         # Horovod: save checkpoints only on worker 0 to prevent other workers from corrupting them.
-        if device=='GPU' and hvd.rank() == 0:
-            callbacks.append(model_checkpoint_callback)
-        elif device=='CPU':
+        if (device=='GPU' and hvd.rank() == 0) or device=='CPU':
             callbacks.append(model_checkpoint_callback)
 
     ### compiling and training the model with L1 pixel loss
-    steps_per_epoch = steps_per_epoch // hvd.size()
+    if steps_per_epoch is not None:
+        steps_per_epoch = steps_per_epoch // hvd.size()
     model.compile(optimizer=optimizer, loss=mean_absolute_error)
     fithist = model.fit(ds_train, 
                         epochs=epochs, 
@@ -198,9 +198,11 @@ def training(
     score = model.evaluate(ds_test, steps=test_steps, verbose=verbose)
     print(f'\nScore on the test set: {score}')
     
+    timing.runtime()
+
     if savetoh5_name == '':
         savetoh5_name = f'scale{str(scale)}'
-    savetoh5_name = model_architecture + '_' + savetoh5_name
+        savetoh5_name = model_architecture + '_' + savetoh5_name
     savetoh5_path = os.path.join(savetoh5_dir, savetoh5_name)
     if plot == 'plt':
         if savetoh5_dir is not None:
@@ -211,11 +213,10 @@ def training(
         if show_plot:
             show()
     
-    if savetoh5_dir is not None:
-        os.makedirs(savetoh5_dir, exist_ok=True)
-        model.save(savetoh5_path + '.h5')
-    
-    timing.runtime()
+    if (device=='GPU' and hvd.rank() == 0) or device=='CPU':
+        if savetoh5_dir is not None:
+            os.makedirs(savetoh5_dir, exist_ok=True)
+            model.save(savetoh5_path, save_format='tf')
     
     return model
 
