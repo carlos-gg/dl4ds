@@ -56,8 +56,8 @@ def create_pair_hr_lr(
             cropsize = patch_size
             # cropping predictors 
             lr_array_predictors, crop_y, crop_x = crop_array(array_predictors, cropsize,
-                                                                yx=(crop_y, crop_x), 
-                                                                position=True)
+                                                             yx=(crop_y, crop_x), 
+                                                             position=True)
             # concatenating the predictors to the lr image
             lr_array = np.concatenate([lr_array, lr_array_predictors], axis=2)
     elif model == 'rspc':
@@ -65,7 +65,7 @@ def create_pair_hr_lr(
             cropsize = lr_x
             # cropping first the predictors 
             lr_array_predictors, crop_y, crop_x = crop_array(array_predictors, cropsize,
-                                                            yx=None, position=True)
+                                                             yx=None, position=True)
             crop_y = int(crop_y * scale)
             crop_x = int(crop_x * scale)
             hr_array = crop_array(np.squeeze(hr_array), patch_size, yx=(crop_y, crop_x))   
@@ -83,7 +83,7 @@ def create_pair_hr_lr(
 
     if topography is not None:
         topo_crop_hr = crop_array(np.squeeze(topography), patch_size, yx=(crop_y, crop_x))
-        if model == 'rpsc':  # downsizing the topography
+        if model == 'rspc':  # downsizing the topography
             topo_crop_lr = resize_array(topo_crop_hr, (lr_x, lr_y), interpolation)
             lr_array = np.concatenate([lr_array, np.expand_dims(topo_crop_lr, -1)], axis=2)
         elif model == 'rint':  # topography in HR 
@@ -195,9 +195,12 @@ class DataGenerator(tf.keras.utils.Sequence):
 
     def __len__(self):
         """
-        Defines the number of batches per epoch.
+        Defines the number of batches the DataGenerator can produce per epoch.
+        A common practice is to set this value to n_samples / batch_size so that 
+        the model sees the training samples at most once per epoch. 
         """
-        return self.n // self.batch_size
+        n_batches = self.n // self.batch_size
+        return n_batches
 
     def __getitem__(self, index):
         """
