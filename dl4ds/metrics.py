@@ -16,7 +16,7 @@ import ecubevis as ecv
 from .utils import resize_array
 
 
-def compute_corr(y_t, y_that, mode='spearman'):
+def compute_correlation(y, y_hat, over='time', mode='spearman', n_jobs=40):
     """
     https://scipy.github.io/devdocs/generated/scipy.stats.spearmanr.html
 
@@ -27,23 +27,44 @@ def compute_corr(y_t, y_that, mode='spearman'):
             f = spearmanr
         elif mode == 'pearson':
             f = pearsonr
-        y, x = tupyx
-        return y, x, f(y_t[:,y,x,0], y_that[:,y,x,0])[0]
+        y_coord, x_coord = tupyx
+        return y_coord, x_coord, f(y[:,y_coord,x_coord,0], y_hat[:,y_coord,x_coord,0])[0]
 
-    corrmap = np.zeros_like(y_t[0,:,:,0]) 
-    yy, xx = np.where(y_t[0,:,:,0])
-    coords = zip(yy, xx)
+    def corr_per_gridpair(index):
+        if mode == 'spearman':
+            f = spearmanr
+        elif mode == 'pearson':
+            f = pearsonr
+        return index, f(y[index].ravel(), y_hat[index].ravel())[0]
 
-    out = Parallel(n_jobs=40, verbose=False)(delayed(corr_per_px)(i) for i in coords) 
+    #---------------------------------------------------------------------------
+    if over == 'time':
+        corrmap = np.zeros_like(y[0,:,:,0]) 
+        yy, xx = np.where(y[0,:,:,0])
+        coords = zip(yy, xx)
+        out = Parallel(n_jobs=n_jobs, verbose=False)(delayed(corr_per_px)(i) for i in coords) 
 
-    for i in range(len(out)):
-        y, x, val = out[i]
-        corrmap[y, x] = val
+        for i in range(len(out)):
+            y_coord, x_coord, val = out[i]
+            corrmap[y_coord, x_coord] = val
 
-    return corrmap
+        return corrmap
+
+    elif over == 'space':
+        n_timesteps = np.arange(y.shape[0])
+        out = Parallel(n_jobs=n_jobs, verbose=False)(delayed(corr_per_gridpair)(i) for i in n_timesteps)
+
+        list_corrs = []
+        list_inds = []
+        for i in range(len(out)):
+            index, value = out[i]
+            list_inds.append(index)
+            list_corrs.append(value)
+
+        return list_corrs
 
 
-def pxwise_metrics(y_test, y_test_hat, dpi=150, savepath=None):
+def compute_metrics(y_test, y_test_hat, dpi=150, n_jobs=40, save_path=None):
     """ 
     MSE
     https://keras.io/api/losses/regression_losses/#mean_squared_error-function
@@ -78,6 +99,8 @@ def pxwise_metrics(y_test, y_test_hat, dpi=150, savepath=None):
     pxwise_mse = np.mean(mses, axis=0)
     global_mse = np.nanmean(pxwise_mse)
     mses_pairs = np.mean(mses, axis=(1,2))
+    if save_path is not None:
+        np.save(os.path.join(save_path, 'mse_pergridpair.npy'), mses_pairs)
     tmean_mse = np.mean(mses, axis=0)
     mean_mse = np.mean(mses_pairs)
     std_mse = np.std(mses_pairs)
@@ -86,49 +109,57 @@ def pxwise_metrics(y_test, y_test_hat, dpi=150, savepath=None):
     subpti = f'MSE map ($\mu$ = {global_mse:.6f})'
     ecv.plot_ndarray(pxwise_mse, dpi=dpi, subplot_titles=(subpti), cmap='viridis', 
                      plot_size_px=800, interactive=False, 
-                     save=os.path.join(savepath, 'mse.png'))
+                     save=os.path.join(save_path, 'mse.png'))
 
-    ### Plotting the Spearman correlation coefficient
-    spearman_corrmap = compute_corr(y_test, y_test_hat)
+    ### Spearman correlation coefficient
+    spearman_corr_perpairs = compute_correlation(y_test, y_test_hat, n_jobs=n_jobs, over='space')
+    if save_path is not None:
+        np.save(os.path.join(save_path, 'spearcorr_pergridpair.npy'), spearman_corr_perpairs)
+    spearman_corrmap = compute_correlation(y_test, y_test_hat, n_jobs=n_jobs)
     mean_spcorr = np.mean(spearman_corrmap)
     subpti = f'Spearman correlation map ($\mu$ = {mean_spcorr:.6f})'
     ecv.plot_ndarray(spearman_corrmap, dpi=dpi, subplot_titles=(subpti), cmap='magma', 
                      plot_size_px=800, interactive=False, 
-                     save=os.path.join(savepath, 'corr_spear.png'))
+                     save=os.path.join(save_path, 'corr_spear.png'))
 
-    # ### Plotting the Pearson correlation coefficient
-    pearson_corrmap = compute_corr(y_test, y_test_hat, mode='pearson')
+    ### Pearson correlation coefficient
+    pearson_corr_perpairs = compute_correlation(y_test, y_test_hat, mode='pearson', n_jobs=n_jobs, over='space')
+    if save_path is not None:
+        np.save(os.path.join(save_path, 'pearcorr_pergridpair.npy'), pearson_corr_perpairs)
+    pearson_corrmap = compute_correlation(y_test, y_test_hat, mode='pearson', n_jobs=n_jobs)
     mean_pecorr = np.mean(pearson_corrmap)
     subpti = f'Pearson correlation map ($\mu$ = {mean_pecorr:.6f})'
     ecv.plot_ndarray(pearson_corrmap, dpi=dpi, subplot_titles=(subpti), cmap='magma', 
                      plot_size_px=800, interactive=False, 
-                     save=os.path.join(savepath, 'corr_pears.png'))
+                     save=os.path.join(save_path, 'corr_pears.png'))
+     
+    ### Plotting violin plots
+    f, ax = plt.subplots(1, 4, figsize=(12, 4))
 
-    if savepath is None:      
-        ### Plotting violin plots
-        f, ax = plt.subplots(1, 5, figsize=(12, 4))
+    ax_ = sns.violinplot(x=np.array(psnr), ax=ax[0], orient='h')
+    plt.setp(ax_.collections, alpha=0.5)
+    ax_.set_title('PSNR')
+    ax_.set_xlabel(f'$\mu$ = {mean_psnr:.6f} \n$\sigma$ = {std_psnr:.6f}')
 
-        ax_ = sns.violinplot(x=psnr, ax=ax[0], orient='v')
-        plt.setp(ax_.collections, alpha=0.5)
-        ax_.set_title('PSNR')
-        ax_.set_xlabel(f'$\mu$ = {mean_psnr:.6f} \n$\sigma$ = {std_psnr:.6f}')
+    ax_ = sns.violinplot(x=np.array(ssim), ax=ax[1], orient='h')
+    plt.setp(ax_.collections, alpha=0.5)
+    ax_.set_title('SSIM')
+    ax_.set_xlabel(f'$\mu$ = {mean_ssim:.6f} \n$\sigma$ = {std_ssim:.6f}')
 
-        ax_ = sns.violinplot(x=ssim, ax=ax[1], orient='v')
-        plt.setp(ax_.collections, alpha=0.5)
-        ax_.set_title('SSIM')
-        ax_.set_xlabel(f'$\mu$ = {mean_ssim:.6f} \n$\sigma$ = {std_ssim:.6f}')
+    ax_ = sns.violinplot(x=maes_pairs, ax=ax[2], orient='h')
+    plt.setp(ax_.collections, alpha=0.5)
+    ax_.set_title('MAE')
+    ax_.set_xlabel(f'$\mu$ = {mean_mae:.6f} \n$\sigma$ = {std_mae:.6f}')
 
-        ax_ = sns.violinplot(x=maes_pairs, ax=ax[2], orient='v')
-        plt.setp(ax_.collections, alpha=0.5)
-        ax_.set_title('MAE')
-        ax_.set_xlabel(f'$\mu$ = {mean_mae:.6f} \n$\sigma$ = {std_mae:.6f}')
+    ax_ = sns.violinplot(x=mses_pairs, ax=ax[3], orient='h')
+    plt.setp(ax_.collections, alpha=0.5)
+    ax_.set_title('MSE')
+    ax_.set_xlabel(f'$\mu$ = {mean_mse:.6f} \n$\sigma$ = {std_mse:.6f}')
 
-        ax_ = sns.violinplot(x=mses_pairs, ax=ax[3], orient='v')
-        plt.setp(ax_.collections, alpha=0.5)
-        ax_.set_title('MSE')
-        ax_.set_xlabel(f'$\mu$ = {mean_mse:.6f} \n$\sigma$ = {std_mse:.6f}')
-
-        f.tight_layout()
+    f.tight_layout()
+    if save_path is not None: 
+        plt.savefig(os.path.join(save_path, 'violin_plots.png'))
+    else:
         plt.show()
 
     print('Metrics on y_test and y_test_hat:\n')
@@ -143,7 +174,7 @@ def pxwise_metrics(y_test, y_test_hat, dpi=150, savepath=None):
 
 
 def plot_sample(model, lr_image, topography=None, landocean=None, 
-                predictors=None, dpi=150, scale=None, savepath=None, plot=True):
+                predictors=None, dpi=150, scale=None, save_path=None, plot=True):
     """
     Check the model prediction for a single LR image/grid. 
     """
@@ -155,7 +186,7 @@ def plot_sample(model, lr_image, topography=None, landocean=None,
         return image
     
     model_architecture = model.name
-    if model_architecture == 'rspc':
+    if model_architecture  in ['resnet_spc', 'resnet_rec']:
         input_image = check_image_dims_for_inference(lr_image)
         
         # expecting a 3d ndarray, [lat, lon, variables]
@@ -177,7 +208,7 @@ def plot_sample(model, lr_image, topography=None, landocean=None,
         
         pred_image = model.predict(input_image)
     
-    elif model_architecture == 'rint':
+    elif model_architecture == 'resnet_int':
         if scale is None:
             raise ValueError('`scale` must be set for `rint` model')
         lr_y, lr_x = np.squeeze(lr_image).shape    
@@ -200,8 +231,8 @@ def plot_sample(model, lr_image, topography=None, landocean=None,
         pred_image = model.predict(input_image)
 
     if plot:
-        if savepath is not None:
-            savepath = os.path.join(savepath, 'sample_nogt.png')
+        if save_path is not None:
+            savepath = os.path.join(save_path, 'sample_nogt.png')
         else:
             savepath = None
 
@@ -213,7 +244,7 @@ def plot_sample(model, lr_image, topography=None, landocean=None,
 
 def plot_sample_with_gt(model, hr_image, scale, topography=None, landocean=None,
                         predictors=None, dpi=150, interpolation='bicubic', 
-                        savepath=None):
+                        save_path=None):
     """ """
     hr_image = np.squeeze(hr_image)
     hr_y, hr_x = hr_image.shape
@@ -226,8 +257,8 @@ def plot_sample_with_gt(model, hr_image, scale, topography=None, landocean=None,
     residuals = hr_image - np.squeeze(pred_image)
     half_range = (hr_image.max() - hr_image.min()) / 2
 
-    if savepath is not None:
-        savepath = os.path.join(savepath, 'sample_gt.png')
+    if save_path is not None:
+        savepath = os.path.join(save_path, 'sample_gt.png')
     else:
         savepath = None
     ecv.plot_ndarray((np.squeeze(lr_image), np.squeeze(pred_image), hr_image, residuals), 
