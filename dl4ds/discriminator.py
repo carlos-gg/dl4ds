@@ -1,10 +1,10 @@
 import tensorflow as tf
 from tensorflow.keras.layers import (Input, Dropout, Dense, Conv2D, Add, concatenate, 
-                                     GlobalAveragePooling2D, Cropping2D)
+                                     GlobalAveragePooling2D, Cropping2D, AveragePooling2D)
 from .blocks import residual_block
 
 
-def residual_discriminator(n_channels, n_filters, n_res_blocks, model, attention=False):
+def residual_discriminator(n_channels, n_filters, n_res_blocks, model, scale=5, attention=False):
     """
     """
     x_in = Input(shape=(None, None, n_channels))    
@@ -19,11 +19,16 @@ def residual_discriminator(n_channels, n_filters, n_res_blocks, model, attention
     for i in range(n_res_blocks):
         c = residual_block(c, n_filters, attention=attention)
 
-    if model == 'rspc':
-        c = Conv2D(n_filters, (3, 3), padding='valid', strides=(2,2))(c)
-        x_2 = Conv2D(n_filters, (3, 3), padding='valid', strides=(2,2))(c)
-        x_2 = Cropping2D(cropping=((0,1),(0,1)))(x_2)
-    elif model == 'rint':
+    if model in ['resnet_spc', 'resnet_rec']:  
+        # c = AveragePooling2D(scale)(c)
+        if scale == 5:      
+            c = Conv2D(n_filters, (3, 3), padding='valid', strides=(2,2))(c)
+            x_2 = Conv2D(n_filters, (3, 3), padding='valid', strides=(2,2))(c)
+            x_2 = Cropping2D(cropping=((0,1),(0,1)))(x_2)
+        elif scale == 4:
+            c = Conv2D(n_filters, (3, 3), padding='same', strides=(2,2))(c)
+            x_2 = Conv2D(n_filters, (3, 3), padding='same', strides=(2,2))(c)
+    elif model == 'resnet_int':
         c = Conv2D(n_filters, (3, 3), padding='same')(c)
         x_2 = Add()([x_2, c])
 
