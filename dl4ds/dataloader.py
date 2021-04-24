@@ -16,7 +16,7 @@ def create_pair_hr_lr(
     topography=None, 
     landocean=None, 
     tuple_predictors=None, 
-    model='rspc',
+    model='resnet_spc',
     debug=False, 
     interpolation='bicubic'):
     """
@@ -30,7 +30,7 @@ def create_pair_hr_lr(
     """
     hr_array = np.squeeze(array)
     
-    if model == 'rint':
+    if model == 'resnet_int':
         hr_y, hr_x = hr_array.shape 
         lr_x, lr_y = int(hr_x / scale), int(hr_y / scale) 
         # whole image is downsampled and upsampled via interpolation
@@ -41,7 +41,7 @@ def create_pair_hr_lr(
         lr_array = crop_array(np.squeeze(lr_array_resized), patch_size, yx=(crop_y, crop_x))
         hr_array = np.expand_dims(hr_array, -1)
         lr_array = np.expand_dims(lr_array, -1)
-    elif model == 'rspc':
+    elif model in ['resnet_spc', 'resnet_rec']:
         lr_x, lr_y = int(patch_size / scale), int(patch_size / scale)  
 
     if tuple_predictors is not None:
@@ -49,7 +49,7 @@ def create_pair_hr_lr(
         array_predictors = np.asarray(tuple_predictors)
         array_predictors = np.rollaxis(np.squeeze(array_predictors), 0, 3)
 
-    if model == 'rint':
+    if model == 'resnet_int':
         if tuple_predictors is not None:
             # upsampling the lr predictors
             array_predictors = resize_array(array_predictors, (hr_x, hr_y), interpolation)
@@ -60,7 +60,7 @@ def create_pair_hr_lr(
                                                              position=True)
             # concatenating the predictors to the lr image
             lr_array = np.concatenate([lr_array, lr_array_predictors], axis=2)
-    elif model == 'rspc':
+    elif model in ['resnet_spc', 'resnet_rec']:
         if tuple_predictors is not None:
             cropsize = lr_x
             # cropping first the predictors 
@@ -83,19 +83,19 @@ def create_pair_hr_lr(
 
     if topography is not None:
         topo_crop_hr = crop_array(np.squeeze(topography), patch_size, yx=(crop_y, crop_x))
-        if model == 'rspc':  # downsizing the topography
+        if model in ['resnet_spc', 'resnet_rec']:  # downsizing the topography
             topo_crop_lr = resize_array(topo_crop_hr, (lr_x, lr_y), interpolation)
             lr_array = np.concatenate([lr_array, np.expand_dims(topo_crop_lr, -1)], axis=2)
-        elif model == 'rint':  # topography in HR 
+        elif model == 'resnet_int':  # topography in HR 
             lr_array = np.concatenate([lr_array, np.expand_dims(topo_crop_hr, -1)], axis=2)
 
     if landocean is not None:
         landocean_crop_hr = crop_array(np.squeeze(landocean), patch_size, yx=(crop_y, crop_x))
-        if model == 'rspc':  # downsizing the land-ocean mask
+        if model in ['resnet_spc', 'resnet_rec']:  # downsizing the land-ocean mask
             # integer array can only be interpolated with nearest method
             landocean_crop_lr = resize_array(landocean_crop_hr, (lr_x, lr_y), interpolation='nearest')
             lr_array = np.concatenate([lr_array, np.expand_dims(landocean_crop_lr, -1)], axis=2)
-        elif model == 'rint':  # lando in HR 
+        elif model == 'resnet_int':  # lando in HR 
             lr_array = np.concatenate([lr_array, np.expand_dims(landocean_crop_hr, -1)], axis=2)
     
     hr_array = np.asarray(hr_array, 'float32')
@@ -115,7 +115,7 @@ def create_pair_hr_lr(
                          dpi=80, interactive=False, 
                          subplot_titles=('HR cropped image', 'LR cropped image'))
         
-        if model == 'rspc':
+        if model in ['resnet_spc', 'resnet_rec']:
             if topography is not None:
                 ecv.plot_ndarray((topo_crop_hr, topo_crop_lr), 
                                 interactive=False, dpi=80, 
@@ -125,7 +125,7 @@ def create_pair_hr_lr(
                 ecv.plot_ndarray((landocean_crop_hr, landocean_crop_lr), 
                                 interactive=False, dpi=80, 
                                 subplot_titles=('HR Land Ocean mask', 'LR  Land Ocean mask'))
-        elif model == 'rint':
+        elif model == 'resnet_int':
             if topography is not None:
                 ecv.plot_ndarray(topography, interactive=False, dpi=80, 
                                  subplot_titles=('Topography'))
@@ -159,13 +159,13 @@ class DataGenerator(tf.keras.utils.Sequence):
         topography=None, 
         landocean=None, 
         predictors=None,
-        model='rspc', 
+        model='resnet_spc', 
         interpolation='bicubic'):
         """
         Parameters
         ----------
-        model : {'rspc', 'rint'}
-            Name of the model architecture. rspc = ResNet-SPC, rint = ResNet-INT.
+        model : {'resnet_spc', 'resnet_int', 'resnet_rec'}
+            Name of the model architecture.
         predictors : tuple of 4D ndarray 
             Tuple of predictor ndarrays with dims [nsamples, lat, lon, 1].
 
@@ -186,10 +186,10 @@ class DataGenerator(tf.keras.utils.Sequence):
         self.n = array.shape[0]
         self.indices = np.random.permutation(self.n)
 
-        if self.model not in ['rspc', 'rint']:        
-            raise ValueError('`model` not recognized')
+        if self.model not in ['resnet_spc', 'resnet_int', 'resnet_rec']:
+            raise ValueError('`model` not recognized. Must be one of the following: resnet_spc, resnet_int, resnet_rec')
 
-        if self.model == 'rspc':
+        if self.model in ['resnet_spc', 'resnet_rec']:
             if not self.patch_size % self.scale == 0:
                 raise ValueError('`patch_size` must be divisible by `scale`')
 
