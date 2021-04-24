@@ -1,3 +1,8 @@
+"""
+
+
+"""
+
 import os
 import livelossplot
 import numpy as np
@@ -12,10 +17,13 @@ import horovod.tensorflow.keras as hvd
 
 from .utils import Timing, list_devices
 from .dataloader import DataGenerator
+from .resnet_int import resnet_int
+from .resnet_rec import resnet_rec
+from .resnet_spc import resnet_spc
 
 
 def training(
-    model_function, 
+    model, 
     x_train, 
     x_val, 
     x_test,  
@@ -26,7 +34,7 @@ def training(
     landocean=None,
     scale=5, 
     interpolation='bicubic', 
-    patch_size=40, 
+    patch_size=50, 
     batch_size=64, 
     epochs=60, 
     steps_per_epoch=None, 
@@ -37,13 +45,14 @@ def training(
     early_stopping=False, 
     patience=6, 
     min_delta=0, 
-    savetoh5_name='', 
-    savetoh5_dir='./', 
-    savecheckpoint_dir='./checkpoints/',
+    save=False,
+    save_path=None, 
+    savecheckpoint_path='./checkpoints/',
     device='GPU', 
     gpu_memory_growth=True,
     plot='plt', 
     show_plot=True, 
+    save_plot=False,
     verbosity='max', 
     **architecture_params):
     """  
@@ -64,9 +73,6 @@ def training(
     steps_per_epoch : int, optional
         batch_size * steps_per_epoch samples are passed per epoch.
 
-    TO-DO
-    -----
-    add other losses (SSIM, SSIM+MAE)
     
     """
     timing = Timing()
@@ -104,12 +110,12 @@ def training(
     if verbose in [1 ,2]:
         print(f'Global batch size: {global_batch_size}, per replica: {batch_size_per_replica}')
 
-    ### checking model name from function name (should be equal to keras model name)
-    model_architecture = model_function.__name__
-    if model_architecture not in ['rspc', 'rint']:
-        raise ValueError('`model_function` not recognized. Must be one of the '
-                         'following: rspc, rint')
+    if model not in ['resnet_spc', 'resnet_int', 'resnet_rec']:
+        raise ValueError('`model` not recognized. Must be one of the following: resnet_spc, resnet_int, resnet_rec')
 
+    if patch_size % scale != 0:
+        raise ValueError('`patch_size` must be divisible by `scale` (remainder must be zero)')
+    
     ### data loader
     datagen_params = dict(
         scale=scale, 
@@ -117,7 +123,7 @@ def training(
         topography=topography, 
         landocean=landocean, 
         patch_size=patch_size, 
-        model=model_architecture, 
+        model=model, 
         interpolation=interpolation)
     
     ds_train = DataGenerator(x_train, predictors=predictors_train, **datagen_params)
@@ -134,10 +140,13 @@ def training(
         n_channels += len(predictors_train)
     
     ### instantiating and fitting the model
-    if model_architecture == 'rspc':
-        model = model_function(scale=scale, n_channels=n_channels, **architecture_params)
-    elif model_architecture == 'rint':
-        model = model_function(n_channels=n_channels, **architecture_params)
+    if model == 'resnet_spc':
+        model = resnet_spc(scale=scale, n_channels=n_channels, **architecture_params)
+    elif model == 'resnet_rec':
+        model = resnet_rec(scale=scale, n_channels=n_channels, **architecture_params)
+    elif model == 'resnet_int':
+        model = resnet_int(n_channels=n_channels, **architecture_params)
+    
     if verbose == 1:
         if (device == 'GPU' and hvd.rank() == 0) or device == 'CPU':
             model.summary(line_length=150)
@@ -172,10 +181,10 @@ def training(
         verbose=1 if hvd.rank() == 0 else 0
 
     # Model checkopoints are saved at the end of every epoch, if it's the best seen so far.
-    if savecheckpoint_dir is not None:
-        os.makedirs(savecheckpoint_dir, exist_ok=True)
+    if savecheckpoint_path is not None:
+        os.makedirs(savecheckpoint_path, exist_ok=True)
         model_checkpoint_callback = tf.keras.callbacks.ModelCheckpoint(
-            os.path.join(savecheckpoint_dir, './checkpoint_epoch-{epoch:02d}_val-loss-{val_loss:.6f}.h5'),
+            os.path.join(savecheckpoint_path, './checkpoint_epoch-{epoch:02d}_val-loss-{val_loss:.6f}.h5'),
             save_weights_only=False,
             monitor='val_loss',
             mode='min',
@@ -199,24 +208,23 @@ def training(
     print(f'\nScore on the test set: {score}')
     
     timing.runtime()
-
-    if savetoh5_name == '':
-        savetoh5_name = f'scale{str(scale)}'
-        savetoh5_name = model_architecture + '_' + savetoh5_name
-    savetoh5_path = os.path.join(savetoh5_dir, savetoh5_name)
+    
     if plot == 'plt':
-        if savetoh5_dir is not None:
-            learning_curve_fname = savetoh5_path + '_learning_curve.png'
+        if save_plot:
+            learning_curve_fname = 'learning_curve.png'
         else:
             learning_curve_fname = None
         plot_history(fithist.history, path=learning_curve_fname)
         if show_plot:
             show()
+
+    if save:
+        if save_path is None:
+            save_path = './saved_model/'
     
-    if (device=='GPU' and hvd.rank() == 0) or device=='CPU':
-        if savetoh5_dir is not None:
-            os.makedirs(savetoh5_dir, exist_ok=True)
-            model.save(savetoh5_path, save_format='tf')
+        if (device=='GPU' and hvd.rank() == 0) or device=='CPU':
+            os.makedirs(save_path, exist_ok=True)
+            model.save(save_path, save_format='tf')
     
     return model
 
