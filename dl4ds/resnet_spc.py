@@ -6,7 +6,7 @@ from tensorflow.keras.models import Model
 from .blocks import residual_block
 
 
-def rspc(scale, n_channels, n_filters, n_res_blocks, n_channels_out=1, attention=False):
+def resnet_spc(scale, n_channels, n_filters, n_res_blocks, n_channels_out=1, attention=False):
     """
     ResNet-SPC. ResNet with EDSR residual blocks and pixel shuffle post-upscaling.
     """
@@ -20,7 +20,7 @@ def rspc(scale, n_channels, n_filters, n_res_blocks, n_channels_out=1, attention
     x = upsample(x, scale, n_filters)
     x = Conv2D(n_channels_out, (3, 3), padding='same')(x)
 
-    return Model(x_in, x, name="rspc")
+    return Model(x_in, x, name="resnet_spc")
 
 
 def upsample(x, scale, n_filters):
