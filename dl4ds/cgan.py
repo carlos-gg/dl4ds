@@ -16,7 +16,7 @@ from .dataloader import create_pair_hr_lr
 from .utils import Timing
 
 
-def load_checkpoint(checkpoint_dir, load_epoch, scale, model='resnet_spc', 
+def load_checkpoint(checkpoint_dir, checkpoint_number, scale, model='resnet_spc', 
                     topography=None, landocean=None, 
                     n_res_blocks=(20, 4), n_filters=64, attention=False):
     """
@@ -28,6 +28,9 @@ def load_checkpoint(checkpoint_dir, load_epoch, scale, model='resnet_spc',
         n_channels += 1
 
     # generator
+    if model not in ['resnet_spc', 'resnet_int', 'resnet_rec']:
+        raise ValueError('`model` not recognized. Must be one of the following: resnet_spc, resnet_int, resnet_rec')
+
     if model == 'resnet_spc':
         generator = resnet_spc(scale=scale, n_channels=n_channels, n_filters=n_filters, 
                                n_res_blocks=n_res_blocks[0], n_channels_out=1, attention=attention)
@@ -39,7 +42,7 @@ def load_checkpoint(checkpoint_dir, load_epoch, scale, model='resnet_spc',
                                n_res_blocks=n_res_blocks[0], n_channels_out=1, attention=attention)
         
     # discriminator
-    discriminator = residual_discriminator(n_channels=n_channels, n_filters=n_filters, 
+    discriminator = residual_discriminator(n_channels=n_channels, n_filters=n_filters, scale=scale,
                                            n_res_blocks=n_res_blocks[1], model=model, attention=attention)
     
     # optimizers
@@ -50,14 +53,17 @@ def load_checkpoint(checkpoint_dir, load_epoch, scale, model='resnet_spc',
     checkpoint = tf.train.Checkpoint(generator_optimizer=generator_optimizer,
                                      discriminator_optimizer=discriminator_optimizer,
                                      generator=generator, discriminator=discriminator)
-    checkpoint.restore(checkpoint_prefix + '-' + str(load_epoch))
+    checkpoint.restore(checkpoint_prefix + '-' + str(checkpoint_number))
     return generator, generator_optimizer, discriminator, discriminator_optimizer
 
 
 def generator_loss(disc_generated_output, gen_output, target, lambda_scaling_factor=100):
     """
     Generator loss:
-    * It is a sigmoid cross entropy loss of the generated images and an array of ones.
+    The generator loss is then calculated from the discriminator’s classification – it 
+    gets rewarded if it successfully fools the discriminator, and gets penalized otherwise. 
+
+    * It is a sigmoid cross entropy loss of the discriminator output and an array of ones.
     * The paper also includes L1 loss which is MAE (mean absolute error) between the generated image and the target image.
     * This allows the generated image to become structurally similar to the target image.
     * The formula to calculate the total generator loss = gan_loss + LAMBDA * l1_loss, where LAMBDA = 100. This value was decided by the authors of the paper.
@@ -199,9 +205,10 @@ def training_cgan(model, x_train, epochs, scale=5, patch_size=50, interpolation=
             if (i + 1) % 100 == 0:
                 print('.', end='')
 
-            hr_array, lr_array = create_pair_hr_lr(x_train[i], tuple_predictors=None, scale=scale, topography=topography, 
-                                                   landocean=landocean, patch_size=patch_size, model=model, 
-                                                   interpolation=interpolation)
+            hr_array, lr_array = create_pair_hr_lr(x_train[i],
+                tuple_predictors=None, scale=scale, topography=topography, 
+                landocean=landocean, patch_size=patch_size, 
+                model=model, interpolation=interpolation)
 
             losses = train_step(lr_array, hr_array, generator, discriminator, generator_optimizer, 
                                 discriminator_optimizer, epoch, summary_writer)
