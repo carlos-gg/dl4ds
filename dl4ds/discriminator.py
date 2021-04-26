@@ -4,7 +4,7 @@ from tensorflow.keras.layers import (Input, Dropout, Dense, Conv2D, Add, concate
 from .blocks import residual_block
 
 
-def residual_discriminator(n_channels, n_filters, n_res_blocks, model, scale=5, attention=False):
+def residual_discriminator(n_channels, n_filters, n_res_blocks, model, scale, attention=False):
     """
     """
     x_in = Input(shape=(None, None, n_channels))    
