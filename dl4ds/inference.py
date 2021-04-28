@@ -13,7 +13,8 @@ def predict_with_gt(
     landocean=None, 
     predictors=None, 
     interpolation='bicubic', 
-    save_path=None):
+    save_path=None,
+    save_fname='x_test_pred.npy'):
     """
 
     Parameters
@@ -89,8 +90,8 @@ def predict_with_gt(
         print('Downsampled x_test shape: ', x_test_lr.shape)
         x_test_pred = model.predict(x_test_lr)
 
-    if save_path is not None:
-        name = os.path.join(save_path, 'x_test_pred.npy')
+    if save_path is not None and save_fname is not None:
+        name = os.path.join(save_path, save_fname)
         np.save(name, x_test_pred.astype('float32'))
     return x_test_pred
 
