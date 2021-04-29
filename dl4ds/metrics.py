@@ -7,7 +7,6 @@ from sklearn.metrics import mean_squared_error
 from scipy.stats import spearmanr, pearsonr
 import os
 import seaborn as sns
-sns.set(style="white")
 
 import sys
 sys.path.append('/esarchive/scratch/cgomez/pkgs/ecubevis/')
@@ -15,6 +14,41 @@ import ecubevis as ecv
 
 from .utils import resize_array
 
+
+def compute_rmse(y, y_hat, over='time', squared=False, n_jobs=40):
+    """
+
+    Parameters
+    ----------
+    squared : bool
+        If True returns MSE value, if False returns RMSE value.
+
+    https://scikit-learn.org/stable/modules/generated/sklearn.metrics.mean_squared_error.html
+    """
+    def rmse_per_px(tupyx):
+        y_coord, x_coord = tupyx
+        return y_coord, x_coord, mean_squared_error(y[:,y_coord,x_coord,0], y_hat[:,y_coord,x_coord,0])
+
+    def rmse_gridpair(index):
+        return mean_squared_error(y[index].flatten(), y_hat[index].flatten(), squared=squared)
+
+    #---------------------------------------------------------------------------
+    if over == 'time':
+        rmse_map = np.zeros_like(y[0,:,:,0]) 
+        yy, xx = np.where(y[0,:,:,0])
+        coords = zip(yy, xx)
+        out = Parallel(n_jobs=n_jobs, verbose=False)(delayed(rmse_per_px)(i) for i in coords) 
+
+        for i in range(len(out)):
+            y_coord, x_coord, val = out[i]
+            rmse_map[y_coord, x_coord] = val
+        return rmse_map
+
+    elif over == 'space':
+        n_timesteps = np.arange(y.shape[0])
+        out = Parallel(n_jobs=n_jobs, verbose=False)(delayed(rmse_gridpair)(i) for i in n_timesteps)
+        return out
+    
 
 def compute_correlation(y, y_hat, over='time', mode='spearman', n_jobs=40):
     """
@@ -83,8 +117,8 @@ def compute_metrics(y_test, y_test_hat, dpi=150, n_jobs=40, save_path=None):
 
     with tf.device("cpu:0"):
         ssim = tf.image.ssim(tf.convert_to_tensor(y_test, dtype=tf.float32), 
-                        tf.convert_to_tensor(y_test_hat, dtype=tf.float32), 
-                        drange)
+                             tf.convert_to_tensor(y_test_hat, dtype=tf.float32), 
+                             drange)
     mean_ssim = np.mean(ssim)
     std_ssim = np.std(ssim)
 
@@ -94,83 +128,109 @@ def compute_metrics(y_test, y_test_hat, dpi=150, n_jobs=40, save_path=None):
     mean_mae = np.mean(maes_pairs)
     std_mae = np.std(maes_pairs)
 
-    with tf.device("cpu:0"):
-        mses = tf.keras.metrics.mean_squared_error(y_test, y_test_hat)
-    pxwise_mse = np.mean(mses, axis=0)
-    global_mse = np.nanmean(pxwise_mse)
-    mses_pairs = np.mean(mses, axis=(1,2))
+    ### RMSE 
+    temp_rmse_map = compute_rmse(y_test, y_test_hat, n_jobs=n_jobs, over='time')
+    spatial_rmse = compute_rmse(y_test, y_test_hat, n_jobs=n_jobs, over='space')
     if save_path is not None:
-        np.save(os.path.join(save_path, 'mse_pergridpair.npy'), mses_pairs)
-    tmean_mse = np.mean(mses, axis=0)
-    mean_mse = np.mean(mses_pairs)
-    std_mse = np.std(mses_pairs)
+        np.save(os.path.join(save_path, 'mse_pergridpair.npy'), spatial_rmse)
+    mean_spatial_rmse = np.mean(spatial_rmse)
+    std_spatial_rmse = np.std(spatial_rmse)
+    mean_temp_rmse = np.mean(temp_rmse_map)
+    std_temp_rmse = np.std(temp_rmse_map)
 
-    ### Plotting the MSE map
-    subpti = f'MSE map ($\mu$ = {global_mse:.6f})'
-    ecv.plot_ndarray(pxwise_mse, dpi=dpi, subplot_titles=(subpti), cmap='viridis', 
-                     plot_size_px=800, interactive=False, 
-                     save=os.path.join(save_path, 'mse.png'))
+    subpti = f'MSE map ($\mu$ = {mean_temp_rmse:.6f})'
+    if save_path is not None:
+        savepath = os.path.join(save_path, 'mse.png')
+    else:
+        savepath = None
+    ecv.plot_ndarray(temp_rmse_map, dpi=dpi, subplot_titles=(subpti), cmap='viridis', 
+                     plot_size_px=800, interactive=False, save=savepath)
 
     ### Spearman correlation coefficient
-    spearman_corr_perpairs = compute_correlation(y_test, y_test_hat, n_jobs=n_jobs, over='space')
+    spatial_spearman_corr = compute_correlation(y_test, y_test_hat, n_jobs=n_jobs, over='space')
+    mean_spatial_spearman_corr = np.mean(spatial_spearman_corr)
+    std_spatial_spearman_corr = np.std(spatial_spearman_corr)
     if save_path is not None:
-        np.save(os.path.join(save_path, 'spearcorr_pergridpair.npy'), spearman_corr_perpairs)
-    spearman_corrmap = compute_correlation(y_test, y_test_hat, n_jobs=n_jobs)
-    mean_spcorr = np.mean(spearman_corrmap)
-    subpti = f'Spearman correlation map ($\mu$ = {mean_spcorr:.6f})'
-    ecv.plot_ndarray(spearman_corrmap, dpi=dpi, subplot_titles=(subpti), cmap='magma', 
-                     plot_size_px=800, interactive=False, 
-                     save=os.path.join(save_path, 'corr_spear.png'))
+        np.save(os.path.join(save_path, 'spearcorr_pergridpair.npy'), spatial_spearman_corr)
+    temp_spearman_corrmap = compute_correlation(y_test, y_test_hat, n_jobs=n_jobs)
+    mean_temp_spcorr = np.mean(temp_spearman_corrmap)
+    subpti = f'Spearman correlation map ($\mu$ = {mean_temp_spcorr:.6f})'
+    if save_path is not None:
+        savepath = os.path.join(save_path, 'corr_spear.png')
+    else:
+        savepath = None
+    #ecv.plot_ndarray(temp_spearman_corrmap, dpi=dpi, subplot_titles=(subpti), cmap='magma', 
+    #                 plot_size_px=800, interactive=False, save=savepath)
 
     ### Pearson correlation coefficient
-    pearson_corr_perpairs = compute_correlation(y_test, y_test_hat, mode='pearson', n_jobs=n_jobs, over='space')
+    spatial_pearson_corr = compute_correlation(y_test, y_test_hat, mode='pearson', n_jobs=n_jobs, over='space')
+    mean_spatial_pearson_corr = np.mean(spatial_pearson_corr)
+    std_spatial_pearson_corr = np.std(spatial_pearson_corr)
     if save_path is not None:
-        np.save(os.path.join(save_path, 'pearcorr_pergridpair.npy'), pearson_corr_perpairs)
+        np.save(os.path.join(save_path, 'pearcorr_pergridpair.npy'), spatial_pearson_corr)
     pearson_corrmap = compute_correlation(y_test, y_test_hat, mode='pearson', n_jobs=n_jobs)
     mean_pecorr = np.mean(pearson_corrmap)
     subpti = f'Pearson correlation map ($\mu$ = {mean_pecorr:.6f})'
+    if save_path is not None:
+        savepath = os.path.join(save_path, 'corr_pears.png')
+    else:
+        savepath = None
     ecv.plot_ndarray(pearson_corrmap, dpi=dpi, subplot_titles=(subpti), cmap='magma', 
-                     plot_size_px=800, interactive=False, 
-                     save=os.path.join(save_path, 'corr_pears.png'))
+                     plot_size_px=800, interactive=False, save=savepath)
      
     ### Plotting violin plots
-    f, ax = plt.subplots(1, 4, figsize=(12, 4))
+    # http://seaborn.pydata.org/tutorial/aesthetics.html
+    sns.set_style("darkgrid", {"axes.facecolor": ".9"})
+    sns.set_context("notebook")
+    f, ax = plt.subplots(1, 6, figsize=(15, 5), dpi=dpi)
+    for axis in f.axes:
+        axis.tick_params(labelrotation=40)
 
-    ax_ = sns.violinplot(x=np.array(psnr), ax=ax[0], orient='h')
-    plt.setp(ax_.collections, alpha=0.5)
+    ax_ = sns.violinplot(x=np.array(psnr), ax=ax[0], orient='h', color="skyblue", saturation=1, linewidth=0.8)
     ax_.set_title('PSNR')
-    ax_.set_xlabel(f'$\mu$ = {mean_psnr:.6f} \n$\sigma$ = {std_psnr:.6f}')
+    ax_.set_xlabel(f'$\mu$ = {mean_psnr:.4f} \n$\sigma$ = {std_psnr:.4f}')
 
-    ax_ = sns.violinplot(x=np.array(ssim), ax=ax[1], orient='h')
-    plt.setp(ax_.collections, alpha=0.5)
+    ax_ = sns.violinplot(x=np.array(ssim), ax=ax[1], orient='h', color="skyblue", saturation=1, linewidth=0.8)
     ax_.set_title('SSIM')
-    ax_.set_xlabel(f'$\mu$ = {mean_ssim:.6f} \n$\sigma$ = {std_ssim:.6f}')
+    ax_.set_xlabel(f'$\mu$ = {mean_ssim:.4f} \n$\sigma$ = {std_ssim:.4f}')
 
-    ax_ = sns.violinplot(x=maes_pairs, ax=ax[2], orient='h')
-    plt.setp(ax_.collections, alpha=0.5)
+    ax_ = sns.violinplot(x=maes_pairs, ax=ax[2], orient='h', color="skyblue", saturation=1, linewidth=0.8)
     ax_.set_title('MAE')
-    ax_.set_xlabel(f'$\mu$ = {mean_mae:.6f} \n$\sigma$ = {std_mae:.6f}')
+    ax_.set_xlabel(f'$\mu$ = {mean_mae:.4f} \n$\sigma$ = {std_mae:.4f}')
 
-    ax_ = sns.violinplot(x=mses_pairs, ax=ax[3], orient='h')
-    plt.setp(ax_.collections, alpha=0.5)
-    ax_.set_title('MSE')
-    ax_.set_xlabel(f'$\mu$ = {mean_mse:.6f} \n$\sigma$ = {std_mse:.6f}')
+    ax_ = sns.violinplot(x=spatial_rmse, ax=ax[3], orient='h', color="skyblue", saturation=1, linewidth=0.8)
+    ax_.set_title('RMSE')
+    ax_.set_xlabel(f'$\mu$ = {mean_spatial_rmse:.4f} \n$\sigma$ = {std_spatial_rmse:.4f}')
+
+    ax_ = sns.violinplot(x=spatial_pearson_corr, ax=ax[4], orient='h', color="skyblue", saturation=1, linewidth=0.8)
+    ax_.set_title('Pearson correlation')
+    ax_.set_xlabel(f'$\mu$ = {mean_spatial_pearson_corr:.4f} \n$\sigma$ = {std_spatial_pearson_corr:.4f}')
+
+    ax_ = sns.violinplot(x=spatial_spearman_corr, ax=ax[5], orient='h', color="skyblue", saturation=1, linewidth=0.8)
+    ax_.set_title('Spearman correlation')
+    ax_.set_xlabel(f'$\mu$ = {mean_spatial_spearman_corr:.4f} \n$\sigma$ = {std_spatial_spearman_corr:.4f}')
 
     f.tight_layout()
     if save_path is not None: 
         plt.savefig(os.path.join(save_path, 'violin_plots.png'))
     else:
         plt.show()
-
+    
+    sns.set_style("white")
+    
     print('Metrics on y_test and y_test_hat:\n')
-    print(f'PSNR \tmu = {mean_psnr:.6f} \tsigma = {std_psnr:.8f}')
-    print(f'SSIM \tmu = {mean_ssim:.6f} \tsigma = {std_ssim:.8f}')
-    print(f'MAE \tmu = {mean_mae:.6f} \tsigma = {std_mae:.8f}')
-    print(f'MSE \tmu = {mean_mse:.6f} \tsigma = {std_mse:.8f}')
-    print(f'Spearman correlation \tmu = {mean_spcorr}')
-    print(f'Pearson correlation \tmu = {mean_spcorr}')
+    print(f'PSNR \tmu = {mean_psnr} \tsigma = {std_psnr}')
+    print(f'SSIM \tmu = {mean_ssim} \tsigma = {std_ssim}')
+    print(f'MAE \tmu = {mean_mae} \tsigma = {std_mae}')
+    print(f'Temporal RMSE \tmu = {mean_temp_rmse} \tsigma = {std_temp_rmse}')
+    print(f'Temporal Spearman correlation \tmu = {mean_spatial_spearman_corr}')
+    print(f'Temporal Pearson correlation \tmu = {mean_spatial_pearson_corr}')
+    print()
+    print(f'Spatial MSE \tmu = {mean_spatial_rmse} \tsigma = {std_spatial_rmse}')
+    print(f'Spatial Spearman correlation \tmu = {mean_spatial_spearman_corr} \tsigma = {std_spatial_spearman_corr}')
+    print(f'Spatial Pearson correlation \tmu = {mean_spatial_pearson_corr} \tsigma = {std_spatial_pearson_corr}')
 
-    return pxwise_mse, spearman_corrmap, pearson_corrmap
+    return spatial_rmse, spatial_pearson_corr
 
 
 def plot_sample(model, lr_image, topography=None, landocean=None, 
