@@ -6,6 +6,7 @@ import time
 import os 
 import datetime
 import tensorflow as tf
+from tensorflow.keras.utils import Progbar
 import numpy as np
 
 from .resnet_int import resnet_int
@@ -13,7 +14,7 @@ from .resnet_rec import resnet_rec
 from .resnet_spc import resnet_spc
 from .discriminator import residual_discriminator
 from .dataloader import create_pair_hr_lr
-from .utils import Timing
+from .utils import Timing, list_devices
 
 
 def load_checkpoint(checkpoint_dir, checkpoint_number, scale, model='resnet_spc', 
@@ -149,6 +150,10 @@ def training_cgan(model, x_train, epochs, scale=5, patch_size=50, interpolation=
     """
     timing = Timing()
 
+    devices = list_devices('physical', gpu=True, verbose=True)
+    for gpu in devices:
+        tf.config.experimental.set_memory_growth(gpu, True)
+
     gentotal = []
     gengan = []
     genl1 = []
@@ -197,10 +202,10 @@ def training_cgan(model, x_train, epochs, scale=5, patch_size=50, interpolation=
         raise ValueError('`patch_size` must be divisible by `scale` (remainder must be zero)')
 
     for epoch in range(epochs):
-        start = time.time()        
         print("Epoch: ", epoch)
         n_samples = x_train.shape[0]
-        
+        pb_i = Progbar(n_samples, stateful_metrics=['gen_total_loss', 'gen_crosentr_loss', 'gen_mae_loss', 'disc_loss'])
+
         for i in range(n_samples):
             if (i + 1) % 100 == 0:
                 print('.', end='')
@@ -213,10 +218,12 @@ def training_cgan(model, x_train, epochs, scale=5, patch_size=50, interpolation=
             losses = train_step(lr_array, hr_array, generator, discriminator, generator_optimizer, 
                                 discriminator_optimizer, epoch, summary_writer)
             gen_total_loss, gen_gan_loss, gen_l1_loss, disc_loss = losses
+            lossvals = [('gen_total_loss', gen_total_loss), 
+                        ('gen_crosentr_loss', gen_gan_loss), 
+                        ('gen_mae_loss', gen_l1_loss), 
+                        ('disc_loss', disc_loss)]
+            pb_i.add(1, values=lossvals)
         
-        print()
-        msg = 'gen_total_loss={:.5f}, gen_gan_loss={:.5f}, gen_l1_loss={:.5f}, disc_loss={:.5f}'
-        print(msg.format(gen_total_loss, gen_gan_loss, gen_l1_loss, disc_loss))
         gentotal.append(gen_total_loss)
         gengan.append(gen_gan_loss)
         genl1.append(gen_l1_loss)
@@ -225,8 +232,6 @@ def training_cgan(model, x_train, epochs, scale=5, patch_size=50, interpolation=
         if checkpoints_frequency is not None:
             if (epoch + 1) % checkpoints_frequency == 0:
                 checkpoint.save(file_prefix = checkpoint_prefix)
-
-        print ('Time taken for epoch {} is {} sec\n'.format(epoch + 1, time.time()-start))
     
     if checkpoints_frequency is not None:
         checkpoint.save(file_prefix = checkpoint_prefix)
