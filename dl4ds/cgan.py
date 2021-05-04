@@ -201,9 +201,8 @@ def training_cgan(model, x_train, epochs, scale=5, patch_size=50, interpolation=
     if patch_size % scale != 0:
         raise ValueError('`patch_size` must be divisible by `scale` (remainder must be zero)')
 
-    pb = Progbar(epochs, verbose=2)
-
     for epoch in range(epochs):
+        print(f'\nEpoch {epoch+1}/{epochs}')
         n_samples = x_train.shape[0]
         pb_i = Progbar(n_samples, stateful_metrics=['gen_total_loss', 'gen_crosentr_loss', 'gen_mae_loss', 'disc_loss'])
 
@@ -221,8 +220,6 @@ def training_cgan(model, x_train, epochs, scale=5, patch_size=50, interpolation=
                         ('gen_mae_loss', gen_l1_loss), 
                         ('disc_loss', disc_loss)]
             pb_i.add(1, values=lossvals)
-        
-        pb.update(epoch)
         
         gentotal.append(gen_total_loss)
         gengan.append(gen_gan_loss)
