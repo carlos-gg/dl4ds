@@ -171,8 +171,11 @@ def training(
     # training is started with random weights or restored from a checkpoint.
     callbacks.append(hvd.callbacks.BroadcastGlobalVariablesCallback(0))
     
-    if verbose in [1 ,2]:
+    # Verbosity for model.fit
+    if verbose == 1:
         verbose=1 if hvd.rank() == 0 else 0
+    elif verbose == 2:
+        verbose=2 if hvd.rank() == 0 else 0
 
     # Model checkopoints are saved at the end of every epoch, if it's the best seen so far.
     if savecheckpoint_path is not None:
