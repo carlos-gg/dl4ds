@@ -53,7 +53,7 @@ def training(
     plot='plt', 
     show_plot=True, 
     save_plot=False,
-    verbosity='max', 
+    verbose=1, 
     **architecture_params):
     """  
 
@@ -72,19 +72,13 @@ def training(
         [nsamples, lat, lon, 1]. 
     steps_per_epoch : int, optional
         batch_size * steps_per_epoch samples are passed per epoch.
-
+    verbose : bool, optional
+        Verbosity mode. False or 0 = silent. True or 1, max amount of 
+        information is printed out. When equal 2, then less info is shown.
     
     """
     timing = Timing()
-    
-    ### vervosity
-    if verbosity == 'max':
-        verbose = 1
-    elif verbosity == 'min':
-        verbose = 2
-    else:
-        verbose = 0
-    
+       
     # Initialize Horovod
     hvd.init()
 
