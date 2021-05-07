@@ -7,6 +7,7 @@ import os
 import datetime
 import tensorflow as tf
 from tensorflow.keras.utils import Progbar
+import horovod.tensorflow.keras as hvd
 import numpy as np
 
 from .resnet_int import resnet_int
@@ -95,7 +96,7 @@ def discriminator_loss(disc_real_output, disc_generated_output):
 
 @tf.function
 def train_step(lr_array, hr_array, generator, discriminator, generator_optimizer, 
-               discriminator_optimizer, epoch, summary_writer):
+               discriminator_optimizer, epoch, summary_writer, first_batch):
     """
     Training:
     * For each example input generate an output.
@@ -118,6 +119,10 @@ def train_step(lr_array, hr_array, generator, discriminator, generator_optimizer
         gen_total_loss, gen_gan_loss, gen_l1_loss = generator_loss(disc_generated_output, gen_array, hr_array)
         disc_loss = discriminator_loss(disc_real_output, disc_generated_output)
 
+    # Horovod: add Horovod Distributed GradientTape.
+    gen_tape = hvd.DistributedGradientTape(gen_tape)
+    disc_tape = hvd.DistributedGradientTape(disc_tape)
+
     generator_gradients = gen_tape.gradient(gen_total_loss,
                                             generator.trainable_variables)
     discriminator_gradients = disc_tape.gradient(disc_loss,
@@ -133,12 +138,38 @@ def train_step(lr_array, hr_array, generator, discriminator, generator_optimizer
         tf.summary.scalar('gen_gan_loss', gen_gan_loss, step=epoch)
         tf.summary.scalar('gen_l1_loss', gen_l1_loss, step=epoch)
         tf.summary.scalar('disc_loss', disc_loss, step=epoch)
-        
+    
+    # Horovod: broadcast initial variable states from rank 0 to all other processes.
+    # This is necessary to ensure consistent initialization of all workers when
+    # training is started with random weights or restored from a checkpoint.
+    #
+    # Note: broadcast should be done after the first gradient step to ensure optimizer
+    # initialization.
+    if first_batch:
+        hvd.broadcast_variables(generator.variables, root_rank=0)
+        hvd.broadcast_variables(generator_optimizer.variables(), root_rank=0)
+        hvd.broadcast_variables(discriminator.variables, root_rank=0)
+        hvd.broadcast_variables(discriminator_optimizer.variables(), root_rank=0)
+
     return gen_total_loss, gen_gan_loss, gen_l1_loss, disc_loss 
 
 
-def training_cgan(model, x_train, epochs, scale=5, patch_size=50, interpolation='bicubic', topography=None, 
-                  landocean=None, checkpoints_frequency=5, n_res_blocks=(20, 4), n_filters=64, attention=False):
+def training_cgan(
+    model, 
+    x_train, 
+    epochs, 
+    scale=5, 
+    patch_size=50, 
+    interpolation='bicubic', 
+    topography=None, 
+    landocean=None, 
+    checkpoints_frequency=5, 
+    n_res_blocks=(20, 4), 
+    n_filters=64, 
+    attention=False,
+    device='GPU',
+    gpu_memory_growth=True,
+    verbose='max'):
     """
     
     Parameters
@@ -146,13 +177,32 @@ def training_cgan(model, x_train, epochs, scale=5, patch_size=50, interpolation=
     
     checkpoints_frequency : int, optional
         The training loop saves a checkpoint every ``checkpoints_frequency`` epochs.
-    
+    verbose : bool, optional
+        Verbosity mode. False or 0 = silent. True or 1, max amount of 
+        information is printed out. When equal 2, then less info is shown.
     """
     timing = Timing()
 
-    devices = list_devices('physical', gpu=True, verbose=True)
-    for gpu in devices:
-        tf.config.experimental.set_memory_growth(gpu, True)
+    # Initialize Horovod
+    hvd.init()
+
+    ### devices
+    if verbose in [1 ,2]:
+        print('List of devices:')
+    if device == 'GPU':
+        devices = list_devices('physical', gpu=True, verbose=verbose)
+        tf.config.experimental.set_visible_devices(devices[hvd.local_rank()], 'GPU')
+        if gpu_memory_growth:
+            for gpu in devices:
+                tf.config.experimental.set_memory_growth(gpu, True)
+    elif device == 'CPU':
+        devices = list_devices('physical', gpu=False, verbose=verbose)
+    else:
+        raise ValueError('device not recognized')
+
+    n_devices = len(devices)
+    if verbose in [1 ,2]:
+        print ('Number of devices: {}'.format(n_devices))
 
     gentotal = []
     gengan = []
@@ -186,6 +236,11 @@ def training_cgan(model, x_train, epochs, scale=5, patch_size=50, interpolation=
     discriminator = residual_discriminator(n_channels=n_channels, n_filters=n_filters, scale=scale,
                                            n_res_blocks=n_res_blocks[1], model=model, attention=attention)
     
+    if verbose == 1:
+        if (device == 'GPU' and hvd.rank() == 0) or device == 'CPU':
+            generator.summary(line_length=150)
+            discriminator.summary(line_length=150)
+
     # optimizers
     generator_optimizer = tf.keras.optimizers.Adam(2e-4, beta_1=0.5)
     discriminator_optimizer = tf.keras.optimizers.Adam(2e-4, beta_1=0.5)
@@ -213,7 +268,8 @@ def training_cgan(model, x_train, epochs, scale=5, patch_size=50, interpolation=
                 model=model, interpolation=interpolation)
 
             losses = train_step(lr_array, hr_array, generator, discriminator, generator_optimizer, 
-                                discriminator_optimizer, epoch, summary_writer)
+                                discriminator_optimizer, epoch, summary_writer, 
+                                first_batch=True if epoch==0 and i==0 else False)
             gen_total_loss, gen_gan_loss, gen_l1_loss, disc_loss = losses
             lossvals = [('gen_total_loss', gen_total_loss), 
                         ('gen_crosentr_loss', gen_gan_loss), 
@@ -227,8 +283,11 @@ def training_cgan(model, x_train, epochs, scale=5, patch_size=50, interpolation=
         disc.append(disc_loss)
         
         if checkpoints_frequency is not None:
-            if (epoch + 1) % checkpoints_frequency == 0:
-                checkpoint.save(file_prefix = checkpoint_prefix)
+            # Horovod: save checkpoints only on worker 0 to prevent other workers from
+            # corrupting it.
+            if hvd.rank() == 0:
+                if (epoch + 1) % checkpoints_frequency == 0:
+                    checkpoint.save(file_prefix = checkpoint_prefix)
     
     if checkpoints_frequency is not None:
         checkpoint.save(file_prefix = checkpoint_prefix)
