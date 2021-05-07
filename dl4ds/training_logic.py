@@ -59,8 +59,18 @@ def training(
 
     Parameters
     ----------
-    batch_size : int, optional
-        Batch size per replica.
+    model : str
+        String with the name of the model architecture, either 'resnet_spc', 
+        'resnet_int' or 'resnet_rec'.
+    x_train : 4D ndarray
+        Training dataset with dims [nsamples, lat, lon, 1].
+    x_val : 4D ndarray
+        Validation dataset with dims [nsamples, lat, lon, 1]. This holdout 
+        dataset is used at the end of each epoch to check the losses and prevent 
+        overfitting.
+    x_test : 4D ndarray
+        Testing dataset with dims [nsamples, lat, lon, 1]. Holdout not used
+        during training. 
     predictors_train : tuple of 4D ndarray, optional
         Predictor variables for trianing. Given as tuple of 4D ndarray with dims 
         [nsamples, lat, lon, 1]. 
@@ -70,12 +80,54 @@ def training(
     predictors_test : tuple of 4D ndarray, optional
         Predictor variables for testing. Given as tuple of 4D ndarray with dims 
         [nsamples, lat, lon, 1]. 
+    topography : None or 2D ndarray, optional
+        Elevation data.
+    landocean : None or 2D ndarray, optional
+        Binary land-ocean mask.
+    scale : int, optional
+        Scaling factor. 
+    interpolation : str, optional
+        Interpolation used when upsampling/downsampling the training samples.
+        By default 'bicubic'. 
+    patch_size : int, optional
+        Size of the square patches used to grab training samples.
+    batch_size : int, optional
+        Batch size per replica.
+    epochs : int, optional
+        Number of epochs or passes through the whole training dataset. 
     steps_per_epoch : int, optional
-        batch_size * steps_per_epoch samples are passed per epoch.
+        ``batch_size * steps_per_epoch`` samples are passed per epoch.
+    validation_steps : int, optional
+        Steps using at the end of each epoch for drawing validation samples. 
+    test_steps : int, optional
+        Steps using after training for drawing testing samples.
+    learning_rate : float or tuple of floats, optional
+        Learning rate. If a tuple is given, it corresponds to the min and max
+        LR used for a PiecewiseConstantDecay scheduler.
+    lr_decay_after : float or None, optional
+        Used for the PiecewiseConstantDecay scheduler.
+    early_stopping : bool, optional
+        Whether to use early stopping.
+    patience : int, optional
+        Patience for early stopping. 
+    min_delta : float, otional 
+        Min delta for early stopping.
+    save : bool, optional
+        Whether to save the final model. 
+    save_path : None or str
+        Path for saving the final model. If None, then ``'./saved_model/'`` is
+        used.
+    savecheckpoint_path : None or str
+        Path for saving the training checkpoints. If None, then no checkpoints
+        are saved during training. 
+    device : str
+        Choice of 'GPU' or 'CPU' for the training of the Tensorflow models. 
     verbose : bool, optional
         Verbosity mode. False or 0 = silent. True or 1, max amount of 
         information is printed out. When equal 2, then less info is shown.
-    
+    **architecture_params : dict
+        Dictionary with additional parameters passed to the neural network model.
+        
     """
     timing = Timing()
        
@@ -148,7 +200,7 @@ def training(
     if isinstance(learning_rate, tuple):
         ### Adam optimizer with a scheduler 
         learning_rate = PiecewiseConstantDecay(boundaries=[lr_decay_after], 
-                                                values=[learning_rate[0], learning_rate[1]])
+                                               values=[learning_rate[0], learning_rate[1]])
     optimizer = Adam(learning_rate=learning_rate)
 
     ### Callbacks
