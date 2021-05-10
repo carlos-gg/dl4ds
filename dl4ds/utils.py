@@ -25,9 +25,10 @@ def list_devices(which='physical', gpu=True, verbose=True):
     return devices
 
 
-def set_visible_gpu(indices=(0)):
-    physical_devices = list_devices('physical')
-    tf.config.set_visible_devices(physical_devices[indices], 'GPU') 
+def set_visible_gpus(*gpu_indices):
+    gpus = list_devices('physical', gpu=True)
+    wanted_gpus = [gpus[i] for i in gpu_indices]
+    tf.config.set_visible_devices(wanted_gpus, 'GPU') 
     print(list_devices('logical'))
 
 
