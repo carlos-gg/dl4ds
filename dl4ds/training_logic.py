@@ -123,6 +123,14 @@ def training(
         are saved during training. 
     device : str
         Choice of 'GPU' or 'CPU' for the training of the Tensorflow models. 
+    plot : str, optional
+        Either 'plt' for static plot of the learning curves or 'llp' for 
+        interactive plotting (useful on jupyterlab as an alternative to 
+        Tensorboard).
+    show_plot : bool, optional
+        If True the static plot is shown after training. 
+    save_plot : bool, optional
+        If True the static plot is saved to disk after training. 
     verbose : bool, optional
         Verbosity mode. False or 0 = silent. True or 1, max amount of 
         information is printed out. When equal 2, then less info is shown.
@@ -263,7 +271,7 @@ def training(
         else:
             learning_curve_fname = None
         
-        if device=='GPU' and hvd.rank() == 0:
+        if (device == 'GPU' and hvd.rank() == 0) or device == 'CPU':
             plot_history(fithist.history, path=learning_curve_fname)
             if show_plot:
                 show()
