@@ -15,7 +15,7 @@ from tensorflow.keras.losses import mean_absolute_error
 from matplotlib.pyplot import show
 import horovod.tensorflow.keras as hvd
 
-from .utils import Timing, list_devices
+from .utils import Timing, list_devices, set_gpu_memory_growth, set_visible_gpus
 from .dataloader import DataGenerator
 from .resnet_int import resnet_int
 from .resnet_rec import resnet_rec
@@ -53,7 +53,7 @@ def training(
     plot='plt', 
     show_plot=True, 
     save_plot=False,
-    verbose=1, 
+    verbose=True, 
     **architecture_params):
     """  
 
@@ -116,7 +116,8 @@ def training(
         Whether to save the final model. 
     save_path : None or str
         Path for saving the final model. If None, then ``'./saved_model/'`` is
-        used.
+        used. The SavedModel format is a directory containing a protobuf binary 
+        and a TensorFlow checkpoint.
     savecheckpoint_path : None or str
         Path for saving the training checkpoints. If None, then no checkpoints
         are saved during training. 
@@ -127,22 +128,22 @@ def training(
         information is printed out. When equal 2, then less info is shown.
     **architecture_params : dict
         Dictionary with additional parameters passed to the neural network model.
-        
+
     """
     timing = Timing()
        
-    # Initialize Horovod
+    # initialize Horovod
     hvd.init()
 
     ### devices
     if verbose in [1 ,2]:
         print('List of devices:')
     if device == 'GPU':
-        devices = list_devices('physical', gpu=True, verbose=verbose)
-        tf.config.experimental.set_visible_devices(devices[hvd.local_rank()], 'GPU')
         if gpu_memory_growth:
-            for gpu in devices:
-                tf.config.experimental.set_memory_growth(gpu, True)
+            set_gpu_memory_growth(verbose=False)
+        # pin GPU to be used to process local rank (one GPU per process)       
+        set_visible_gpus(hvd.local_rank())
+        devices = list_devices('physical', gpu=True, verbose=verbose) 
     elif device == 'CPU':
         devices = list_devices('physical', gpu=False, verbose=verbose)
     else:
@@ -156,15 +157,14 @@ def training(
     if verbose in [1 ,2]:
         print(f'Global batch size: {global_batch_size}, per replica: {batch_size_per_replica}')
 
-    if model not in ['resnet_spc', 'resnet_int', 'resnet_rec']:
+    if not isinstance(model, str) and model not in ['resnet_spc', 'resnet_int', 'resnet_rec']:
         raise ValueError('`model` not recognized. Must be one of the following: resnet_spc, resnet_int, resnet_rec')
 
     if patch_size % scale != 0:
         raise ValueError('`patch_size` must be divisible by `scale` (remainder must be zero)')
     
     ### data loader
-    datagen_params = dict(
-        scale=scale, 
+    datagen_params = dict(scale=scale, 
         batch_size=global_batch_size,
         topography=topography, 
         landocean=landocean, 
@@ -207,9 +207,8 @@ def training(
     # early stopping
     callbacks = []
     if early_stopping:
-        earlystop = EarlyStopping(monitor='val_loss', mode='min', 
-                                  patience=patience, min_delta=min_delta, 
-                                  verbose=verbose)
+        earlystop = EarlyStopping(monitor='val_loss', mode='min', patience=patience, 
+                                  min_delta=min_delta, verbose=verbose)
         callbacks.append(earlystop)
     # loss plotting
     if plot == 'llp':
@@ -233,7 +232,7 @@ def training(
     if savecheckpoint_path is not None:
         os.makedirs(savecheckpoint_path, exist_ok=True)
         model_checkpoint_callback = tf.keras.callbacks.ModelCheckpoint(
-            os.path.join(savecheckpoint_path, './checkpoint_epoch-{epoch:02d}_val-loss-{val_loss:.6f}.h5'),
+            os.path.join(savecheckpoint_path, './checkpoint_epoch-{epoch:02d}.h5'),
             save_weights_only=False,
             monitor='val_loss',
             mode='min',
@@ -263,9 +262,11 @@ def training(
             learning_curve_fname = 'learning_curve.png'
         else:
             learning_curve_fname = None
-        plot_history(fithist.history, path=learning_curve_fname)
-        if show_plot:
-            show()
+        
+        if device=='GPU' and hvd.rank() == 0:
+            plot_history(fithist.history, path=learning_curve_fname)
+            if show_plot:
+                show()
 
     if save:
         if save_path is None:
