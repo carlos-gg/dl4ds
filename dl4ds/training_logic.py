@@ -1,11 +1,9 @@
 """
-
-
+Training procedure for supervised models
 """
 
 import os
 import livelossplot
-import numpy as np
 import tensorflow as tf
 from plot_keras_history import plot_history
 from tensorflow.keras.optimizers import Adam
@@ -201,14 +199,22 @@ def training(
     elif model == 'resnet_int':
         model = resnet_int(n_channels=n_channels, **architecture_params)
     
-    if verbose == 1:
-        if (device == 'GPU' and hvd.rank() == 0) or device == 'CPU':
-            model.summary(line_length=150)
+    # identifying the first Horovod worker (for distributed training with GPUs), or CPU training
+    if (device == 'GPU' and hvd.rank() == 0) or device == 'CPU':
+        running_on_first_worker = True
+    else:
+        running_on_first_worker = False
+    
+    if verbose == 1 and running_on_first_worker:
+        model.summary(line_length=150)
 
     if isinstance(learning_rate, tuple):
         ### Adam optimizer with a scheduler 
         learning_rate = PiecewiseConstantDecay(boundaries=[lr_decay_after], 
                                                values=[learning_rate[0], learning_rate[1]])
+    elif isinstance(learning_rate, float):
+        # as in Goyan et al 2018 (https://arxiv.org/abs/1706.02677)
+        learning_rate *= hvd.size()
     optimizer = Adam(learning_rate=learning_rate)
 
     ### Callbacks
@@ -230,11 +236,13 @@ def training(
     # training is started with random weights or restored from a checkpoint.
     callbacks.append(hvd.callbacks.BroadcastGlobalVariablesCallback(0))
     
-    # Verbosity for model.fit
-    if verbose == 1:
-        verbose=1 if hvd.rank() == 0 else 0
-    elif verbose == 2:
-        verbose=2 if hvd.rank() == 0 else 0
+    # verbosity for model.fit
+    if verbose == 1 and running_on_first_worker:
+        verbose = 1
+    elif verbose == 2 and running_on_first_worker:
+        verbose = 2
+    else:
+        verbose = 0
 
     # Model checkopoints are saved at the end of every epoch, if it's the best seen so far.
     if savecheckpoint_path is not None:
@@ -246,7 +254,7 @@ def training(
             mode='min',
             save_best_only=True)
         # Horovod: save checkpoints only on worker 0 to prevent other workers from corrupting them.
-        if (device=='GPU' and hvd.rank() == 0) or device=='CPU':
+        if running_on_first_worker:
             callbacks.append(model_checkpoint_callback)
 
     ### compiling and training the model with L1 pixel loss
@@ -271,7 +279,7 @@ def training(
         else:
             learning_curve_fname = None
         
-        if (device == 'GPU' and hvd.rank() == 0) or device == 'CPU':
+        if running_on_first_worker:
             plot_history(fithist.history, path=learning_curve_fname)
             if show_plot:
                 show()
@@ -280,7 +288,7 @@ def training(
         if save_path is None:
             save_path = './saved_model/'
     
-        if (device=='GPU' and hvd.rank() == 0) or device=='CPU':
+        if running_on_first_worker:
             os.makedirs(save_path, exist_ok=True)
             model.save(save_path, save_format='tf')
     
