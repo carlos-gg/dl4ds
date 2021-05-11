@@ -154,7 +154,7 @@ def training(
         devices = list_devices('physical', gpu=False, verbose=verbose)
     else:
         raise ValueError('device not recognized')
-    
+
     n_devices = len(devices)
     if verbose in [1 ,2]:
         print ('Number of devices: {}'.format(n_devices))
@@ -162,6 +162,12 @@ def training(
     global_batch_size = batch_size_per_replica * n_devices
     if verbose in [1 ,2]:
         print(f'Global batch size: {global_batch_size}, per replica: {batch_size_per_replica}')
+
+   # identifying the first Horovod worker (for distributed training with GPUs), or CPU training
+    if (device == 'GPU' and hvd.rank() == 0) or device == 'CPU':
+        running_on_first_worker = True
+    else:
+        running_on_first_worker = False
 
     if not isinstance(model, str) and model not in ['resnet_spc', 'resnet_int', 'resnet_rec']:
         raise ValueError('`model` not recognized. Must be one of the following: resnet_spc, resnet_int, resnet_rec')
@@ -198,12 +204,6 @@ def training(
         model = resnet_rec(scale=scale, n_channels=n_channels, **architecture_params)
     elif model == 'resnet_int':
         model = resnet_int(n_channels=n_channels, **architecture_params)
-    
-    # identifying the first Horovod worker (for distributed training with GPUs), or CPU training
-    if (device == 'GPU' and hvd.rank() == 0) or device == 'CPU':
-        running_on_first_worker = True
-    else:
-        running_on_first_worker = False
     
     if verbose == 1 and running_on_first_worker:
         model.summary(line_length=150)
