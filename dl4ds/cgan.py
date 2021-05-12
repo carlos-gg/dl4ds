@@ -135,11 +135,35 @@ def training_cgan(
     x_test : 4D ndarray
         Testing dataset with dims [nsamples, lat, lon, 1]. Holdout not used
         during training. 
+    epochs : int, optional
+        Number of epochs or passes through the whole training dataset. 
     steps_per_epoch : int, optional
         ``batch_size * steps_per_epoch`` samples are passed per epoch.
+    scale : int, optional
+        Scaling factor. 
+    interpolation : str, optional
+        Interpolation used when upsampling/downsampling the training samples.
+        By default 'bicubic'. 
+    patch_size : int, optional
+        Size of the square patches used to grab training samples.
+    batch_size : int, optional
+        Batch size per replica.
+    topography : None or 2D ndarray, optional
+        Elevation data.
+    landocean : None or 2D ndarray, optional
+        Binary land-ocean mask.
     checkpoints_frequency : int, optional
         The training loop saves a checkpoint every ``checkpoints_frequency`` 
-        epochs.
+        epochs. If None, then no checkpoints are saved during training. 
+    savecheckpoint_path : None or str
+        Path for saving the training checkpoints. If None, then no checkpoints
+        are saved during training. 
+    device : str
+        Choice of 'GPU' or 'CPU' for the training of the Tensorflow models. 
+    gpu_memory_growth : bool, optional
+        By default, TensorFlow maps nearly all of the GPU memory of all GPUs.
+        If True, we request to only grow the memory usage as is needed by the 
+        process.
     verbose : bool, optional
         Verbosity mode. False or 0 = silent. True or 1, max amount of 
         information is printed out. When equal 2, then less info is shown.
@@ -223,7 +247,7 @@ def training_cgan(
     discriminator_optimizer = tf.keras.optimizers.Adam(2e-4, beta_1=0.5)
     
     # checkpoint
-    if savecheckpoint_path is not None:
+    if savecheckpoint_path is not None and savecheckpoint_path is not None:
         checkpoint_prefix = os.path.join(savecheckpoint_path, 'checkpoint_epoch')
         checkpoint = tf.train.Checkpoint(generator_optimizer=generator_optimizer,
                                          discriminator_optimizer=discriminator_optimizer,
@@ -280,12 +304,13 @@ def training_cgan(
         genl1.append(gen_l1_loss)
         disc.append(disc_loss)
         
-        if checkpoints_frequency is not None:
+        if savecheckpoint_path is not None and savecheckpoint_path is not None:
             # Horovod: save checkpoints only on worker 0 to prevent other workers from corrupting it
             if running_on_first_worker:
                 if (epoch + 1) % checkpoints_frequency == 0:
                     checkpoint.save(file_prefix=checkpoint_prefix)
     
+    # Horovod: save last checkpoint only on worker 0 to prevent other workers from corrupting it
     if checkpoints_frequency is not None and running_on_first_worker:
         checkpoint.save(file_prefix=checkpoint_prefix)
 

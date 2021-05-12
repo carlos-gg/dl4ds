@@ -121,6 +121,10 @@ def training(
         are saved during training. 
     device : str
         Choice of 'GPU' or 'CPU' for the training of the Tensorflow models. 
+    gpu_memory_growth : bool, optional
+        By default, TensorFlow maps nearly all of the GPU memory of all GPUs.
+        If True, we request to only grow the memory usage as is needed by the 
+        process.
     plot : str, optional
         Either 'plt' for static plot of the learning curves or 'llp' for 
         interactive plotting (useful on jupyterlab as an alternative to 
