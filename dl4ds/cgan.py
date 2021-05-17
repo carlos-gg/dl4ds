@@ -2,7 +2,6 @@
 Training procedure for Conditional GAN models. Follows Isola et al. 2016
 """
 
-import time
 import os 
 import datetime
 import tensorflow as tf
