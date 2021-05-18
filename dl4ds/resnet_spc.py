@@ -32,14 +32,15 @@ def rclstm_spc(scale, n_channels, n_filters, n_res_blocks, n_channels_out=1,
     post-upscaling.
     """
     x_in = Input(shape=(None, None, None, n_channels))
-    x = b = ConvLSTM2D(n_filters, (3, 3), padding='same')(x_in)
+    x = b = ConvLSTM2D(n_filters, (3, 3), return_sequences=True, padding='same')(x_in)
     for i in range(n_res_blocks):
-        b = residual_convlstm_block(b, n_filters, attention=attention)
-    b = ConvLSTM2D(n_filters, (3, 3), padding='same')(b)
+        b = residual_convlstm_block(b, n_filters)
+    b = ConvLSTM2D(n_filters, (3, 3), return_sequences=True, padding='same')(b)
     x = Add()([x, b])
+    x = ConvLSTM2D(n_filters, (3, 3), return_sequences=False, padding='same')(x)
     
     x = upsample(x, scale, n_filters)
-    x = ConvLSTM2D(n_channels_out, (3, 3), padding='same')(x)
+    x = Conv2D(n_channels_out, (3, 3), padding='same')(x)
 
     return Model(x_in, x, name="rclstm_spc")
 
