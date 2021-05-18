@@ -32,6 +32,10 @@ def set_visible_gpus(*gpu_indices):
     print(list_devices('logical'))
 
 
+def rank(x):
+    return len(x.get_shape().as_list())
+
+
 class Timing():
     """ 
     """
