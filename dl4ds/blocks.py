@@ -16,8 +16,8 @@ def residual_block(x_in, filters, scaling=None, attention=False):
 
 def residual_convlstm_block(x_in, filters, scaling=None):
     """ """
-    x = ConvLSTM2D(filters, (3, 3), padding='same', activation='relu')(x_in)
-    x = ConvLSTM2D(filters, (3, 3), padding='same')(x)
+    x = ConvLSTM2D(filters, (3, 3), padding='same', return_sequences=True, activation='relu')(x_in)
+    x = ConvLSTM2D(filters, (3, 3), padding='same', return_sequences=True)(x)
     if scaling is not None:
         x = Lambda(lambda t: t * scaling)(x)
     x = Add()([x_in, x])
