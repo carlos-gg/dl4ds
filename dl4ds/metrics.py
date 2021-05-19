@@ -9,7 +9,7 @@ import os
 import seaborn as sns
 
 import sys
-sys.path.append('/esarchive/scratch/cgomez/pkgs/ecubevis/')
+sys.path.append('/esarchive/scratch/cgomez/src/ecubevis/')
 import ecubevis as ecv
 
 from .utils import resize_array

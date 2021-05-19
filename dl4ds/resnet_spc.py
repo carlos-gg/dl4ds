@@ -25,8 +25,7 @@ def resnet_spc(scale, n_channels, n_filters, n_res_blocks, n_channels_out=1,
     return Model(x_in, x, name="resnet_spc")
 
 
-def rclstm_spc(scale, n_channels, n_filters, n_res_blocks, n_channels_out=1, 
-                 attention=False):
+def rclstm_spc(scale, n_channels, n_filters, n_res_blocks, n_channels_out=1):
     """
     Residual ConvLSTM-SPC. ResNet with ConvLSTM residual blocks and pixel shuffle 
     post-upscaling.
