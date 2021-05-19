@@ -3,10 +3,48 @@ import tensorflow as tf
 import numpy as np
 
 import sys
-sys.path.append('/esarchive/scratch/cgomez/pkgs/ecubevis/')
+sys.path.append('/esarchive/scratch/cgomez/src/ecubevis/')
 import ecubevis as ecv
 
 from .utils import crop_array, resize_array
+
+
+def create_pair_hr_lrensemble(
+    hr_array, 
+    lr_array,
+    scale, 
+    patch_size, 
+    topography=None, 
+    landocean=None, 
+    tuple_predictors=None, 
+    model='rclstm_spc',
+    debug=False, 
+    interpolation='bicubic'):
+    """
+    Create a pair of HR and LR square sub-patches. In this case, the LR
+    corresponds to the ensembles of the seasonal forecast and therefore is 3D.
+    """
+    hr_array = np.squeeze(hr_array)
+    
+    # if tuple_predictors is not None:
+    #     # turned into a 3d ndarray, [lat, lon, variables]
+    #     array_predictors = np.asarray(tuple_predictors)
+    #     array_predictors = np.rollaxis(np.squeeze(array_predictors), 0, 3)
+
+    if model == "rclstm_spc":
+        # cropping the lr array  
+        patch_size_lr = int(patch_size / scale)       
+        lr_array, crop_y, crop_x = crop_array(lr_array, patch_size_lr, yx=None, position=True) 
+        # cropping the hr array
+        wing = int(scale / 2)
+        crop_y = int(crop_y * scale) - wing
+        crop_x = int(crop_x * scale) - wing
+        hr_array = crop_array(hr_array, patch_size, yx=(crop_y, crop_x))
+    
+    hr_array = np.asarray(hr_array, 'float32')
+    lr_array = np.asarray(lr_array, 'float32')
+    
+    return hr_array, lr_array
 
 
 def create_pair_hr_lr(
@@ -20,6 +58,10 @@ def create_pair_hr_lr(
     debug=False, 
     interpolation='bicubic'):
     """
+    Create a pair of HR and LR square sub-patches. In this case, the LR 
+    corresponds to a coarsen version of the HR reference with land-ocean mask,
+    topography and auxiliary predictors added as "image channels".
+
     Parameters
     ----------
     tuple_predictors : tuple of ndarrays, optional
@@ -75,8 +117,9 @@ def create_pair_hr_lr(
             # concatenating the predictors to the lr image
             lr_array = np.concatenate([lr_array, lr_array_predictors], axis=2)
         else:
-            # cropping and downsampling the image to get lr_array
-            hr_array, crop_y, crop_x = crop_array(np.squeeze(hr_array), patch_size, yx=None, position=True)
+            # cropping the hr array
+            hr_array, crop_y, crop_x = crop_array(hr_array, patch_size, yx=None, position=True)
+            # downsampling the hr array to get lr_array
             lr_array = resize_array(hr_array, (lr_x, lr_y), interpolation)    
             hr_array = np.expand_dims(hr_array, -1)
             lr_array = np.expand_dims(lr_array, -1)
