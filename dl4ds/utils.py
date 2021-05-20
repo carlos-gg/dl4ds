@@ -81,7 +81,8 @@ class Timing():
             print(self.sep)
 
 
-def crop_array(array, size, yx=None, position=False, get_copy=False):
+def crop_array(array, size, yx=None, position=False, exclude_borders=False, 
+               get_copy=False):
     """
     Return a square cropped version of a 2D, 3D or 4D ndarray.
     
@@ -128,8 +129,12 @@ def crop_array(array, size, yx=None, position=False, get_copy=False):
         y, x = yx
     else:
         # random location
-        y = np.random.randint(0, array_size_y - size - 1)
-        x = np.random.randint(0, array_size_x - size - 1)
+        if exclude_borders:
+            y = np.random.randint(1, array_size_y - size - 1)
+            x = np.random.randint(1, array_size_x - size - 1)
+        else:
+            y = np.random.randint(0, array_size_y - size)
+            x = np.random.randint(0, array_size_x - size)
 
     y0, y1 = y, int(y + size)
     x0, x1 = x, int(x + size)
