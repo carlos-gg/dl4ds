@@ -24,7 +24,10 @@ def create_pair_hr_lrensemble(
     Create a pair of HR and LR square sub-patches. In this case, the LR
     corresponds to the ensembles of the seasonal forecast and therefore is 3D.
     """
-    hr_array = np.squeeze(hr_array)
+    hr_array = np.squeeze(hr_array)  
+    hr_array = np.expand_dims(hr_array, -1)
+    lr_array = np.squeeze(lr_array)
+    lr_array = np.expand_dims(lr_array, -1)
     
     # if tuple_predictors is not None:
     #     # turned into a 3d ndarray, [lat, lon, variables]
@@ -32,18 +35,29 @@ def create_pair_hr_lrensemble(
     #     array_predictors = np.rollaxis(np.squeeze(array_predictors), 0, 3)
 
     if model == "rclstm_spc":
-        # cropping the lr array  
-        patch_size_lr = int(patch_size / scale)       
-        lr_array, crop_y, crop_x = crop_array(lr_array, patch_size_lr, yx=None, position=True) 
+        # cropping the lr array        
+        lr_array, crop_y, crop_x = crop_array(lr_array, patch_size, yx=None, 
+                                              exclude_borders=True, position=True) 
         # cropping the hr array
         wing = int(scale / 2)
-        crop_y = int(crop_y * scale) - wing
-        crop_x = int(crop_x * scale) - wing
-        hr_array = crop_array(hr_array, patch_size, yx=(crop_y, crop_x))
+        crop_y_hr = int(crop_y * scale) - wing
+        crop_x_hr = int(crop_x * scale) - wing
+        patch_size_hr = int(patch_size * scale) 
+        hr_array = crop_array(hr_array, patch_size_hr, yx=(crop_y_hr, crop_x_hr))
     
     hr_array = np.asarray(hr_array, 'float32')
     lr_array = np.asarray(lr_array, 'float32')
     
+    if debug:
+        print(f'HR image: {hr_array.shape}, LR image {lr_array.shape}')
+        print(f'Crop X,Y: {crop_x}, {crop_y}')
+
+        ecv.plot_ndarray(hr_array, dpi=80, interactive=False, 
+                         subplot_titles=('HR cropped image'))
+
+        ecv.plot_ndarray(lr_array[:5], dpi=80, interactive=False, 
+                         subplot_titles=('LR cropped image (first 5 slices)'))
+
     return hr_array, lr_array
 
 
