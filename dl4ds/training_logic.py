@@ -13,7 +13,7 @@ from tensorflow.keras.losses import mean_absolute_error
 from matplotlib.pyplot import show
 import horovod.tensorflow.keras as hvd
 
-from .utils import Timing, list_devices, set_gpu_memory_growth, set_visible_gpus
+from .utils import Timing, list_devices, set_gpu_memory_growth, set_visible_gpus, checkarg_model
 from .dataloader import DataGenerator
 from .resnet_int import resnet_int
 from .resnet_rec import resnet_rec
@@ -173,8 +173,7 @@ def training(
     else:
         running_on_first_worker = False
 
-    if not isinstance(model, str) and model not in ['resnet_spc', 'resnet_int', 'resnet_rec']:
-        raise ValueError('`model` not recognized. Must be one of the following: resnet_spc, resnet_int, resnet_rec')
+    model = checkarg_model(model)
 
     if patch_size % scale != 0:
         raise ValueError('`patch_size` must be divisible by `scale` (remainder must be zero)')

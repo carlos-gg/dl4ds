@@ -4,6 +4,15 @@ import cv2
 from datetime import datetime
 
 
+def checkarg_model(model):
+    if not isinstance(model, str) or model not in ['resnet_spc', 'resnet_int', 'resnet_rec', 'rclstm_spc']:
+        msg = '`model` not recognized. Must be one of the following: '
+        msg += 'resnet_spc, resnet_int, resnet_rec, rclstm_spc'
+        raise ValueError(msg)
+    else:
+        return model
+
+
 def set_gpu_memory_growth(verbose=True):
     physical_devices = list_devices(verbose=verbose) 
     for gpu in physical_devices:
