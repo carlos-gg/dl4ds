@@ -1,4 +1,3 @@
-from numpy.testing._private.utils import integer_repr
 import tensorflow as tf
 import numpy as np
 
@@ -6,7 +5,7 @@ import sys
 sys.path.append('/esarchive/scratch/cgomez/src/ecubevis/')
 import ecubevis as ecv
 
-from .utils import crop_array, resize_array
+from .utils import crop_array, resize_array, checkarg_model
 
 
 def create_pair_hr_lrensemble(
@@ -42,6 +41,8 @@ def create_pair_hr_lrensemble(
         wing = int(scale / 2)
         crop_y_hr = int(crop_y * scale) - wing
         crop_x_hr = int(crop_x * scale) - wing
+        # crop_y_hr = int(crop_y * scale)
+        # crop_x_hr = int(crop_x * scale)
         patch_size_hr = int(patch_size * scale) 
         hr_array = crop_array(hr_array, patch_size_hr, yx=(crop_y_hr, crop_x_hr))
     
@@ -50,13 +51,14 @@ def create_pair_hr_lrensemble(
     
     if debug:
         print(f'HR image: {hr_array.shape}, LR image {lr_array.shape}')
-        print(f'Crop X,Y: {crop_x}, {crop_y}')
+        print(f'Crop X,Y in LR: {crop_x}, {crop_y}')
+        print(f'Crop X,Y in HR: {crop_x_hr}, {crop_y_hr}')
 
         ecv.plot_ndarray(hr_array, dpi=80, interactive=False, 
                          subplot_titles=('HR cropped image'))
 
-        ecv.plot_ndarray(lr_array[:5], dpi=80, interactive=False, 
-                         subplot_titles=('LR cropped image (first 5 slices)'))
+        ecv.plot_ndarray(lr_array[:10], dpi=80, interactive=False, 
+                         subplot_titles=('LR cropped image (first 10 slices)'))
 
     return hr_array, lr_array
 
@@ -210,6 +212,7 @@ class DataGenerator(tf.keras.utils.Sequence):
     """
     def __init__(self, 
         array, 
+        y_array=None,
         scale=4, 
         batch_size=32, 
         patch_size=40,
@@ -221,7 +224,7 @@ class DataGenerator(tf.keras.utils.Sequence):
         """
         Parameters
         ----------
-        model : {'resnet_spc', 'resnet_int', 'resnet_rec'}
+        model : {'resnet_spc', 'resnet_int', 'resnet_rec', 'rclstm_spc'}
             Name of the model architecture.
         predictors : tuple of 4D ndarray 
             Tuple of predictor ndarrays with dims [nsamples, lat, lon, 1].
@@ -232,23 +235,28 @@ class DataGenerator(tf.keras.utils.Sequence):
         netcdf files lazily or memmap a numpy array
         """
         self.array = array
+        self.y_array = y_array
         self.batch_size = batch_size
         self.scale = scale
         self.patch_size = patch_size
         self.topography = topography
         self.landocean = landocean
         self.predictors = predictors
-        self.model = model
+        self.model = checkarg_model(model)
         self.interpolation = interpolation
         self.n = array.shape[0]
         self.indices = np.random.permutation(self.n)
 
-        if self.model not in ['resnet_spc', 'resnet_int', 'resnet_rec']:
-            raise ValueError('`model` not recognized. Must be one of the following: resnet_spc, resnet_int, resnet_rec')
-
         if self.model in ['resnet_spc', 'resnet_rec']:
             if not self.patch_size % self.scale == 0:
                 raise ValueError('`patch_size` must be divisible by `scale`')
+
+        if self.model in ['resnet_spc', 'resnet_int', 'resnet_rec']:
+            self.datapairfunc = create_pair_hr_lr
+        elif self.model in ['rclstm_spc']:
+            self.datapairfunc = create_pair_hr_lrensemble
+            if self.y_array is None:
+                raise ValueError('`y_array` must be provided')
 
     def __len__(self):
         """
@@ -276,15 +284,21 @@ class DataGenerator(tf.keras.utils.Sequence):
             else:
                 tuple_predictors = None
 
-            res = create_pair_hr_lr(
-                    array=self.array[i], 
-                    scale=self.scale, 
-                    patch_size=self.patch_size, 
-                    topography=self.topography, 
-                    landocean=self.landocean, 
-                    tuple_predictors=tuple_predictors,
-                    model=self.model,
-                    interpolation=self.interpolation)
+            params = dict( 
+                scale=self.scale, 
+                patch_size=self.patch_size, 
+                topography=self.topography, 
+                landocean=self.landocean, 
+                tuple_predictors=tuple_predictors,
+                model=self.model,
+                interpolation=self.interpolation)
+            if self.model in ['resnet_spc', 'resnet_int', 'resnet_rec']:
+                params['array'] = self.array[i]
+            elif self.model == 'rclstm_spc':
+                params['hr_array'] = self.y_array[i]
+                params['lr_array'] = self.array[i]
+            
+            res = self.datapairfunc(**params)
             hr_array, lr_array = res
             batch_lr_images.append(lr_array)
             batch_hr_images.append(hr_array)
