@@ -17,7 +17,7 @@ from .utils import Timing, list_devices, set_gpu_memory_growth, set_visible_gpus
 from .dataloader import DataGenerator
 from .resnet_int import resnet_int
 from .resnet_rec import resnet_rec
-from .resnet_spc import resnet_spc
+from .resnet_spc import resnet_spc, rclstm_spc
 
 
 def training(
@@ -25,6 +25,9 @@ def training(
     x_train, 
     x_val, 
     x_test,  
+    y_train=None,
+    y_val=None,
+    y_test=None,
     predictors_train=None,
     predictors_val=None,
     predictors_test=None,
@@ -48,6 +51,7 @@ def training(
     savecheckpoint_path='./checkpoints/',
     device='GPU', 
     gpu_memory_growth=True,
+    use_multiprocessing=False,
     plot='plt', 
     show_plot=True, 
     save_plot=False,
@@ -187,9 +191,9 @@ def training(
         model=model, 
         interpolation=interpolation)
     
-    ds_train = DataGenerator(x_train, predictors=predictors_train, **datagen_params)
-    ds_val = DataGenerator(x_val, predictors=predictors_val, **datagen_params)
-    ds_test = DataGenerator(x_test, predictors=predictors_test, **datagen_params)
+    ds_train = DataGenerator(x_train, y_train, predictors=predictors_train, **datagen_params)
+    ds_val = DataGenerator(x_val, y_val, predictors=predictors_val, **datagen_params)
+    ds_test = DataGenerator(x_test, y_test, predictors=predictors_test, **datagen_params)
 
     ### number of channels
     n_channels = x_train.shape[-1]
@@ -207,7 +211,9 @@ def training(
         model = resnet_rec(scale=scale, n_channels=n_channels, **architecture_params)
     elif model == 'resnet_int':
         model = resnet_int(n_channels=n_channels, **architecture_params)
-    
+    elif model == 'rclstm_spc':
+        model = rclstm_spc(scale=scale, n_channels=n_channels, **architecture_params)
+
     if verbose == 1 and running_on_first_worker:
         model.summary(line_length=150)
 
@@ -270,7 +276,8 @@ def training(
                         validation_data=ds_val, 
                         validation_steps=validation_steps, 
                         verbose=verbose, 
-                        callbacks=callbacks)
+                        callbacks=callbacks,
+                        use_multiprocessing=use_multiprocessing)
     score = model.evaluate(ds_test, steps=test_steps, verbose=verbose)
     print(f'\nScore on the test set: {score}')
     
