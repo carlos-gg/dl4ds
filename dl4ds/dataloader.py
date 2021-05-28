@@ -80,11 +80,28 @@ def create_pair_hr_lr(
 
     Parameters
     ----------
+    array : np.ndarray
+        HR gridded data.
+    scale : int
+        Scaling factor.
+    patch_size : int
+        Size of the square patches to be extracted.
+    topography : None or 2D ndarray, optional
+        Elevation data.
+    landocean : None or 2D ndarray, optional
+        Binary land-ocean mask.
     tuple_predictors : tuple of ndarrays, optional
         Tuple of 3D ndarrays [lat, lon, 1] corresponding to predictor variables,
         in low (target) resolution. Assumed to be in LR for r-spc. To be 
         concatenated to the LR version of `array`.
-    
+    model : str, optional
+        String with the name of the model architecture, either 'resnet_spc', 
+        'resnet_int' or 'resnet_rec'.
+    interpolation : str, optional
+        Interpolation used when upsampling/downsampling the training samples.
+        By default 'bicubic'. 
+    debug : bool, optional
+        Whether to show plots and debugging information.
     """
     hr_array = np.squeeze(array)
     
