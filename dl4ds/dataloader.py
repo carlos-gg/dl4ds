@@ -19,7 +19,8 @@ def create_pair_hr_lrensemble(
     model='rclstm_spc',
     debug=False, 
     interpolation='bicubic',
-    downsample_hr=False):
+    downsample_hr=False,
+    crop=True):
     """
     Create a pair of HR and LR square sub-patches. In this case, the LR
     corresponds to the ensembles of the seasonal forecast and therefore is 3D.
@@ -36,15 +37,15 @@ def create_pair_hr_lrensemble(
     #     array_predictors = np.rollaxis(np.squeeze(array_predictors), 0, 3)
 
     if model == "rclstm_spc":
-        # cropping the lr array        
-        lr_array, crop_y, crop_x = crop_array(lr_array, patch_size, yx=None, 
-                                              exclude_borders=False, position=True) 
-        # cropping the hr array
-        wing = int(scale / 2)
-        crop_y_hr = int(crop_y * scale) 
-        crop_x_hr = int(crop_x * scale)
-        patch_size_hr = int(patch_size * scale) 
-        hr_array = crop_array(hr_array, patch_size_hr, yx=(crop_y_hr, crop_x_hr))
+        if crop:
+            # cropping the lr array        
+            lr_array, crop_y, crop_x = crop_array(lr_array, patch_size, yx=None, position=True) 
+            # cropping the hr array
+            wing = int(scale / 2)
+            crop_y_hr = int(crop_y * scale) 
+            crop_x_hr = int(crop_x * scale)
+            patch_size_hr = int(patch_size * scale) 
+            hr_array = crop_array(hr_array, patch_size_hr, yx=(crop_y_hr, crop_x_hr))
 
         if downsample_hr:
             hr_array = resize_array(hr_array, (patch_size, patch_size), interpolation=interpolation)
@@ -53,11 +54,13 @@ def create_pair_hr_lrensemble(
                 pass
         else:
             if topography is not None:
-                topography = crop_array(topography, patch_size_hr, yx=(crop_y_hr, crop_x_hr))
+                if crop:
+                    topography = crop_array(topography, patch_size_hr, yx=(crop_y_hr, crop_x_hr))
                 topography = np.expand_dims(topography, -1)
                 static_array = topography
             if landocean is not None:
-                landocean = crop_array(landocean, patch_size_hr, yx=(crop_y_hr, crop_x_hr))
+                if crop:
+                    landocean = crop_array(landocean, patch_size_hr, yx=(crop_y_hr, crop_x_hr))
                 landocean = np.expand_dims(landocean, -1)
                 static_array = np.concatenate([static_array, landocean], axis=-1)
 
@@ -66,8 +69,9 @@ def create_pair_hr_lrensemble(
     
     if debug:
         print(f'HR image: {hr_array.shape}, LR image {lr_array.shape}')
-        print(f'Crop X,Y in LR: {crop_x}, {crop_y}')
-        print(f'Crop X,Y in HR: {crop_x_hr}, {crop_y_hr}')
+        if crop:
+            print(f'Crop X,Y in LR: {crop_x}, {crop_y}')
+            print(f'Crop X,Y in HR: {crop_x_hr}, {crop_y_hr}')
 
         ecv.plot_ndarray(hr_array, dpi=100, interactive=False, 
                          plot_title='HR cropped image')
@@ -363,7 +367,8 @@ class DataGeneratorEns(tf.keras.utils.Sequence):
         predictors=None,
         model='resnet_spc', 
         interpolation='bicubic',
-        downsample_hr=False):
+        downsample_hr=False,
+        crop=True):
         """
         Parameters
         ----------
@@ -388,6 +393,7 @@ class DataGeneratorEns(tf.keras.utils.Sequence):
         self.model = checkarg_model(model)
         self.interpolation = interpolation
         self.downsample_hr = downsample_hr
+        self.crop = crop
         self.n = x_array.shape[0]
         self.indices = np.random.permutation(self.n)
 
@@ -432,7 +438,8 @@ class DataGeneratorEns(tf.keras.utils.Sequence):
                 tuple_predictors=tuple_predictors,
                 model=self.model,
                 interpolation=self.interpolation,
-                downsample_hr = self.downsample_hr)
+                downsample_hr = self.downsample_hr,
+                crop=self.crop)
             
             if self.topography is not None or self.landocean is not None:
                 hr_array, lr_array, static_array = res
