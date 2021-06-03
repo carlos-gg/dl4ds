@@ -14,7 +14,7 @@ from matplotlib.pyplot import show
 import horovod.tensorflow.keras as hvd
 
 from .utils import Timing, list_devices, set_gpu_memory_growth, set_visible_gpus, checkarg_model
-from .dataloader import DataGenerator
+from .dataloader import DataGenerator, DataGeneratorEns
 from .resnet_int import resnet_int
 from .resnet_rec import resnet_rec
 from .resnet_spc import resnet_spc, rclstm_spc
@@ -35,6 +35,8 @@ def training(
     landocean=None,
     scale=5, 
     interpolation='bicubic', 
+    downsample_hr=False,
+    crop=True,
     patch_size=50, 
     batch_size=64, 
     epochs=60, 
@@ -183,7 +185,8 @@ def training(
         raise ValueError('`patch_size` must be divisible by `scale` (remainder must be zero)')
     
     ### data loader
-    datagen_params = dict(scale=scale, 
+    datagen_params = dict(
+        scale=scale, 
         batch_size=global_batch_size,
         topography=topography, 
         landocean=landocean, 
@@ -191,18 +194,37 @@ def training(
         model=model, 
         interpolation=interpolation)
     
-    ds_train = DataGenerator(x_train, y_train, predictors=predictors_train, **datagen_params)
-    ds_val = DataGenerator(x_val, y_val, predictors=predictors_val, **datagen_params)
-    ds_test = DataGenerator(x_test, y_test, predictors=predictors_test, **datagen_params)
+    if model in ['resnet_spc', 'resnet_int', 'resnet_rec']:
+        ds_train = DataGenerator(x_train, predictors=predictors_train, **datagen_params)
+        ds_val = DataGenerator(x_val, predictors=predictors_val, **datagen_params)
+        ds_test = DataGenerator(x_test, predictors=predictors_test, **datagen_params)
 
-    ### number of channels
-    n_channels = x_train.shape[-1]
-    if topography is not None:
-        n_channels += 1
-    if landocean is not None:
-        n_channels += 1
-    if predictors_train is not None:
-        n_channels += len(predictors_train)
+        ### number of channels
+        n_channels = x_train.shape[-1]
+        if topography is not None:
+            n_channels += 1
+        if landocean is not None:
+            n_channels += 1
+        if predictors_train is not None:
+            n_channels += len(predictors_train)
+
+    elif model == 'rclstm_spc':
+        datagen_params['downsample_hr'] = downsample_hr
+        datagen_params['crop'] = crop
+        ds_train = DataGeneratorEns(x_train, y_train, predictors=predictors_train, **datagen_params)
+        ds_val = DataGeneratorEns(x_val, y_val, predictors=predictors_val, **datagen_params)
+        ds_test = DataGeneratorEns(x_test, y_test, predictors=predictors_test, **datagen_params)
+
+        ### number of channels
+        n_var_channels = 1
+        n_static_channels = 0
+        if topography is not None:
+            n_static_channels += 1
+        if landocean is not None:
+            n_static_channels += 1
+        if predictors_train is not None:
+            pass
+        n_channels = (n_var_channels, n_static_channels)
     
     ### instantiating and fitting the model
     if model == 'resnet_spc':
@@ -212,7 +234,12 @@ def training(
     elif model == 'resnet_int':
         model = resnet_int(n_channels=n_channels, **architecture_params)
     elif model == 'rclstm_spc':
-        model = rclstm_spc(scale=scale, n_channels=n_channels, **architecture_params)
+        if crop:
+            lr_height_width = None
+        else:
+            lr_height_width = (x_test.shape[2], x_test.shape[3])
+        model = rclstm_spc(scale=scale, n_channels=n_channels, 
+                           lr_height_width=lr_height_width, **architecture_params)
 
     if verbose == 1 and running_on_first_worker:
         model.summary(line_length=150)
