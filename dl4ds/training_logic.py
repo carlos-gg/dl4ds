@@ -15,6 +15,7 @@ import horovod.tensorflow.keras as hvd
 
 from .utils import Timing, list_devices, set_gpu_memory_growth, set_visible_gpus, checkarg_model
 from .dataloader import DataGenerator, DataGeneratorEns
+from .losses import dssim, dssim_mae
 from .resnet_int import resnet_int
 from .resnet_rec import resnet_rec
 from .resnet_spc import resnet_spc, rclstm_spc
@@ -39,6 +40,7 @@ def training(
     crop=True,
     patch_size=50, 
     batch_size=64, 
+    loss='mae',
     epochs=60, 
     steps_per_epoch=None, 
     validation_steps=None, 
@@ -296,7 +298,16 @@ def training(
     ### compiling and training the model with L1 pixel loss
     if steps_per_epoch is not None:
         steps_per_epoch = steps_per_epoch // hvd.size()
-    model.compile(optimizer=optimizer, loss=mean_absolute_error)
+
+    ### loss
+    if loss == 'mae':
+        lossf = mean_absolute_error
+    elif loss == 'dssim':
+        lossf = dssim
+    elif loss == 'dssim_mae':
+        lossf = dssim_mae
+
+    model.compile(optimizer=optimizer, loss=lossf)
     fithist = model.fit(ds_train, 
                         epochs=epochs, 
                         steps_per_epoch=steps_per_epoch,
