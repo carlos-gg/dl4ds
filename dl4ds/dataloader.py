@@ -51,7 +51,14 @@ def create_pair_hr_lrensemble(
             hr_array = resize_array(hr_array, (patch_size, patch_size), interpolation=interpolation)
             hr_array = np.expand_dims(hr_array, -1)
             if topography is not None:
-                pass
+                topography = resize_array(topography, (patch_size, patch_size), interpolation=interpolation)
+                static_array = topography
+            if landocean is not None:
+                landocean = resize_array(landocean, (patch_size, patch_size), interpolation='nearest')
+                if static_array is not None:
+                    static_array = np.concatenate([static_array, landocean], axis=-1)
+                else:
+                    static_array = landocean
         else:
             if topography is not None:
                 if crop:
@@ -62,7 +69,10 @@ def create_pair_hr_lrensemble(
                 if crop:
                     landocean = crop_array(landocean, patch_size_hr, yx=(crop_y_hr, crop_x_hr))
                 landocean = np.expand_dims(landocean, -1)
-                static_array = np.concatenate([static_array, landocean], axis=-1)
+                if static_array is not None:
+                    static_array = np.concatenate([static_array, landocean], axis=-1)
+                else:
+                    static_array = landocean
 
     hr_array = np.asarray(hr_array, 'float32')
     lr_array = np.asarray(lr_array, 'float32')
