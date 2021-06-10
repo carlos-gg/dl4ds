@@ -18,7 +18,8 @@ from .dataloader import DataGenerator, DataGeneratorEns
 from .losses import dssim, dssim_mae
 from .resnet_int import resnet_int
 from .resnet_rec import resnet_rec
-from .resnet_spc import resnet_spc, rclstm_spc
+from .resnet_spc import resnet_spc
+from .res_clstm import rclstm_spc
 
 
 def training(
@@ -240,7 +241,12 @@ def training(
             lr_height_width = None
         else:
             lr_height_width = (x_test.shape[2], x_test.shape[3])
-        model = rclstm_spc(scale=scale, n_channels=n_channels, 
+        # bias correction w/o downscaling
+        if downsample_hr:
+            upsample = False
+        else:
+            upsample = True
+        model = rclstm_spc(scale=scale, n_channels=n_channels, upsampling=upsample,
                            lr_height_width=lr_height_width, **architecture_params)
 
     if verbose == 1 and running_on_first_worker:
@@ -306,6 +312,8 @@ def training(
         lossf = dssim
     elif loss == 'dssim_mae':
         lossf = dssim_mae
+    else:
+        raise ValueError('`loss` not recognized')
 
     model.compile(optimizer=optimizer, loss=lossf)
     fithist = model.fit(ds_train, 
