@@ -7,7 +7,7 @@ from .blocks import residual_block
 from .resnet_spc import upsample
 
 
-def rclstm_spc(scale, n_channels, n_filters, n_res_blocks, lr_height_width, n_channels_out=1, upsampling=True):
+def clstm_rspc(scale, n_channels, n_filters, n_res_blocks, lr_height_width, n_channels_out=1, upsampling=True):
     """
     Residual ConvLSTM SPC. ConvLSTM layer followed by residual blocks (with 
     BatchNorm) and pixel shuffle post-upscaling
@@ -57,4 +57,4 @@ def rclstm_spc(scale, n_channels, n_filters, n_res_blocks, lr_height_width, n_ch
     if static_arr:
         return Model(inputs=[x_in, s_in], outputs=x, name="rclstm_spc")
     else:
-        return Model(inputs=x_in, outputs=x, name="rclstm_spc")
+        return Model(inputs=x_in, outputs=x, name="clstm_rspc")
