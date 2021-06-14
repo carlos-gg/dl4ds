@@ -5,9 +5,9 @@ from datetime import datetime
 
 
 def checkarg_model(model):
-    if not isinstance(model, str) or model not in ['resnet_spc', 'resnet_int', 'resnet_rec', 'rclstm_spc']:
+    if not isinstance(model, str) or model not in ['resnet_spc', 'resnet_int', 'resnet_rec', 'clstm_rspc', 'conv3d_rspc']:
         msg = '`model` not recognized. Must be one of the following: '
-        msg += 'resnet_spc, resnet_int, resnet_rec, rclstm_spc'
+        msg += 'resnet_spc, resnet_int, resnet_rec, clstm_rspc, conv3d_rspc'
         raise ValueError(msg)
     else:
         return model
