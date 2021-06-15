@@ -36,7 +36,7 @@ def create_pair_hr_lrensemble(
     #     array_predictors = np.asarray(tuple_predictors)
     #     array_predictors = np.rollaxis(np.squeeze(array_predictors), 0, 3)
 
-    if model == "rclstm_spc":
+    if model in ["clstm_rspc", "conv3d_rspc"]:
         if crop:
             # cropping the lr array        
             lr_array, crop_y, crop_x = crop_array(lr_array, patch_size, yx=None, position=True) 
