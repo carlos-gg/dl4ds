@@ -1,6 +1,8 @@
 import numpy as np
 import tensorflow as tf
-from tensorflow.keras.layers import Add, Conv2D, Input, Lambda, Conv3D, concatenate, LocallyConnected2D, ZeroPadding3D
+from tensorflow.keras.layers import (Add, Conv2D, Input, Lambda, Conv3D, 
+                                     concatenate, LocallyConnected2D, 
+                                     ZeroPadding3D, BatchNormalization, ReLU)
 from tensorflow.keras.models import Model
 
 from .blocks import residual_block
@@ -45,22 +47,23 @@ def conv3d_rspc(
     if static_arr:
         s_in = Input(shape=(h_hr, w_hr, static_n_channels))
 
-    x = Conv3D(n_filters, (5, 5, 5), padding='same')(x_in)
-    x = ZeroPadding3D(padding=(0, 2, 2))(x)
+    x = ZeroPadding3D(padding=(0, 2, 2))(x_in)
     compression_factor1 = ensemble_size // 2
     x = Conv3D(n_filters, (compression_factor1, 5, 5), padding='valid')(x)
+    x = BatchNormalization()(x)
+    x = ReLU()(x)
     x = ZeroPadding3D(padding=(0, 2, 2))(x)
     compression_factor2 = x.get_shape()[1]
     x = Conv3D(n_filters, (compression_factor2, 5, 5), padding='valid')(x)
-    # squeezing the ensemble members dimension
-    x = b = tf.squeeze(x, axis=1)
+    x = b = tf.squeeze(x, axis=1)  # squeezing the ensemble members dimension
+    x = BatchNormalization()(x)
+    x = ReLU()(x)
 
     for i in range(n_res_blocks):
         b = residual_block(b, n_filters, batchnorm=True)
     x = Add()([x, b])
 
     if upsampling:
-        print(x.get_shape())
         x = upsample(x, scale, n_filters)
 
     if isinstance(n_channels, tuple):
@@ -69,7 +72,7 @@ def conv3d_rspc(
     x = Conv2D(n_filters, (3, 3), padding='same', activation='relu')(x)
     x = Conv2D(n_channels_out, (3, 3), padding='same')(x)
     
-    # x = LocallyConnected2D(n_channels_out, (1, 1), padding='valid', bias_initializer='zeros', use_bias=False)(x)
+    # x = LocallyConnected2D(n_channels_out, (1, 1), padding='valid', use_bias=False)(x)
 
     if static_arr:
         return Model(inputs=[x_in, s_in], outputs=x, name="rclstm_spc")
