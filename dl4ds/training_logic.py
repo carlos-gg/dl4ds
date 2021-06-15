@@ -19,7 +19,8 @@ from .losses import dssim, dssim_mae
 from .resnet_int import resnet_int
 from .resnet_rec import resnet_rec
 from .resnet_spc import resnet_spc
-from .res_clstm import rclstm_spc
+from .clstm_rspc import clstm_rspc
+from .conv3d_rspc import conv3d_rspc
 
 
 def training(
@@ -211,7 +212,7 @@ def training(
         if predictors_train is not None:
             n_channels += len(predictors_train)
 
-    elif model == 'rclstm_spc':
+    elif model in ['clstm_rspc', 'conv3d_rspc']:
         datagen_params['downsample_hr'] = downsample_hr
         datagen_params['crop'] = crop
         ds_train = DataGeneratorEns(x_train, y_train, predictors=predictors_train, **datagen_params)
@@ -236,7 +237,7 @@ def training(
         model = resnet_rec(scale=scale, n_channels=n_channels, **architecture_params)
     elif model == 'resnet_int':
         model = resnet_int(n_channels=n_channels, **architecture_params)
-    elif model == 'rclstm_spc':
+    elif model in ['clstm_rspc', 'conv3d_rspc']:
         if crop:
             lr_height_width = None
         else:
@@ -246,8 +247,12 @@ def training(
             upsample = False
         else:
             upsample = True
-        model = rclstm_spc(scale=scale, n_channels=n_channels, upsampling=upsample,
-                           lr_height_width=lr_height_width, **architecture_params)
+        if model == 'clstm_rspc':
+            model = clstm_rspc(scale=scale, n_channels=n_channels, upsampling=upsample,
+                               lr_height_width=lr_height_width, **architecture_params)
+        elif model == 'conv3d_rspc':
+            model = conv3d_rspc(scale=scale, n_channels=n_channels, upsampling=upsample,
+                                lr_height_width=lr_height_width, **architecture_params)
 
     if verbose == 1 and running_on_first_worker:
         model.summary(line_length=150)
