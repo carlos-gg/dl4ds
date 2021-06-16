@@ -30,13 +30,13 @@ def conv3d_rspc(
     else:
         x_n_channels = n_channels
 
-    # no cropping
+    # using the whole spatial domain
     if lr_height_width is not None:  
         h_lr = lr_height_width[0]
         w_lr = lr_height_width[1]
         h_hr = h_lr * scale
         w_hr = w_lr * scale
-    # cropping square patches
+    # using square patches
     else:  
         h_lr = None
         w_lr = None
@@ -48,16 +48,14 @@ def conv3d_rspc(
         s_in = Input(shape=(h_hr, w_hr, static_n_channels))
 
     x = ZeroPadding3D(padding=(0, 2, 2))(x_in)
-    compression_factor1 = ensemble_size // 2
-    x = Conv3D(n_filters, (compression_factor1, 5, 5), padding='valid')(x)
+    x = Conv3D(n_filters, (ensemble_size // 2, 5, 5), padding='valid')(x)
     x = BatchNormalization()(x)
     x = ReLU()(x)
     x = ZeroPadding3D(padding=(0, 2, 2))(x)
-    compression_factor2 = x.get_shape()[1]
-    x = Conv3D(n_filters, (compression_factor2, 5, 5), padding='valid')(x)
-    x = b = tf.squeeze(x, axis=1)  # squeezing the ensemble members dimension
+    x = Conv3D(n_filters, (x.get_shape()[1], 5, 5), padding='valid')(x)
+    x = tf.squeeze(x, axis=1)  # squeezing the ensemble members dimension
     x = BatchNormalization()(x)
-    x = ReLU()(x)
+    x = b = ReLU()(x)
 
     for i in range(n_res_blocks):
         b = residual_block(b, n_filters, batchnorm=True)
@@ -75,6 +73,6 @@ def conv3d_rspc(
     # x = LocallyConnected2D(n_channels_out, (1, 1), padding='valid', use_bias=False)(x)
 
     if static_arr:
-        return Model(inputs=[x_in, s_in], outputs=x, name="rclstm_spc")
+        return Model(inputs=[x_in, s_in], outputs=x, name="conv3d_rspc")
     else:
         return Model(inputs=x_in, outputs=x, name="conv3d_rspc")

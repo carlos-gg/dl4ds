@@ -55,6 +55,6 @@ def clstm_rspc(scale, n_channels, n_filters, n_res_blocks, lr_height_width, n_ch
     # x = LocallyConnected2D(n_channels_out, (1, 1), padding='valid', bias_initializer='zeros', use_bias=False)(x)
 
     if static_arr:
-        return Model(inputs=[x_in, s_in], outputs=x, name="rclstm_spc")
+        return Model(inputs=[x_in, s_in], outputs=x, name="clstm_rspc")
     else:
         return Model(inputs=x_in, outputs=x, name="clstm_rspc")
