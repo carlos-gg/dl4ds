@@ -103,8 +103,11 @@ def training(
         Batch size per replica.
     epochs : int, optional
         Number of epochs or passes through the whole training dataset. 
-    steps_per_epoch : int, optional
-        ``batch_size * steps_per_epoch`` samples are passed per epoch.
+    steps_per_epoch : int or None, optional
+        Total number of steps (batches of samples) before decalrin one epoch
+        finished.``batch_size * steps_per_epoch`` samples are passed per epoch. 
+        If None, ``then steps_per_epoch`` is equal to the number of samples
+        diviced by the ``batch_size``.
     validation_steps : int, optional
         Steps using at the end of each epoch for drawing validation samples. 
     test_steps : int, optional
@@ -215,6 +218,8 @@ def training(
     elif model in ['clstm_rspc', 'conv3d_rspc']:
         datagen_params['downsample_hr'] = downsample_hr
         datagen_params['crop'] = crop
+        if steps_per_epoch is not None:
+            datagen_params['repeat'] = True 
         ds_train = DataGeneratorEns(x_train, y_train, predictors=predictors_train, **datagen_params)
         ds_val = DataGeneratorEns(x_val, y_val, predictors=predictors_val, **datagen_params)
         ds_test = DataGeneratorEns(x_test, y_test, predictors=predictors_test, **datagen_params)
