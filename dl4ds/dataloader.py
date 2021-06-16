@@ -23,13 +23,19 @@ def create_pair_hr_lrensemble(
     crop=True):
     """
     Create a pair of HR and LR square sub-patches. In this case, the LR
-    corresponds to the ensembles of the seasonal forecast and therefore is 3D.
+    corresponds to the ensembles of the seasonal forecast and therefore has 3 
+    dimensions.
     """
     hr_array = np.squeeze(hr_array)  
     hr_array = np.expand_dims(hr_array, -1)
     lr_array = np.squeeze(lr_array)
     lr_array = np.expand_dims(lr_array, -1)
     static_array = None
+
+    if topography is not None:
+        if (topography.shape[0] != hr_array.shape[0] or
+            topography.shape[1] != hr_array.shape[1]):
+            raise ValueError('`topography` must be in HR (same as `hr_array`)')
     
     # if tuple_predictors is not None:
     #     # turned into a 3d ndarray, [lat, lon, variables]
@@ -378,7 +384,8 @@ class DataGeneratorEns(tf.keras.utils.Sequence):
         model='resnet_spc', 
         interpolation='bicubic',
         downsample_hr=False,
-        crop=True):
+        crop=True,
+        repeat=False):
         """
         Parameters
         ----------
@@ -389,8 +396,9 @@ class DataGeneratorEns(tf.keras.utils.Sequence):
 
         TO-DO
         -----
-        instead of the in-memory array, we could input the path and load the 
+        - instead of the in-memory array, we could input the path and load the 
         netcdf files lazily or memmap a numpy array
+        - when repeat=True, the x3 __len__ increase is hardcoded
         """
         self.x_array = x_array
         self.y_array = y_array
@@ -404,8 +412,11 @@ class DataGeneratorEns(tf.keras.utils.Sequence):
         self.interpolation = interpolation
         self.downsample_hr = downsample_hr
         self.crop = crop
+        self.repeat = repeat
         self.n = x_array.shape[0]
         self.indices = np.random.permutation(self.n)
+        if self.repeat:
+            self.indices = np.hstack([self.indices, self.indices, self.indices])
 
         if self.model in ['rclstm_spc']:
             if not self.patch_size % self.scale == 0:
@@ -418,7 +429,10 @@ class DataGeneratorEns(tf.keras.utils.Sequence):
         the model sees the training samples at most once per epoch. 
         """
         n_batches = self.n // self.batch_size
-        return n_batches
+        if self.repeat:
+            return n_batches * 3
+        else:
+            return n_batches
 
     def __getitem__(self, index):
         """
