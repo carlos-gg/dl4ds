@@ -15,7 +15,7 @@ import horovod.tensorflow.keras as hvd
 
 from .utils import Timing, list_devices, set_gpu_memory_growth, set_visible_gpus, checkarg_model
 from .dataloader import DataGenerator, DataGeneratorEns
-from .losses import dssim, dssim_mae
+from .losses import dssim, dssim_mae, dssim_mae_mse, dssim_mse
 from .resnet_int import resnet_int
 from .resnet_rec import resnet_rec
 from .resnet_spc import resnet_spc
@@ -322,6 +322,10 @@ def training(
         lossf = dssim
     elif loss == 'dssim_mae':
         lossf = dssim_mae
+    elif loss == 'dssim_mse':
+        lossf = dssim_mse
+    elif loss == 'dssim_mae_mse':
+        lossf = dssim_mae_mse
     else:
         raise ValueError('`loss` not recognized')
 
