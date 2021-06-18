@@ -1,21 +1,23 @@
-from tensorflow.keras.layers import Add, Conv2D, Lambda, ConvLSTM2D, ReLU, BatchNormalization
+from tensorflow.keras.layers import (Add, Conv2D, Lambda, ReLU, 
+                                     BatchNormalization, LayerNormalization)
 from .attention import ChannelAttention2D
 
 
-def residual_block(x_in, filters, scaling=None, attention=False, batchnorm=False):
+def residual_block(x_in, filters, scaling=None, attention=False, normalization=None):
     """Create a residual block
+
+    Standard residual block: Conv2D -> BN -> ReLU -> Conv2D -> BN
+    EDSR-style block: Conv2D -> ReLU -> Conv2D
     """
-    if batchnorm:
-        # Standard residual block
-        x = Conv2D(filters, (3, 3), padding='same')(x_in)
-        x = BatchNormalization()(x)
-        x = ReLU()(x)
-        x = Conv2D(filters, (3, 3), padding='same')(x)
-        x = BatchNormalization()(x)
-    else:
-        # EDSR-style w/o BatchNorm
-        x = Conv2D(filters, (3, 3), padding='same', activation='relu')(x_in)
-        x = Conv2D(filters, (3, 3), padding='same')(x)
+    x = Conv2D(filters, (3, 3), padding='same')(x_in)
+    if normalization is not None:
+        if normalization == 'bn':
+            x = BatchNormalization()(x)
+        elif normalization == 'ln':
+            x = LayerNormalization()(x)
+    x = ReLU()(x)
+    x = Conv2D(filters, (3, 3), padding='same')(x)
+    x = BatchNormalization()(x)
 
     if scaling is not None:
         x = Lambda(lambda t: t * scaling)(x)
