@@ -14,23 +14,18 @@ from matplotlib.pyplot import show
 import horovod.tensorflow.keras as hvd
 
 from .utils import Timing, list_devices, set_gpu_memory_growth, set_visible_gpus, checkarg_model
-from .dataloader import DataGenerator, DataGeneratorEns
+from .dataloader import DataGenerator
 from .losses import dssim, dssim_mae, dssim_mae_mse, dssim_mse
 from .resnet_int import resnet_int
 from .resnet_rec import resnet_rec
 from .resnet_spc import resnet_spc
-from .clstm_rspc import clstm_rspc
-from .conv3d_rspc import conv3d_rspc
 
 
 def training(
     model, 
-    x_train, 
-    x_val, 
-    x_test,  
-    y_train=None,
-    y_val=None,
-    y_test=None,
+    data_train, 
+    data_val, 
+    data_test,  
     predictors_train=None,
     predictors_val=None,
     predictors_test=None,
@@ -38,8 +33,6 @@ def training(
     landocean=None,
     scale=5, 
     interpolation='bicubic', 
-    downsample_hr=False,
-    crop=True,
     patch_size=50, 
     batch_size=64, 
     loss='mae',
@@ -70,13 +63,15 @@ def training(
     model : str
         String with the name of the model architecture, either 'resnet_spc', 
         'resnet_int' or 'resnet_rec'.
-    x_train : 4D ndarray
-        Training dataset with dims [nsamples, lat, lon, 1].
-    x_val : 4D ndarray
+    data_train : 4D ndarray
+        Training dataset with dims [nsamples, lat, lon, 1]. This grids must 
+        correspond to the observational reference at HR, from which a coarsened
+        version will be created to produce paired samples. 
+    data_val : 4D ndarray
         Validation dataset with dims [nsamples, lat, lon, 1]. This holdout 
         dataset is used at the end of each epoch to check the losses and prevent 
         overfitting.
-    x_test : 4D ndarray
+    data_test : 4D ndarray
         Testing dataset with dims [nsamples, lat, lon, 1]. Holdout not used
         during training. 
     predictors_train : tuple of 4D ndarray, optional
@@ -97,7 +92,7 @@ def training(
     interpolation : str, optional
         Interpolation used when upsampling/downsampling the training samples.
         By default 'bicubic'. 
-    patch_size : int, optional
+    patch_size : int or None, optional
         Size of the square patches used to grab training samples.
     batch_size : int, optional
         Batch size per replica.
@@ -188,9 +183,9 @@ def training(
 
     model = checkarg_model(model)
 
-    if patch_size % scale != 0:
+    if patch_size is not None and patch_size % scale != 0:
         raise ValueError('`patch_size` must be divisible by `scale` (remainder must be zero)')
-    
+
     ### data loader
     datagen_params = dict(
         scale=scale, 
@@ -202,38 +197,18 @@ def training(
         interpolation=interpolation)
     
     if model in ['resnet_spc', 'resnet_int', 'resnet_rec']:
-        ds_train = DataGenerator(x_train, predictors=predictors_train, **datagen_params)
-        ds_val = DataGenerator(x_val, predictors=predictors_val, **datagen_params)
-        ds_test = DataGenerator(x_test, predictors=predictors_test, **datagen_params)
+        ds_train = DataGenerator(data_train, predictors=predictors_train, **datagen_params)
+        ds_val = DataGenerator(data_val, predictors=predictors_val, **datagen_params)
+        ds_test = DataGenerator(data_test, predictors=predictors_test, **datagen_params)
 
         ### number of channels
-        n_channels = x_train.shape[-1]
+        n_channels = data_train.shape[-1]
         if topography is not None:
             n_channels += 1
         if landocean is not None:
             n_channels += 1
         if predictors_train is not None:
             n_channels += len(predictors_train)
-
-    elif model in ['clstm_rspc', 'conv3d_rspc']:
-        datagen_params['downsample_hr'] = downsample_hr
-        datagen_params['crop'] = crop
-        if steps_per_epoch is not None:
-            datagen_params['repeat'] = True 
-        ds_train = DataGeneratorEns(x_train, y_train, predictors=predictors_train, **datagen_params)
-        ds_val = DataGeneratorEns(x_val, y_val, predictors=predictors_val, **datagen_params)
-        ds_test = DataGeneratorEns(x_test, y_test, predictors=predictors_test, **datagen_params)
-
-        ### number of channels
-        n_var_channels = 1
-        n_static_channels = 0
-        if topography is not None:
-            n_static_channels += 1
-        if landocean is not None:
-            n_static_channels += 1
-        if predictors_train is not None:
-            pass
-        n_channels = (n_var_channels, n_static_channels)
     
     ### instantiating and fitting the model
     if model == 'resnet_spc':
@@ -242,22 +217,6 @@ def training(
         model = resnet_rec(scale=scale, n_channels=n_channels, **architecture_params)
     elif model == 'resnet_int':
         model = resnet_int(n_channels=n_channels, **architecture_params)
-    elif model in ['clstm_rspc', 'conv3d_rspc']:
-        if crop:
-            lr_height_width = None
-        else:
-            lr_height_width = (x_test.shape[2], x_test.shape[3])
-        # bias correction w/o downscaling
-        if downsample_hr:
-            upsample = False
-        else:
-            upsample = True
-        if model == 'clstm_rspc':
-            model = clstm_rspc(scale=scale, n_channels=n_channels, upsampling=upsample,
-                               lr_height_width=lr_height_width, **architecture_params)
-        elif model == 'conv3d_rspc':
-            model = conv3d_rspc(scale=scale, n_channels=n_channels, upsampling=upsample,
-                                lr_height_width=lr_height_width, **architecture_params)
 
     if verbose == 1 and running_on_first_worker:
         model.summary(line_length=150)

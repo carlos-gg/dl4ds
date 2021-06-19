@@ -1,4 +1,3 @@
-import numpy as np
 import tensorflow as tf
 from tensorflow.keras.layers import Add, Conv2D, Input, Lambda
 from tensorflow.keras.models import Model
