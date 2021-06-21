@@ -62,6 +62,7 @@ def create_pair_hr_lr(
                                                   yx=None, position=True)
             lr_array = crop_array(np.squeeze(lr_array_resized), patch_size, yx=(crop_y, crop_x))
         else:
+            # no cropping
             lr_array = lr_array_resized
         hr_array = np.expand_dims(hr_array, -1)
         lr_array = np.expand_dims(lr_array, -1)
@@ -81,8 +82,8 @@ def create_pair_hr_lr(
             # upsampling the lr predictors
             array_predictors = resize_array(array_predictors, (hr_x, hr_y), interpolation)
             if patch_size is not None:
-                cropsize = patch_size
-                # cropping predictors 
+                # cropping predictors
+                cropsize = patch_size 
                 lr_array_predictors, crop_y, crop_x = crop_array(array_predictors, cropsize,
                                                                  yx=(crop_y, crop_x), 
                                                                  position=True)
@@ -91,8 +92,8 @@ def create_pair_hr_lr(
     elif model in ['resnet_spc', 'resnet_rec']:
         if tuple_predictors is not None:
             if patch_size is not None:
-                cropsize = lr_x
                 # cropping first the predictors 
+                cropsize = lr_x
                 lr_array_predictors, crop_y, crop_x = crop_array(array_predictors, cropsize,
                                                                  yx=None, position=True)
                 crop_y = int(crop_y * scale)
@@ -142,16 +143,14 @@ def create_pair_hr_lr(
         print(f'HR image: {hr_array.shape}, LR image {lr_array.shape}')
         if patch_size is not None:
             print(f'Crop X,Y: {crop_x}, {crop_y}')
-
-        ecv.plot_ndarray((array[:,:,0]), dpi=60, interactive=False)
+            ecv.plot_ndarray((array[:,:,0]), dpi=60, interactive=False)
         
         if topography is not None or landocean is not None or tuple_predictors is not None:
             lr_array_plot = np.squeeze(lr_array)[:,:,0]
         else:
             lr_array_plot = np.squeeze(lr_array)
-        ecv.plot_ndarray((np.squeeze(hr_array), lr_array_plot), 
-                         dpi=80, interactive=False, 
-                         subplot_titles=('HR cropped image', 'LR cropped image'))
+        ecv.plot_ndarray((np.squeeze(hr_array), lr_array_plot), dpi=80, interactive=False, 
+                         subplot_titles=('HR image', 'LR image'))
         
         if model in ['resnet_spc', 'resnet_rec']:
             if topography is not None:

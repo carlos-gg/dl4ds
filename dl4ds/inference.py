@@ -7,7 +7,7 @@ from .utils import resize_array
 
 def predict_with_gt(
     model, 
-    x_test, 
+    data_test, 
     scale, 
     topography=None, 
     landocean=None, 
@@ -15,15 +15,33 @@ def predict_with_gt(
     interpolation='bicubic', 
     save_path=None,
     save_fname='x_test_pred.npy'):
-    """
+    """Predict with a groudtruth. The HR gridded input is downsampled, then 
+    super-resolved or downscaled using the trained super-resolution model. 
 
     Parameters
     ----------
+    model : tf.keras model
+        Trained model.
+    data_test : numpy.ndarray
+        HR gridded variable. 
+    scale : int
+        Scaling factor. 
+    topography : None or 2D ndarray, optional
+        Elevation data.
+    landocean : None or 2D ndarray, optional
+        Binary land-ocean mask.
     predictors : tuple of 4D ndarrays 
         Predictor variables, with dimensions [nsamples, lat, lon, 1].
+    interpolation : str, optional
+        Interpolation used when upsampling/downsampling the training samples.
+        By default 'bicubic'. 
+    save_path : str or None, optional
+        If not None, the prediction (gridded variable at HR) is saved to disk.
+    save_fname : str, optional
+        Filename to complete the path were the prediciton is saved. 
     """ 
     model_architecture = model.name
-    _, hr_y, hr_x, _ = x_test.shape
+    _, hr_y, hr_x, _ = data_test.shape
     lr_x = int(hr_x / scale)
     lr_y = int(hr_y / scale)
     
@@ -46,10 +64,10 @@ def predict_with_gt(
         if landocean is not None:
             # integer array can only be interpolated with nearest method
             lando_interp = resize_array(landocean, (lr_x, lr_y), interpolation='nearest')
-        x_test_lr = np.zeros((x_test.shape[0], lr_y, lr_x, n_channels))
+        x_test_lr = np.zeros((data_test.shape[0], lr_y, lr_x, n_channels))
     
-        for i in range(x_test.shape[0]):
-            x_test_lr[i, :, :, 0] = resize_array(x_test[i], (lr_x, lr_y), interpolation)
+        for i in range(data_test.shape[0]):
+            x_test_lr[i, :, :, 0] = resize_array(data_test[i], (lr_x, lr_y), interpolation)
             if predictors is not None:
                 # we create a tuple of 3D ndarrays [lat, lon, 1]
                 tuple_predictors = tuple([var[i] for var in predictors])
@@ -67,11 +85,11 @@ def predict_with_gt(
         x_test_pred = model.predict(x_test_lr)
 
     elif model_architecture == 'resnet_int':
-        x_test_lr = np.zeros((x_test.shape[0], hr_y, hr_x, n_channels))
+        x_test_lr = np.zeros((data_test.shape[0], hr_y, hr_x, n_channels))
 
-        for i in range(x_test.shape[0]):
+        for i in range(data_test.shape[0]):
             # downsampling and upsampling via interpolation
-            x_test_resized = resize_array(x_test[i], (lr_x, lr_y), interpolation)
+            x_test_resized = resize_array(data_test[i], (lr_x, lr_y), interpolation)
             x_test_resized = resize_array(x_test_resized, (hr_x, hr_y), interpolation)
             x_test_lr[i, :, :, 0] = x_test_resized
             if predictors is not None:
@@ -105,16 +123,31 @@ def predict(
     interpolation='bicubic', 
     save_path=None,
     save_fname='x_test_pred.npy'):
-    """
+    """Predict without a groudtruth. Super-resolve or downscale a LR gridded 
+    variable using the trained super-resolution model. 
 
     Parameters
     ----------
-    x_test : numpy.ndarray
+    model : tf.keras model
+        Trained model.
+    input_array : numpy.ndarray
         Gridded data in LR.
     predictors : tuple of 4D ndarrays 
         Predictor variables, with dimensions [nsamples, lat, lon, 1].
-    topography : numpy.ndarray
-        Assumed in HR for rint and in LR (resizing happens anyway) for rspc.
+    topography : None or 2D ndarray, optional
+        Elevation data. Assumed in HR for rint and in LR (resizing happens 
+        anyway) for rspc.
+    landocean : None or 2D ndarray, optional
+        Binary land-ocean mask.
+    predictors : tuple of 4D ndarrays 
+        Predictor variables, with dimensions [nsamples, lat, lon, 1].
+    interpolation : str, optional
+        Interpolation used when upsampling/downsampling the training samples.
+        By default 'bicubic'. 
+    save_path : str or None, optional
+        If not None, the prediction (gridded variable at HR) is saved to disk.
+    save_fname : str, optional
+        Filename to complete the path were the prediciton is saved. 
     """ 
     model_architecture = model.name
     
