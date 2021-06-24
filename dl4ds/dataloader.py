@@ -8,6 +8,182 @@ import ecubevis as ecv
 from .utils import crop_array, resize_array, checkarg_model
 
 
+def create_pair_temp_hr_lr(
+    array, 
+    scale, 
+    patch_size, 
+    topography=None, 
+    landocean=None, 
+    tuple_predictors=None, 
+    model='resnet_spc',
+    debug=False, 
+    interpolation='bicubic'):
+    """
+    Create a pair of HR and LR square sub-patches with a temporal window. In 
+    this case, the LR corresponds to a coarsen version of the HR reference. If
+    a land-ocean mask or topography are provided, these are concatenated and 
+    returned as an additional output.
+
+    Parameters
+    ----------
+    array : np.ndarray
+        HR gridded data.
+    scale : int
+        Scaling factor.
+    patch_size : int or None
+        Size of the square patches to be extracted.
+    topography : None or 2D ndarray, optional
+        Elevation data.
+    landocean : None or 2D ndarray, optional
+        Binary land-ocean mask.
+    tuple_predictors : tuple of ndarrays, optional
+        Tuple of 3D ndarrays [lat, lon, 1] corresponding to predictor variables,
+        in low (target) resolution. Assumed to be in LR for r-spc. To be 
+        concatenated to the LR version of `array`.
+    model : str, optional
+        String with the name of the model architecture, either 'resnet_spc', 
+        'resnet_int' or 'resnet_rec'.
+    interpolation : str, optional
+        Interpolation used when upsampling/downsampling the training samples.
+        By default 'bicubic'. 
+    debug : bool, optional
+        If True, plots and debugging information are shown.
+    
+    """
+    static_array = None
+    hr_y = array.shape[1] 
+    hr_x = array.shape[2]
+    hr_array = array  # 4D array [time,y,x,1ch]
+
+    if model == 'resnet_int': 
+        lr_x, lr_y = int(hr_x / scale), int(hr_y / scale) 
+        # HR array is downsampled and upsampled via interpolation
+        lr_array_resized = resize_array(hr_array, (lr_x, lr_y), interpolation, squeezed=False)
+        lr_array_resized = resize_array(lr_array_resized, (hr_x, hr_y), interpolation, squeezed=False)
+        lr_array = lr_array_resized
+        if patch_size is not None:
+            # cropping both hr_array and lr_array (same sizes)
+            hr_array, crop_y, crop_x = crop_array(hr_array, patch_size, yx=None, position=True)
+            lr_array = crop_array(lr_array, patch_size, yx=(crop_y, crop_x))
+    
+    elif model in ['resnet_spc', 'resnet_rec']:
+        if patch_size is not None:
+            lr_x, lr_y = int(patch_size / scale), int(patch_size / scale) 
+            hr_array, crop_y, crop_x = crop_array(hr_array, patch_size, yx=None, position=True)
+            lr_array = resize_array(hr_array, (lr_x, lr_y), interpolation)
+        else:
+            lr_x, lr_y = int(hr_x / scale), int(hr_y / scale)
+            lr_array = resize_array(hr_array, (lr_x, lr_y), interpolation)
+
+    # if tuple_predictors is not None:
+    #     # turned into a 3d ndarray, [lat, lon, variables]
+    #     array_predictors = np.asarray(tuple_predictors)
+    #     array_predictors = np.rollaxis(np.squeeze(array_predictors), 0, 3)
+
+    # if model == 'resnet_int':
+    #     if tuple_predictors is not None:
+    #         # upsampling the lr predictors
+    #         array_predictors = resize_array(array_predictors, (hr_x, hr_y), interpolation)
+    #         if patch_size is not None:
+    #             # cropping predictors
+    #             cropsize = patch_size 
+    #             lr_array_predictors, crop_y, crop_x = crop_array(array_predictors, cropsize,
+    #                                                              yx=(crop_y, crop_x), 
+    #                                                              position=True)
+    #         # concatenating the predictors to the lr image
+    #         lr_array = np.concatenate([lr_array, lr_array_predictors], axis=2)
+    # elif model in ['resnet_spc', 'resnet_rec']:
+    #     if tuple_predictors is not None:
+    #         if patch_size is not None:
+    #             # cropping first the predictors 
+    #             cropsize = lr_x
+    #             lr_array_predictors, crop_y, crop_x = crop_array(array_predictors, cropsize,
+    #                                                              yx=None, position=True)
+    #             crop_y = int(crop_y * scale)
+    #             crop_x = int(crop_x * scale)
+    #             hr_array = crop_array(np.squeeze(hr_array), patch_size, yx=(crop_y, crop_x))   
+    #         lr_array = resize_array(hr_array, (lr_x, lr_y), interpolation)       
+    #         hr_array = np.expand_dims(hr_array, -1)
+    #         lr_array = np.expand_dims(lr_array, -1) 
+    #         # concatenating the predictors to the lr image
+    #         lr_array = np.concatenate([lr_array, lr_array_predictors], axis=2)
+    #     else:
+    #         if patch_size is not None:
+    #             # cropping the hr array
+    #             hr_array, crop_y, crop_x = crop_array(hr_array, patch_size, yx=None, position=True)
+    #         # downsampling the hr array to get lr_array
+    #         lr_array = resize_array(hr_array, (lr_x, lr_y), interpolation)    
+    #         hr_array = np.expand_dims(hr_array, -1)
+    #         lr_array = np.expand_dims(lr_array, -1)
+
+    if topography is not None:
+        if patch_size is not None:
+            topography = crop_array(topography, patch_size, yx=(crop_y, crop_x))
+        if model == 'resnet_int':
+            static_array = np.expand_dims(topography, -1)
+        elif model in ['resnet_spc', 'resnet_rec']:  
+            # downsizing the topography
+            topography_lr = resize_array(topography, (lr_x, lr_y), interpolation)
+            static_array = np.expand_dims(topography_lr, -1)
+
+    if landocean is not None:
+        if patch_size is not None:
+            landocean = crop_array(landocean, patch_size, yx=(crop_y, crop_x))  
+        if model == 'resnet_int':
+            landocean = np.expand_dims(landocean, -1)
+            if static_array is not None:
+                static_array = np.concatenate([static_array, landocean], axis=-1)
+            else:
+                static_array = landocean
+        elif model in ['resnet_spc', 'resnet_rec']:  
+            # downsizing the land-ocean mask
+            # integer array can only be interpolated with nearest method
+            landocean_lr = resize_array(landocean, (lr_x, lr_y), interpolation='nearest')
+            landocean_lr = np.expand_dims(landocean_lr, -1)
+            if static_array is not None:
+                static_array = np.concatenate([static_array, landocean_lr], axis=-1)
+            else:
+                static_array = landocean_lr
+    
+    hr_array = np.asarray(hr_array, 'float32')
+    lr_array = np.asarray(lr_array, 'float32')
+    if static_array is not None:
+        static_array = np.asarray(static_array, 'float32')
+
+    if debug:
+        print(f'HR array: {hr_array.shape}, LR array: {lr_array.shape}, Static array: {static_array.shape}')
+        if patch_size is not None:
+            print(f'Crop X,Y: {crop_x}, {crop_y}')
+
+        ecv.plot_ndarray(np.squeeze(hr_array), dpi=80, interactive=False, subplot_titles=('HR array'))
+        ecv.plot_ndarray(np.squeeze(lr_array), dpi=80, interactive=False, subplot_titles=('LR array'))
+        
+        if model in ['resnet_spc', 'resnet_rec']:
+            if topography is not None:
+                ecv.plot_ndarray((topography, topography_lr), interactive=False, dpi=80, 
+                                subplot_titles=('HR Topography', 'LR Topography'))
+            if landocean is not None:
+                ecv.plot_ndarray((landocean, landocean_lr), interactive=False, dpi=80, 
+                                subplot_titles=('HR Land Ocean mask', 'LR  Land Ocean mask'))
+        elif model == 'resnet_int':
+            if static_array is not None:
+                if topography is not None and landocean is not None:
+                    subpti = ('HR Topography', 'HR Land-Ocean mask')
+                else:
+                    subpti = None
+                ecv.plot_ndarray(tuple(np.moveaxis(static_array, -1, 0)), interactive=False, 
+                                 dpi=80, subplot_titles=subpti)
+
+        # if tuple_predictors is not None:
+        #     ecv.plot_ndarray(np.rollaxis(lr_array_predictors, 2, 0), dpi=80, interactive=False, 
+        #                      subplot_titles=('LR cropped predictors'), multichannel4d=True)
+
+    if static_array is not None:
+        return hr_array, lr_array, static_array
+    else:
+        return hr_array, lr_array
+
+
 def create_pair_hr_lr(
     array, 
     scale, 
@@ -46,7 +222,8 @@ def create_pair_hr_lr(
         Interpolation used when upsampling/downsampling the training samples.
         By default 'bicubic'. 
     debug : bool, optional
-        Whether to show plots and debugging information.
+        If True, plots and debugging information are shown.
+
     """
     hr_array = np.squeeze(array)
     hr_y, hr_x = hr_array.shape
@@ -140,7 +317,7 @@ def create_pair_hr_lr(
     lr_array = np.asarray(lr_array, 'float32')
 
     if debug:
-        print(f'HR image: {hr_array.shape}, LR image {lr_array.shape}')
+        print(f'HR array: {hr_array.shape}, LR array {lr_array.shape}')
         if patch_size is not None:
             print(f'Crop X,Y: {crop_x}, {crop_y}')
             ecv.plot_ndarray((array[:,:,0]), dpi=60, interactive=False)
@@ -150,14 +327,13 @@ def create_pair_hr_lr(
         else:
             lr_array_plot = np.squeeze(lr_array)
         ecv.plot_ndarray((np.squeeze(hr_array), lr_array_plot), dpi=80, interactive=False, 
-                         subplot_titles=('HR image', 'LR image'))
+                         subplot_titles=('HR array', 'LR array'))
         
         if model in ['resnet_spc', 'resnet_rec']:
             if topography is not None:
                 ecv.plot_ndarray((topo_hr, topo_lr), 
                                 interactive=False, dpi=80, 
                                 subplot_titles=('HR Topography', 'LR Topography'))
-            
             if landocean is not None:
                 ecv.plot_ndarray((landocean_hr, landocean_lr), 
                                 interactive=False, dpi=80, 
@@ -166,7 +342,6 @@ def create_pair_hr_lr(
             if topography is not None:
                 ecv.plot_ndarray(topography, interactive=False, dpi=80, 
                                  subplot_titles=('HR Topography'))
-        
             if landocean is not None:
                 ecv.plot_ndarray(landocean, interactive=False, dpi=80, 
                                  subplot_titles=('HR Land Ocean mask'))
