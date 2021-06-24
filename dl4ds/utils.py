@@ -123,11 +123,11 @@ def crop_array(array, size, yx=None, position=False, exclude_borders=False,
     if not isinstance(size, int):
         raise TypeError('`Size` must be integer')
     if array.ndim in [2, 3]: 
-        # assuming 3D ndarray as multichannel image [lat, lon, vars]
+        # assuming 3D ndarray as multichannel grid [lat,lon,vars] or [y,x,channels]
         array_size_y = array.shape[0]
         array_size_x = array.shape[1] 
     elif array.ndim == 4:
-        # assuming 4D ndarray [aux dim, lat, lon, vars]
+        # assuming 4D ndarray [aux dim, lat, lon, vars] or [time,y,x,channels]
         array_size_y = array.shape[1]
         array_size_x = array.shape[2]
     if size > array_size_y or size > array_size_x: 
@@ -172,23 +172,26 @@ def crop_array(array, size, yx=None, position=False, exclude_borders=False,
         return cropped_array
 
 
-def resize_array(array, newsize, interpolation='bicubic'):
+def resize_array(array, newsize, interpolation='bicubic', squeezed=True):
     """
-    Return a resized version of a 2D or [x,y] 3D ndarray [x,y,channels], via
-    interpolation.
+    Return a resized version of a 2D or [y,x] 3D ndarray [y,x,channels] or
+    4D ndarray [time,y,x,channels] via interpolation.
     
     Parameters
     ----------
     array : numpy ndarray 
-        Ndarray.
+        Input ndarray.
     newsize : tuple of int
         New size in X,Y.
-    interpolation : 
+    interpolation : str, optional
         Interpolation mode.
+    squeezed : bool, optional
+        If True, the output will be squeezed (any dimension with lenght 1 will
+        be removed).
 
     Returns
     -------
-    resized_array : numpy ndarray
+    resized_arr : numpy ndarray
         Interpolated array with size ``newsize``.
     """
     if interpolation == 'nearest':
@@ -199,5 +202,19 @@ def resize_array(array, newsize, interpolation='bicubic'):
         interp = cv2.INTER_LINEAR
 
     size_x, size_y = newsize
-    resized_array = cv2.resize(array, (size_x,size_y), interpolation=interp)
-    return resized_array
+    
+    if array.ndim in [2, 3]:
+        resized_arr = cv2.resize(array, (size_x,size_y), interpolation=interp)
+    elif array.ndim == 4:
+        n = array.shape[0]
+        n_ch = array.shape[-1]
+        resized_arr = np.zeros((n, size_y, size_x, n_ch))
+        for i in range(n):
+            ti = cv2.resize(array[i], (size_x,size_y), interpolation=interp)
+            if n_ch == 1:
+                ti = np.expand_dims(ti, -1)
+            resized_arr[i] = ti
+
+    if squeezed:
+        resized_arr = np.squeeze(resized_arr)
+    return resized_arr
