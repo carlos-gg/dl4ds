@@ -14,7 +14,7 @@ def create_pair_temp_hr_lr(
     patch_size, 
     topography=None, 
     landocean=None, 
-    tuple_predictors=None, 
+    array_predictors=None, 
     model='resnet_spc',
     debug=False, 
     interpolation='bicubic'):
@@ -36,10 +36,10 @@ def create_pair_temp_hr_lr(
         Elevation data.
     landocean : None or 2D ndarray, optional
         Binary land-ocean mask.
-    tuple_predictors : tuple of ndarrays, optional
-        Tuple of 3D ndarrays [lat, lon, 1] corresponding to predictor variables,
-        in low (target) resolution. Assumed to be in LR for r-spc. To be 
-        concatenated to the LR version of `array`.
+    array_predictors : tuple of ndarrays, optional
+        4d ndarray with dimensions [time, lat, lon, variables] contaning the 
+        predictor variables in HR. To be concatenated to the LR version of 
+        `array`.
     model : str, optional
         String with the name of the model architecture, either 'resnet_spc', 
         'resnet_int' or 'resnet_rec'.
@@ -54,6 +54,9 @@ def create_pair_temp_hr_lr(
     hr_y = array.shape[1] 
     hr_x = array.shape[2]
     hr_array = array  # 4D array [time,y,x,1ch]
+
+    if array_predictors is not None:
+        hr_array = np.concatenate([hr_array, array_predictors], axis=-1)
 
     if model == 'resnet_int': 
         lr_x, lr_y = int(hr_x / scale), int(hr_y / scale) 
@@ -74,47 +77,6 @@ def create_pair_temp_hr_lr(
         else:
             lr_x, lr_y = int(hr_x / scale), int(hr_y / scale)
             lr_array = resize_array(hr_array, (lr_x, lr_y), interpolation)
-
-    # if tuple_predictors is not None:
-    #     # turned into a 3d ndarray, [lat, lon, variables]
-    #     array_predictors = np.asarray(tuple_predictors)
-    #     array_predictors = np.rollaxis(np.squeeze(array_predictors), 0, 3)
-
-    # if model == 'resnet_int':
-    #     if tuple_predictors is not None:
-    #         # upsampling the lr predictors
-    #         array_predictors = resize_array(array_predictors, (hr_x, hr_y), interpolation)
-    #         if patch_size is not None:
-    #             # cropping predictors
-    #             cropsize = patch_size 
-    #             lr_array_predictors, crop_y, crop_x = crop_array(array_predictors, cropsize,
-    #                                                              yx=(crop_y, crop_x), 
-    #                                                              position=True)
-    #         # concatenating the predictors to the lr image
-    #         lr_array = np.concatenate([lr_array, lr_array_predictors], axis=2)
-    # elif model in ['resnet_spc', 'resnet_rec']:
-    #     if tuple_predictors is not None:
-    #         if patch_size is not None:
-    #             # cropping first the predictors 
-    #             cropsize = lr_x
-    #             lr_array_predictors, crop_y, crop_x = crop_array(array_predictors, cropsize,
-    #                                                              yx=None, position=True)
-    #             crop_y = int(crop_y * scale)
-    #             crop_x = int(crop_x * scale)
-    #             hr_array = crop_array(np.squeeze(hr_array), patch_size, yx=(crop_y, crop_x))   
-    #         lr_array = resize_array(hr_array, (lr_x, lr_y), interpolation)       
-    #         hr_array = np.expand_dims(hr_array, -1)
-    #         lr_array = np.expand_dims(lr_array, -1) 
-    #         # concatenating the predictors to the lr image
-    #         lr_array = np.concatenate([lr_array, lr_array_predictors], axis=2)
-    #     else:
-    #         if patch_size is not None:
-    #             # cropping the hr array
-    #             hr_array, crop_y, crop_x = crop_array(hr_array, patch_size, yx=None, position=True)
-    #         # downsampling the hr array to get lr_array
-    #         lr_array = resize_array(hr_array, (lr_x, lr_y), interpolation)    
-    #         hr_array = np.expand_dims(hr_array, -1)
-    #         lr_array = np.expand_dims(lr_array, -1)
 
     if topography is not None:
         if patch_size is not None:
@@ -145,7 +107,8 @@ def create_pair_temp_hr_lr(
             else:
                 static_array = landocean_lr
     
-    hr_array = np.asarray(hr_array, 'float32')
+    hr_array = np.asarray(hr_array[:,:,:,0], 'float32')  # keeping the target variable
+    hr_array = np.expand_dims(hr_array, -1)
     lr_array = np.asarray(lr_array, 'float32')
     if static_array is not None:
         static_array = np.asarray(static_array, 'float32')
@@ -155,8 +118,10 @@ def create_pair_temp_hr_lr(
         if patch_size is not None:
             print(f'Crop X,Y: {crop_x}, {crop_y}')
 
-        ecv.plot_ndarray(np.squeeze(hr_array), dpi=80, interactive=False, subplot_titles=('HR array'))
-        ecv.plot_ndarray(np.squeeze(lr_array), dpi=80, interactive=False, subplot_titles=('LR array'))
+        ecv.plot_ndarray(np.squeeze(hr_array), dpi=80, interactive=False, plot_title=('HR array'))
+        for i in range(lr_array.shape[-1]):
+            ecv.plot_ndarray(np.squeeze(lr_array[:,:,:,i]), dpi=80, interactive=False, 
+                             plot_title=(f'LR array, variable {i+1}'))
         
         if model in ['resnet_spc', 'resnet_rec']:
             if topography is not None:
@@ -173,10 +138,6 @@ def create_pair_temp_hr_lr(
                     subpti = None
                 ecv.plot_ndarray(tuple(np.moveaxis(static_array, -1, 0)), interactive=False, 
                                  dpi=80, subplot_titles=subpti)
-
-        # if tuple_predictors is not None:
-        #     ecv.plot_ndarray(np.rollaxis(lr_array_predictors, 2, 0), dpi=80, interactive=False, 
-        #                      subplot_titles=('LR cropped predictors'), multichannel4d=True)
 
     if static_array is not None:
         return hr_array, lr_array, static_array
@@ -427,6 +388,8 @@ class DataGenerator(tf.keras.utils.Sequence):
                 tuple_predictors = tuple([var[i] for var in self.predictors])
             else:
                 tuple_predictors = None
+
+            # array_predictors = np.concatenate(tuple_predictors, axis=-1)
 
             res = create_pair_hr_lr(
                 array=self.array[i],
