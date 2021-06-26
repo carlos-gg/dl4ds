@@ -73,10 +73,10 @@ def create_pair_temp_hr_lr(
         if patch_size is not None:
             lr_x, lr_y = int(patch_size / scale), int(patch_size / scale) 
             hr_array, crop_y, crop_x = crop_array(hr_array, patch_size, yx=None, position=True)
-            lr_array = resize_array(hr_array, (lr_x, lr_y), interpolation)
+            lr_array = resize_array(hr_array, (lr_x, lr_y), interpolation, squeezed=False)
         else:
             lr_x, lr_y = int(hr_x / scale), int(hr_y / scale)
-            lr_array = resize_array(hr_array, (lr_x, lr_y), interpolation)
+            lr_array = resize_array(hr_array, (lr_x, lr_y), interpolation, squeezed=False)
 
     if topography is not None:
         if patch_size is not None:
@@ -107,7 +107,7 @@ def create_pair_temp_hr_lr(
             else:
                 static_array = landocean_lr
     
-    hr_array = np.asarray(hr_array[:,:,:,0], 'float32')  # keeping the target variable
+    hr_array = np.asarray(hr_array[-1,:,:,0], 'float32')  # keeping the target variable and last time slice
     hr_array = np.expand_dims(hr_array, -1)
     lr_array = np.asarray(lr_array, 'float32')
     if static_array is not None:
@@ -327,12 +327,14 @@ class DataGenerator(tf.keras.utils.Sequence):
         array, 
         scale=4, 
         batch_size=32, 
-        patch_size=40,
+        patch_size=None,
+        time_window=None,
         topography=None, 
         landocean=None, 
         predictors=None,
         model='resnet_spc', 
-        interpolation='bicubic'
+        interpolation='bicubic',
+        repeat=None,
         ):
         """
         Parameters
@@ -344,20 +346,28 @@ class DataGenerator(tf.keras.utils.Sequence):
 
         TO-DO
         -----
-        instead of the in-memory array, we could input the path and load the 
+        * instead of the in-memory array, we could input the path and load the 
         netcdf files lazily or memmap a numpy array
         """
         self.array = array
         self.batch_size = batch_size
         self.scale = scale
         self.patch_size = patch_size
+        self.time_window = time_window
         self.topography = topography
         self.landocean = landocean
         self.predictors = predictors
         self.model = checkarg_model(model)
         self.interpolation = interpolation
+        self.repeat = repeat
         self.n = array.shape[0]
-        self.indices = np.random.permutation(self.n)
+        if self.time_window is not None:
+            self.indices = np.random.permutation(np.arange(self.time_window, self.n))
+        else:
+            self.indices = np.random.permutation(np.arange(self.n))
+        
+        if self.repeat is not None and isinstance(self.repeat, int):
+            self.indices = np.hstack([self.indices for i in range(self.repeat)])
 
         if self.model in ['resnet_spc', 'resnet_rec'] and patch_size is not None:
             if not self.patch_size % self.scale == 0:
@@ -370,7 +380,10 @@ class DataGenerator(tf.keras.utils.Sequence):
         the model sees the training samples at most once per epoch. 
         """
         n_batches = self.n // self.batch_size
-        return n_batches
+        if self.repeat:
+            return n_batches * self.repeat
+        else:
+            return n_batches
 
     def __getitem__(self, index):
         """
@@ -381,32 +394,58 @@ class DataGenerator(tf.keras.utils.Sequence):
             index * self.batch_size : (index + 1) * self.batch_size]
         batch_hr_images = []
         batch_lr_images = []
+        batch_static_images = []
 
-        for i in self.batch_rand_idx:   
-            if self.predictors is not None:
-                # we pass a tuple of 3D ndarrays [lat, lon, 1]
-                tuple_predictors = tuple([var[i] for var in self.predictors])
+        if self.time_window is None:
+            for i in self.batch_rand_idx:   
+                if self.predictors is not None:
+                    array_predictors = np.concatenate(self.predictors, axis=-1)
+                else:
+                    array_predictors = None
+
+                res = create_pair_hr_lr(
+                    array=self.array[i],
+                    scale=self.scale, 
+                    patch_size=self.patch_size, 
+                    topography=self.topography, 
+                    landocean=self.landocean, 
+                    tuple_predictors=array_predictors[i],
+                    model=self.model,
+                    interpolation=self.interpolation)
+                hr_array, lr_array = res
+                batch_lr_images.append(lr_array)
+                batch_hr_images.append(hr_array)
+            batch_lr_images = np.asarray(batch_lr_images)
+            batch_hr_images = np.asarray(batch_hr_images) 
+            return [batch_lr_images], [batch_hr_images]
+        
+        # batch of samples with a temporal dimension
+        else:
+            for i in self.batch_rand_idx: 
+                if self.predictors is not None:
+                    array_predictors = np.concatenate(self.predictors[i-self.time_window:i], axis=-1)
+                else:
+                    array_predictors = None
+
+                res = create_pair_temp_hr_lr(
+                    array=self.array[i-self.time_window:i],
+                    scale=self.scale, 
+                    patch_size=self.patch_size, 
+                    topography=self.topography, 
+                    landocean=self.landocean, 
+                    tuple_predictors=array_predictors[i],
+                    model=self.model,
+                    interpolation=self.interpolation)
+                hr_array, lr_array = res
+                batch_lr_images.append(lr_array)
+                batch_hr_images.append(hr_array)
+            batch_lr_images = np.asarray(batch_lr_images)
+            batch_hr_images = np.asarray(batch_hr_images) 
+            if self.topography is not None or self.landocean is not None:
+                batch_static_images = np.asarray(batch_static_images)
+                return [batch_lr_images, batch_static_images], [batch_hr_images]
             else:
-                tuple_predictors = None
-
-            # array_predictors = np.concatenate(tuple_predictors, axis=-1)
-
-            res = create_pair_hr_lr(
-                array=self.array[i],
-                scale=self.scale, 
-                patch_size=self.patch_size, 
-                topography=self.topography, 
-                landocean=self.landocean, 
-                tuple_predictors=tuple_predictors,
-                model=self.model,
-                interpolation=self.interpolation)
-            hr_array, lr_array = res
-            batch_lr_images.append(lr_array)
-            batch_hr_images.append(hr_array)
-
-        batch_lr_images = np.asarray(batch_lr_images)
-        batch_hr_images = np.asarray(batch_hr_images) 
-        return [batch_lr_images], [batch_hr_images]
+                return [batch_lr_images], [batch_hr_images]
 
     def on_epoch_end(self):
         """
