@@ -20,7 +20,7 @@ def resnet_bi(n_channels, n_filters, n_res_blocks, n_channels_out=1, attention=F
     return Model(inputs=x_in, outputs=x, name="resnet_bi")
 
 
-def recurrent_resnet_bi(n_channels, n_filters, n_res_blocks, n_channels_out=1, 
+def recresnet_bi(n_channels, n_filters, n_res_blocks, n_channels_out=1, 
                         time_window=None, attention=False):
     """
     Recurrent ResNet-INT. Recurrent Residual network with EDSR residual blocks 
@@ -51,6 +51,6 @@ def recurrent_resnet_bi(n_channels, n_filters, n_res_blocks, n_channels_out=1,
     x = Conv2D(n_channels_out, (3, 3), padding='same')(x)
 
     if static_arr:
-        return Model(inputs=[x_in, s_in], outputs=x, name="recurren_resnet_bi")
+        return Model(inputs=[x_in, s_in], outputs=x, name="recresnet_bi")
     else:
-        return Model(inputs=x_in, outputs=x, name="recurren_resnet_bi")
+        return Model(inputs=x_in, outputs=x, name="recresnet_bi")
