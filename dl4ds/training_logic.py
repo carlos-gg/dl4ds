@@ -16,9 +16,8 @@ from .utils import (Timing, list_devices, set_gpu_memory_growth,
                     set_visible_gpus, checkarg_model, MODELS)
 from .dataloader import DataGenerator, create_batch_hr_lr
 from .losses import dssim, dssim_mae, dssim_mae_mse, dssim_mse
-from .resnet_bi import resnet_bi, recurrent_resnet_bi
-from .resnet_rc import resnet_rc, recurrent_resnet_rc
-from .resnet_spc import resnet_spc, recurrent_resnet_spc
+from .resnet_preupsampling import resnet_bi, recresnet_bi
+from .resnet_postupsampling import resnet_postupsampling, recresnet_postupsampling
 from .cgan import train_step
 from .discriminator import residual_discriminator
 
@@ -28,24 +27,28 @@ class Trainer(ABC):
     """
     def __init__(
         self,
-        model, 
+        model_name, 
         loss='mae',
         batch_size=64, 
         device='GPU', 
         gpu_memory_growth=True,
         use_multiprocessing=False,
         verbose=True, 
-        model_list=None
+        model_list=None,
+        save=True,
+        save_path=None
         ):
         """
         """
-        self.model = model
+        self.model_name = model_name
         self.batch_size = batch_size
         self.loss = loss
         self.device = device
         self.gpu_memory_growth = gpu_memory_growth
         self.use_multiprocessing = use_multiprocessing
         self.verbose = verbose
+        self.save = save
+        self.save_path = save_path
         self.timing = Timing()
        
         ### Initializing Horovod
@@ -82,7 +85,7 @@ class Trainer(ABC):
         ### Checking the model argument
         if model_list is None:
             model_list = MODELS
-        self.model = checkarg_model(self.model, model_list)
+        self.model_name = checkarg_model(self.model_name, model_list)
 
         ### Choosing the loss function
         if loss == 'mae':  # L1 pixel loss
@@ -103,6 +106,17 @@ class Trainer(ABC):
     @abstractmethod
     def run(self):
         pass
+
+    def save_model(self, model_to_save=None):
+        if model_to_save is None:
+            model_to_save = self.model
+
+        if self.save_path is None:
+            self.save_path = './' + self.model_name + '/'
+    
+        if self.running_on_first_worker:
+            os.makedirs(self.save_path, exist_ok=True)
+            model_to_save.save(self.save_path, save_format='tf')        
         
 
 class SupervisedTrainer(Trainer):
@@ -110,7 +124,7 @@ class SupervisedTrainer(Trainer):
     """
     def __init__(
         self,
-        model, 
+        model_name, 
         data_train, 
         data_val, 
         data_test,  
@@ -242,8 +256,8 @@ class SupervisedTrainer(Trainer):
             Dictionary with additional parameters passed to the neural network 
             model.
         """
-        super().__init__(model, loss, batch_size, device, gpu_memory_growth,
-                         use_multiprocessing, verbose, model_list)
+        super().__init__(model_name, loss, batch_size, device, gpu_memory_growth,
+                         use_multiprocessing, verbose, model_list, save, save_path)
         self.data_train = data_train
         self.data_val = data_val
         self.data_test = data_test
@@ -265,8 +279,6 @@ class SupervisedTrainer(Trainer):
         self.early_stopping = early_stopping
         self.patience = patience
         self.min_delta = min_delta
-        self.save = save
-        self.save_path = save_path
         self.savecheckpoint_path = savecheckpoint_path
         self.plot = plot
         self.show_plot = show_plot
@@ -276,6 +288,8 @@ class SupervisedTrainer(Trainer):
         self.setup_datagen()
         self.setup_model()
         self.run()
+        if self.save:
+            self.save_model(self.model)
 
     def setup_datagen(self):
         """Setting up the data generators
@@ -283,12 +297,12 @@ class SupervisedTrainer(Trainer):
         if self.patch_size is not None and self.patch_size % self.scale != 0:
             raise ValueError('`patch_size` must be divisible by `scale` (remainder must be zero)')
 
-        recmodels = ['recurrent_resnet_spc', 'recurrent_resnet_rc', 'recurrent_resnet_bi']
-        if self.time_window is not None and self.model not in recmodels:
+        recmodels = ['recresnet_spc', 'recresnet_rc', 'recresnet_bi']
+        if self.time_window is not None and self.model_name not in recmodels:
             msg = f'``time_window={self.time_window}``, choose a model that handles samples with a temporal dimension'
             raise ValueError(msg)
-        if self.model in recmodels and self.time_window is None:
-            msg = f'``model={self.model}``, the argument ``time_window`` must be a postive integer'
+        if self.model_name in recmodels and self.time_window is None:
+            msg = f'``model={self.model_name}``, the argument ``time_window`` must be a postive integer'
             raise ValueError(msg)
 
         datagen_params = dict(
@@ -297,7 +311,7 @@ class SupervisedTrainer(Trainer):
             topography=self.topography, 
             landocean=self.landocean, 
             patch_size=self.patch_size, 
-            model=self.model, 
+            model=self.model_name, 
             interpolation=self.interpolation,
             time_window=self.time_window)
         self.ds_train = DataGenerator(self.data_train, predictors=self.predictors_train, **datagen_params)
@@ -308,7 +322,7 @@ class SupervisedTrainer(Trainer):
         """Setting up the model
         """
         ### number of channels
-        if self.model in ['resnet_spc', 'resnet_bi', 'resnet_rc']:
+        if self.model_name in ['resnet_spc', 'resnet_bi', 'resnet_rc', 'resnet_dc']:
             n_channels = self.data_train.shape[-1]
             if self.topography is not None:
                 n_channels += 1
@@ -316,7 +330,7 @@ class SupervisedTrainer(Trainer):
                 n_channels += 1
             if self.predictors_train is not None:
                 n_channels += len(self.predictors_train)
-        elif self.model in ['recurrent_resnet_spc', 'recurrent_resnet_rc', 'recurrent_resnet_bi']:
+        elif self.model_name in ['recresnet_spc', 'recresnet_rc', 'recresnet_dc', 'recresnet_bi']:
             n_var_channels = self.data_train.shape[-1]
             n_st_channels = 0
             if self.predictors_train is not None:
@@ -328,21 +342,30 @@ class SupervisedTrainer(Trainer):
             n_channels = (n_var_channels, n_st_channels)
 
         ### instantiating and fitting the model
-        if self.model == 'resnet_spc':
-            self.model = resnet_spc(scale=self.scale, n_channels=n_channels, **self.architecture_params)
-        elif self.model == 'resnet_rc':
-            self.model = resnet_rc(scale=self.scale, n_channels=n_channels, **self.architecture_params)
-        elif self.model == 'resnet_bi':
-            self.model = resnet_bi(n_channels=n_channels, **self.architecture_params)        
-        elif self.model == 'recurrent_resnet_spc':
-            self.model = recurrent_resnet_spc(scale=self.scale, n_channels=n_channels, 
-                                              time_window=self.time_window, **self.architecture_params)
-        elif self.model == 'recurrent_resnet_rc':
-            self.model = recurrent_resnet_rc(scale=self.scale, n_channels=n_channels, 
-                                             time_window=self.time_window, **self.architecture_params)
-        elif self.model == 'recurrent_resnet_bi':
-            self.model = recurrent_resnet_bi(n_channels=n_channels, time_window=self.time_window, 
-                                            **self.architecture_params)
+        if self.model_name in ['resnet_spc', 'resnet_rc', 'resnet_dc']:
+            upsampling_module_name = self.model_name.split('_')[-1]
+            self.model = resnet_postupsampling(
+                upsampling=upsampling_module_name, 
+                scale=self.scale, 
+                n_channels=n_channels, 
+                **self.architecture_params)
+        elif self.model_name == 'resnet_bi':
+            self.model = resnet_bi(
+                n_channels=n_channels, 
+                **self.architecture_params)        
+        elif self.model_name in ['recresnet_spc', 'recresnet_rc', 'recresnet_dc']:
+            upsampling_module_name = self.model_name.split('_')[-1]
+            self.model = recresnet_postupsampling(
+                upsampling=upsampling_module_name, 
+                scale=self.scale, 
+                n_channels=n_channels, 
+                time_window=self.time_window, 
+                **self.architecture_params)
+        elif self.model_name == 'recresnet_bi':
+            self.model = recresnet_bi(
+                n_channels=n_channels, 
+                time_window=self.time_window, 
+                **self.architecture_params)
 
         if self.verbose == 1 and self.running_on_first_worker:
             self.model.summary(line_length=150)
@@ -425,7 +448,7 @@ class SupervisedTrainer(Trainer):
         
         if self.plot == 'plt':
             if self.save_plot:
-                learning_curve_fname = 'learning_curve.png'
+                learning_curve_fname = self.model_name + '_learning_curve.png'
             else:
                 learning_curve_fname = None
             
@@ -434,21 +457,13 @@ class SupervisedTrainer(Trainer):
                 if self.show_plot:
                     show()
 
-        if self.save:
-            if self.save_path is None:
-                save_path = './saved_model/'
-        
-            if self.running_on_first_worker:
-                os.makedirs(save_path, exist_ok=True)
-                self.model.save(save_path, save_format='tf')
-
 
 class CGANTrainer(Trainer):
     """
     """
     def __init__(
         self,
-        model,
+        model_name,
         data_train,
         data_test,
         scale=5, 
@@ -466,6 +481,8 @@ class CGANTrainer(Trainer):
         landocean=None, 
         checkpoints_frequency=5, 
         savecheckpoint_path='./checkpoints/',
+        save=False,
+        save_path=None,
         save_logs=False,
         save_loss_history=True,
         generator_params={},
@@ -476,7 +493,7 @@ class CGANTrainer(Trainer):
     
         Parameters
         ----------
-        model : str
+        model_name : str
             String with the name of the model architecture, either 'resnet_spc', 
             'resnet_bi' or 'resnet_rc'. Used as a the CGAN generator.
         x_train : 4D ndarray
@@ -517,8 +534,9 @@ class CGANTrainer(Trainer):
             Verbosity mode. False or 0 = silent. True or 1, max amount of 
             information is printed out. When equal 2, then less info is shown.
         """
-        super().__init__(model, loss, batch_size, device, gpu_memory_growth,
-                         verbose=verbose, model_list=model_list)
+        super().__init__(model_name, loss, batch_size, device, gpu_memory_growth,
+                         verbose=verbose, model_list=model_list, save=save, 
+                         save_path=save_path)
         self.data_train = data_train
         self.data_test = data_test
         self.scale = scale
@@ -549,21 +567,22 @@ class CGANTrainer(Trainer):
         
         self.setup_model()
         self.run()
+        if self.save:
+            self.save_model(self.generator)
 
     def setup_model(self):
         """
         """
         # Generator
-        if self.model == 'resnet_spc':
-            self.generator = resnet_spc(scale=self.scale, 
-                                        n_channels=self.n_channels,
-                                        **self.generator_params)
-        elif self.model == 'resnet_bi':
+        if self.model_name in ['resnet_spc', 'resnet_rc', 'resnet_dc']:
+            upsampling_module_name = self.model_name.split('_')[-1]
+            self.generator = resnet_postupsampling(
+                upsampling=upsampling_module_name,
+                scale=self.scale, 
+                n_channels=self.n_channels,
+                **self.generator_params)
+        elif self.model_name == 'resnet_bi':
             self.generator = resnet_bi(n_channels=self.n_channels, 
-                                       **self.generator_params)
-        elif self.model == 'resnet_rc':
-            self.generator = resnet_rc(scale=self.scale, 
-                                       n_channels=self.n_channels,
                                        **self.generator_params)
             
         # Discriminator
