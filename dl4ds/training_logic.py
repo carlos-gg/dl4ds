@@ -107,12 +107,15 @@ class Trainer(ABC):
     def run(self):
         pass
 
-    def save_model(self, model_to_save=None):
+    def save_model(self, model_to_save=None, folder_prefix=None):
         if model_to_save is None:
             model_to_save = self.model
 
         if self.save_path is None:
-            self.save_path = './' + self.model_name + '/'
+            if folder_prefix is not None:
+                self.save_path = './' + folder_prefix + self.model_name + '/'
+            else:
+                self.save_path = './' + self.model_name + '/'
     
         if self.running_on_first_worker:
             os.makedirs(self.save_path, exist_ok=True)
@@ -568,7 +571,7 @@ class CGANTrainer(Trainer):
         self.setup_model()
         self.run()
         if self.save:
-            self.save_model(self.generator)
+            self.save_model(self.generator, folder_prefix='cgan_')
 
     def setup_model(self):
         """
@@ -588,7 +591,7 @@ class CGANTrainer(Trainer):
         # Discriminator
         self.discriminator = residual_discriminator(n_channels=self.n_channels, 
                                                     scale=self.scale, 
-                                                    model=self.model,
+                                                    model=self.model_name,
                                                     **self.discriminator_params)
         
         if self.verbose == 1 and self.running_on_first_worker:
@@ -642,7 +645,7 @@ class CGANTrainer(Trainer):
                     topography=self.topography, 
                     landocean=self.landocean, 
                     patch_size=self.patch_size, 
-                    model=self.model, 
+                    model=self.model_name, 
                     interpolation=self.interpolation)
 
                 losses = train_step(
@@ -680,7 +683,7 @@ class CGANTrainer(Trainer):
         
         # Horovod: save last checkpoint only on worker 0 to prevent other 
         # workers from corrupting it
-        if self.checkpoints_frequency is not None and self.running_on_first_worker:
+        if self.savecheckpoint_path is not None and self.running_on_first_worker:
             checkpoint.save(file_prefix=checkpoint_prefix)
 
         if self.save_loss_history and self.running_on_first_worker:
@@ -701,10 +704,12 @@ class CGANTrainer(Trainer):
                 topography=self.topography, 
                 landocean=self.landocean, 
                 patch_size=self.patch_size, 
-                model=self.model, 
+                model=self.model_name, 
                 interpolation=self.interpolation,
                 shuffle=False)
 
+            lr_arrtest = tf.cast(lr_arrtest, tf.float32)
+            hr_arrtest = tf.cast(hr_arrtest, tf.float32)
             y_test_pred = self.generator.predict(lr_arrtest)
             test_loss = self.lossf(hr_arrtest, y_test_pred)
             print(f'\n{self.lossf} on the test set: {test_loss}')
