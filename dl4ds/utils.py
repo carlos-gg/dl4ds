@@ -4,10 +4,34 @@ import cv2
 from datetime import datetime
 
 
-def checkarg_model(model):
-    if not isinstance(model, str) or model not in ['resnet_spc', 'resnet_int', 'resnet_rec', 'clstm_rspc', 'conv3d_rspc']:
-        msg = '`model` not recognized. Must be one of the following: '
-        msg += 'resnet_spc, resnet_int, resnet_rec, clstm_rspc, conv3d_rspc'
+MODELS = (
+    'resnet_spc', 
+    'resnet_bi', 
+    'resnet_rc', 
+    'resnet_dc', 
+    'recresnet_spc', 
+    'recresnet_bi', 
+    'recresnet_rc',
+    'recresnet_dc')
+
+
+def spatial_to_temporal_samples(array, time_window):
+    """
+    """
+    n_samples, y, x, n_channels = array.shape
+    n_t_samples = n_samples - time_window
+    array_out = np.zeros((n_t_samples, time_window, y, x, n_channels))
+    for i in range(n_t_samples):
+        j = i + time_window
+        array_out[i] = array[j - time_window:j]
+    return array_out
+
+
+def checkarg_model(model, model_list=MODELS):
+    """
+    """
+    if not isinstance(model, str) or model not in model_list:
+        msg = f'`model` not recognized. Must be one of the following: {model_list}'
         raise ValueError(msg)
     else:
         return model
@@ -204,13 +228,13 @@ def resize_array(array, newsize, interpolation='bicubic', squeezed=True):
     size_x, size_y = newsize
     
     if array.ndim in [2, 3]:
-        resized_arr = cv2.resize(array, (size_x,size_y), interpolation=interp)
+        resized_arr = cv2.resize(array, (size_x, size_y), interpolation=interp)
     elif array.ndim == 4:
         n = array.shape[0]
         n_ch = array.shape[-1]
         resized_arr = np.zeros((n, size_y, size_x, n_ch))
         for i in range(n):
-            ti = cv2.resize(array[i], (size_x,size_y), interpolation=interp)
+            ti = cv2.resize(array[i], (size_x, size_y), interpolation=interp)
             if n_ch == 1:
                 ti = np.expand_dims(ti, -1)
             resized_arr[i] = ti
