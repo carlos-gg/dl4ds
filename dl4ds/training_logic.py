@@ -443,3 +443,252 @@ class SupervisedTrainer(Trainer):
                 self.model.save(save_path, save_format='tf')
 
 
+class CGANTrainer(Trainer):
+    """
+    """
+    def __init__(
+        self,
+        model,
+        data_train,
+        data_test,
+        scale=5, 
+        patch_size=50, 
+        loss='mae',
+        epochs=60, 
+        batch_size=16,
+        learning_rates=(2e-4, 2e-4),
+        device='GPU',
+        gpu_memory_growth=True,
+        model_list=None,
+        steps_per_epoch=None,
+        interpolation='bicubic', 
+        topography=None, 
+        landocean=None, 
+        checkpoints_frequency=5, 
+        savecheckpoint_path='./checkpoints/',
+        save_logs=False,
+        save_loss_history=True,
+        generator_params={},
+        discriminator_params={},
+        verbose=True,
+        ):
+        """Procedure for training CGAN models.
+    
+        Parameters
+        ----------
+        model : str
+            String with the name of the model architecture, either 'resnet_spc', 
+            'resnet_bi' or 'resnet_rc'. Used as a the CGAN generator.
+        x_train : 4D ndarray
+            Training dataset with dims [nsamples, lat, lon, 1].
+        x_test : 4D ndarray
+            Testing dataset with dims [nsamples, lat, lon, 1]. Holdout not used
+            during training. 
+        epochs : int, optional
+            Number of epochs or passes through the whole training dataset. 
+        steps_per_epoch : int, optional
+            ``batch_size * steps_per_epoch`` samples are passed per epoch.
+        scale : int, optional
+            Scaling factor. 
+        interpolation : str, optional
+            Interpolation used when upsampling/downsampling the training samples.
+            By default 'bicubic'. 
+        patch_size : int, optional
+            Size of the square patches used to grab training samples.
+        batch_size : int, optional
+            Batch size per replica.
+        topography : None or 2D ndarray, optional
+            Elevation data.
+        landocean : None or 2D ndarray, optional
+            Binary land-ocean mask.
+        checkpoints_frequency : int, optional
+            The training loop saves a checkpoint every ``checkpoints_frequency`` 
+            epochs. If None, then no checkpoints are saved during training. 
+        savecheckpoint_path : None or str
+            Path for saving the training checkpoints. If None, then no checkpoints
+            are saved during training. 
+        device : str
+            Choice of 'GPU' or 'CPU' for the training of the Tensorflow models. 
+        gpu_memory_growth : bool, optional
+            By default, TensorFlow maps nearly all of the GPU memory of all GPUs.
+            If True, we request to only grow the memory usage as is needed by the 
+            process.
+        verbose : bool, optional
+            Verbosity mode. False or 0 = silent. True or 1, max amount of 
+            information is printed out. When equal 2, then less info is shown.
+        """
+        super().__init__(model, loss, batch_size, device, gpu_memory_growth,
+                         verbose=verbose, model_list=model_list)
+        self.data_train = data_train
+        self.data_test = data_test
+        self.scale = scale
+        self.patch_size = patch_size
+        self.epochs = epochs
+        self.learning_rates = learning_rates
+        self.steps_per_epoch = steps_per_epoch
+        self.interpolation = interpolation 
+        self.topography = topography 
+        self.landocean = landocean
+        self.checkpoints_frequency = checkpoints_frequency
+        self.savecheckpoint_path = savecheckpoint_path
+        self.save_loss_history = save_loss_history
+        self.save_logs = save_logs
+        self.generator_params = generator_params
+        self.discriminator_params = discriminator_params
+        
+        self.gentotal = []
+        self.gengan = []
+        self.gen_pxloss = []
+        self.disc = []
+        
+        self.n_channels = 1
+        if self.topography is not None:
+            self.n_channels += 1
+        if self.landocean is not None:
+            self.n_channels += 1
+        
+        self.setup_model()
+        self.run()
+
+    def setup_model(self):
+        """
+        """
+        # Generator
+        if self.model == 'resnet_spc':
+            self.generator = resnet_spc(scale=self.scale, 
+                                        n_channels=self.n_channels,
+                                        **self.generator_params)
+        elif self.model == 'resnet_bi':
+            self.generator = resnet_bi(n_channels=self.n_channels, 
+                                       **self.generator_params)
+        elif self.model == 'resnet_rc':
+            self.generator = resnet_rc(scale=self.scale, 
+                                       n_channels=self.n_channels,
+                                       **self.generator_params)
+            
+        # Discriminator
+        self.discriminator = residual_discriminator(n_channels=self.n_channels, 
+                                                    scale=self.scale, 
+                                                    model=self.model,
+                                                    **self.discriminator_params)
+        
+        if self.verbose == 1 and self.running_on_first_worker:
+            self.generator.summary(line_length=150)
+            self.discriminator.summary(line_length=150)
+
+    def run(self):
+        """
+        """
+        # Optimizers
+        if isinstance(self.learning_rates, tuple):
+            genlr, dislr = self.learning_rates
+        elif isinstance(self.learning_rates, float):
+            genlr = dislr = self.learning_rates
+        generator_optimizer = tf.keras.optimizers.Adam(genlr, beta_1=0.5)
+        discriminator_optimizer = tf.keras.optimizers.Adam(dislr, beta_1=0.5)
+        
+        if self.save_logs:
+            log_dir = "cgan_logs/"
+            summary_writer = tf.summary.create_file_writer(log_dir + "fit/" + datetime.datetime.now().strftime("%Y%m%d-%H%M%S"))
+        else:
+            summary_writer = None
+
+        # Checkpoint
+        if self.savecheckpoint_path is not None:
+            checkpoint_prefix = os.path.join(self.savecheckpoint_path, 'checkpoint_epoch')
+            checkpoint = tf.train.Checkpoint(generator_optimizer=generator_optimizer,
+                                            discriminator_optimizer=discriminator_optimizer,
+                                            generator=self.generator, discriminator=self.discriminator)
+        
+        if self.patch_size is not None and self.patch_size % self.scale != 0:
+            raise ValueError('`patch_size` must be divisible by `scale` (remainder must be zero)')
+
+        n_samples = self.data_train.shape[0]
+        if self.steps_per_epoch is None:
+            self.steps_per_epoch = int(n_samples / self.batch_size)
+
+        for epoch in range(self.epochs):
+            print(f'\nEpoch {epoch+1}/{self.epochs}')
+            pb_i = Progbar(self.steps_per_epoch, stateful_metrics=['gen_total_loss', 
+                                                                   'gen_crosentr_loss', 
+                                                                   'gen_mae_loss', 
+                                                                   'disc_loss'])
+
+            for i in range(self.steps_per_epoch):
+                hr_array, lr_array = create_batch_hr_lr(
+                    self.data_train,
+                    batch_size=self.global_batch_size,
+                    tuple_predictors=None, 
+                    scale=self.scale, 
+                    topography=self.topography, 
+                    landocean=self.landocean, 
+                    patch_size=self.patch_size, 
+                    model=self.model, 
+                    interpolation=self.interpolation)
+
+                losses = train_step(
+                    lr_array, 
+                    hr_array, 
+                    self.generator, 
+                    self.discriminator, 
+                    generator_optimizer, 
+                    discriminator_optimizer, 
+                    epoch, 
+                    self.lossf,
+                    summary_writer, 
+                    first_batch=True if epoch==0 and i==0 else False)
+                
+                gen_total_loss, gen_gan_loss, gen_px_loss, disc_loss = losses
+                lossvals = [('gen_total_loss', gen_total_loss), 
+                            ('gen_crosentr_loss', gen_gan_loss), 
+                            ('gen_px_loss', gen_px_loss), 
+                            ('disc_loss', disc_loss)]
+                
+                if self.running_on_first_worker:
+                    pb_i.add(1, values=lossvals)
+            
+            self.gentotal.append(gen_total_loss)
+            self.gengan.append(gen_gan_loss)
+            self.gen_pxloss.append(gen_px_loss)
+            self.disc.append(disc_loss)
+            
+            if self.savecheckpoint_path is not None:
+                # Horovod: save checkpoints only on worker 0 to prevent other 
+                # workers from corrupting it
+                if self.running_on_first_worker:
+                    if (epoch + 1) % self.checkpoints_frequency == 0:
+                        checkpoint.save(file_prefix=checkpoint_prefix)
+        
+        # Horovod: save last checkpoint only on worker 0 to prevent other 
+        # workers from corrupting it
+        if self.checkpoints_frequency is not None and self.running_on_first_worker:
+            checkpoint.save(file_prefix=checkpoint_prefix)
+
+        if self.save_loss_history and self.running_on_first_worker:
+            losses_array = np.array((self.gentotal, self.gengan, self.gen_pxloss, self.disc))
+            np.save('./losses.npy', losses_array)
+
+        self.timing.checktime()
+
+        ### Loss on the Test set
+        if self.running_on_first_worker:
+            test_steps = int(self.data_test.shape[0] / self.batch_size)
+            
+            hr_arrtest, lr_arrtest = create_batch_hr_lr(
+                self.data_test,
+                batch_size=test_steps,
+                tuple_predictors=None, 
+                scale=self.scale, 
+                topography=self.topography, 
+                landocean=self.landocean, 
+                patch_size=self.patch_size, 
+                model=self.model, 
+                interpolation=self.interpolation,
+                shuffle=False)
+
+            y_test_pred = self.generator.predict(lr_arrtest)
+            test_loss = self.lossf(hr_arrtest, y_test_pred)
+            print(f'\n{self.lossf} on the test set: {test_loss}')
+        
+        self.timing.runtime()
+
