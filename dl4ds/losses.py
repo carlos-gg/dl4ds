@@ -1,6 +1,21 @@
 import tensorflow as tf
 import tensorflow.keras.backend as tfk
-from tensorflow.keras.losses import mean_absolute_error, mean_squared_error
+
+
+def mae(y_true, y_pred):
+    """Mean absolute erro, L1 pixel loss
+    """
+    maef = tf.keras.losses.MeanAbsoluteError()
+    mae_loss = maef(y_true, y_pred)  
+    return mae_loss
+
+
+def mse(y_true, y_pred):
+    """Mean squared error, L2 pixel loss
+    """
+    msef = tf.keras.losses.MeanSquaredError()
+    mse_loss = msef(y_true, y_pred)  
+    return mse_loss
 
 
 def dssim(y_true, y_pred):
@@ -32,7 +47,7 @@ def dssim_mae(y_true, y_pred):
     """
     DSSIM + MAE (L1)
     """
-    mae_loss = mean_absolute_error(y_true, y_pred)  
+    mae_loss = mae(y_true, y_pred)  
     dssim_loss = dssim(y_true, y_pred)
     return  0.8 * dssim_loss + 0.2 * mae_loss
 
@@ -43,8 +58,8 @@ def dssim_mae_mse(y_true, y_pred):
     
     See: https://www.mdpi.com/2073-4433/10/5/244/htm
     """
-    mae_loss = mean_absolute_error(y_true, y_pred)  
-    mse_loss = mean_squared_error(y_true, y_pred)  
+    mae_loss = mae(y_true, y_pred)  
+    mse_loss = mse(y_true, y_pred)  
     dssim_loss = dssim(y_true, y_pred)
     return  0.6 * dssim_loss + 0.2 * mae_loss + 0.2 * mse_loss
 
@@ -53,6 +68,6 @@ def dssim_mse(y_true, y_pred):
     """
     DSSIM + MSE (L2)
     """
-    mse_loss = mean_squared_error(y_true, y_pred)  
+    mse_loss = mse(y_true, y_pred)  
     dssim_loss = dssim(y_true, y_pred)
     return  0.8 * dssim_loss + 0.2 * mse_loss
