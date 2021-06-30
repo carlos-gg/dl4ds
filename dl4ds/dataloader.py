@@ -58,7 +58,7 @@ def create_pair_temp_hr_lr(
     if array_predictors is not None:
         hr_array = np.concatenate([hr_array, array_predictors], axis=-1)
 
-    if model == 'recurrent_resnet_bi': 
+    if model == 'recresnet_bi': 
         lr_x, lr_y = int(hr_x / scale), int(hr_y / scale) 
         # HR array is downsampled and upsampled via interpolation
         lr_array_resized = resize_array(hr_array, (lr_x, lr_y), interpolation, squeezed=False)
@@ -69,7 +69,7 @@ def create_pair_temp_hr_lr(
             hr_array, crop_y, crop_x = crop_array(hr_array, patch_size, yx=None, position=True)
             lr_array = crop_array(lr_array, patch_size, yx=(crop_y, crop_x))
     
-    elif model in ['recurrent_resnet_spc', 'recurrent_resnet_rc']:
+    elif model in ['recresnet_spc', 'recresnet_rc', 'recresnet_dc']:
         if patch_size is not None:
             lr_x, lr_y = int(patch_size / scale), int(patch_size / scale) 
             hr_array, crop_y, crop_x = crop_array(hr_array, patch_size, yx=None, position=True)
@@ -81,9 +81,9 @@ def create_pair_temp_hr_lr(
     if topography is not None:
         if patch_size is not None:
             topography = crop_array(topography, patch_size, yx=(crop_y, crop_x))
-        if model == 'recurrent_resnet_bi':
+        if model == 'recresnet_bi':
             static_array = np.expand_dims(topography, -1)
-        elif model in ['recurrent_resnet_spc', 'recurrent_resnet_rc']:  
+        elif model in ['recresnet_spc', 'recresnet_rc', 'recresnet_dc']:  
             # downsizing the topography
             topography_lr = resize_array(topography, (lr_x, lr_y), interpolation)
             static_array = np.expand_dims(topography_lr, -1)
@@ -91,13 +91,13 @@ def create_pair_temp_hr_lr(
     if landocean is not None:
         if patch_size is not None:
             landocean = crop_array(landocean, patch_size, yx=(crop_y, crop_x))  
-        if model == 'recurrent_resnet_bi':
+        if model == 'recresnet_bi':
             landocean = np.expand_dims(landocean, -1)
             if static_array is not None:
                 static_array = np.concatenate([static_array, landocean], axis=-1)
             else:
                 static_array = landocean
-        elif model in ['recurrent_resnet_spc', 'recurrent_resnet_rc']:  
+        elif model in ['recresnet_spc', 'recresnet_rc', 'recresnet_dc']:  
             # downsizing the land-ocean mask
             # integer array can only be interpolated with nearest method
             landocean_lr = resize_array(landocean, (lr_x, lr_y), interpolation='nearest')
@@ -123,14 +123,14 @@ def create_pair_temp_hr_lr(
             ecv.plot_ndarray(np.squeeze(lr_array[:,:,:,i]), dpi=80, interactive=False, 
                              plot_title=(f'LR array, variable {i+1}'))
         
-        if model in ['recurrent_resnet_spc', 'recurrent_resnet_rc']:
+        if model in ['recresnet_spc', 'recresnet_rc', 'recresnet_dc']:
             if topography is not None:
                 ecv.plot_ndarray((topography, topography_lr), interactive=False, dpi=80, 
                                 subplot_titles=('HR Topography', 'LR Topography'))
             if landocean is not None:
                 ecv.plot_ndarray((landocean, landocean_lr), interactive=False, dpi=80, 
                                 subplot_titles=('HR Land Ocean mask', 'LR  Land Ocean mask'))
-        elif model == 'recurrent_resnet_bi':
+        elif model == 'recresnet_bi':
             if static_array is not None:
                 if topography is not None and landocean is not None:
                     subpti = ('HR Topography', 'HR Land-Ocean mask')
@@ -204,7 +204,7 @@ def create_pair_hr_lr(
             lr_array = lr_array_resized
         hr_array = np.expand_dims(hr_array, -1)
         lr_array = np.expand_dims(lr_array, -1)
-    elif model in ['resnet_spc', 'resnet_rc']:
+    elif model in ['resnet_spc', 'resnet_rc', 'resnet_dc']:
         if patch_size is not None:
             lr_x, lr_y = int(patch_size / scale), int(patch_size / scale) 
         else:
@@ -227,7 +227,7 @@ def create_pair_hr_lr(
                                                                  position=True)
             # concatenating the predictors to the lr image
             lr_array = np.concatenate([lr_array, lr_array_predictors], axis=2)
-    elif model in ['resnet_spc', 'resnet_rc']:
+    elif model in ['resnet_spc', 'resnet_rc', 'resnet_dc']:
         if tuple_predictors is not None:
             if patch_size is not None:
                 # cropping first the predictors 
@@ -256,7 +256,7 @@ def create_pair_hr_lr(
             topo_hr = crop_array(np.squeeze(topography), patch_size, yx=(crop_y, crop_x))
         else:
             topo_hr = topography
-        if model in ['resnet_spc', 'resnet_rc']:  # downsizing the topography
+        if model in ['resnet_spc', 'resnet_rc', 'resnet_dc']:  # downsizing the topography
             topo_lr = resize_array(topo_hr, (lr_x, lr_y), interpolation)
             lr_array = np.concatenate([lr_array, np.expand_dims(topo_lr, -1)], axis=2)
         elif model == 'resnet_bi':  # topography in HR 
@@ -267,7 +267,7 @@ def create_pair_hr_lr(
             landocean_hr = crop_array(np.squeeze(landocean), patch_size, yx=(crop_y, crop_x))
         else:
             landocean_hr = landocean
-        if model in ['resnet_spc', 'resnet_rc']:  # downsizing the land-ocean mask
+        if model in ['resnet_spc', 'resnet_rc', 'resnet_dc']:  # downsizing the land-ocean mask
             # integer array can only be interpolated with nearest method
             landocean_lr = resize_array(landocean_hr, (lr_x, lr_y), interpolation='nearest')
             lr_array = np.concatenate([lr_array, np.expand_dims(landocean_lr, -1)], axis=2)
@@ -290,7 +290,7 @@ def create_pair_hr_lr(
         ecv.plot_ndarray((np.squeeze(hr_array), lr_array_plot), dpi=80, interactive=False, 
                          subplot_titles=('HR array', 'LR array'))
         
-        if model in ['resnet_spc', 'resnet_rc']:
+        if model in ['resnet_spc', 'resnet_rc', 'resnet_dc']:
             if topography is not None:
                 ecv.plot_ndarray((topo_hr, topo_lr), 
                                 interactive=False, dpi=80, 
@@ -312,6 +312,69 @@ def create_pair_hr_lr(
                              subplot_titles=('LR cropped predictors'), multichannel4d=True)
 
     return hr_array, lr_array
+
+
+def create_batch_hr_lr(x_train, batch_size, tuple_predictors, scale, topography, 
+                       landocean, patch_size, time_window, model, interpolation, 
+                       shuffle=True):
+    """Create a batch of HR/LR samples. Used in the training of the CGAN models.
+    """
+    if time_window is None:
+        if shuffle:
+            indices = np.random.choice(x_train.shape[0], batch_size, replace=False)
+        else:
+            indices = np.arange(x_train.shape[0])
+        batch_hr_images = []
+        batch_lr_images = []
+        for i in indices:
+            hr_array, lr_array = create_pair_hr_lr(
+                x_train[i],
+                tuple_predictors=tuple_predictors, 
+                scale=scale, 
+                topography=topography, 
+                landocean=landocean, 
+                patch_size=patch_size, 
+                model=model, 
+                interpolation=interpolation)
+            batch_lr_images.append(lr_array)
+            batch_hr_images.append(hr_array)
+
+        batch_lr_images = np.asarray(batch_lr_images)
+        batch_hr_images = np.asarray(batch_hr_images) 
+        return batch_hr_images, batch_lr_images
+    
+    else:
+        if shuffle:
+            indices = np.random.choice(np.arange(time_window, x_train.shape[0]), batch_size, replace=False)
+        else:
+            indices = np.arange(time_window, x_train.shape[0])
+        batch_hr_images = []
+        batch_lr_images = []
+        batch_static_images = []
+        for i in indices:
+            res = create_pair_temp_hr_lr(
+                x_train[i - time_window: i],
+                array_predictors=tuple_predictors, 
+                scale=scale, 
+                topography=topography, 
+                landocean=landocean, 
+                patch_size=patch_size, 
+                model=model, 
+                interpolation=interpolation)
+
+            if topography is not None or landocean is not None:
+                hr_array, lr_array, static_array = res 
+                batch_lr_images.append(lr_array)
+                batch_hr_images.append(hr_array)
+                batch_static_images.append(static_array)
+
+        batch_lr_images = np.asarray(batch_lr_images)
+        batch_hr_images = np.asarray(batch_hr_images) 
+        if topography is not None or landocean is not None:
+            batch_static_images = np.asarray(batch_static_images)
+            return batch_hr_images, batch_lr_images, batch_static_images
+        else:
+            return batch_hr_images, batch_lr_images
 
 
 class DataGenerator(tf.keras.utils.Sequence):
@@ -369,9 +432,10 @@ class DataGenerator(tf.keras.utils.Sequence):
         if self.repeat is not None and isinstance(self.repeat, int):
             self.indices = np.hstack([self.indices for i in range(self.repeat)])
 
-        if self.model in ['resnet_spc', 'resnet_rc'] and patch_size is not None:
-            if not self.patch_size % self.scale == 0:
-                raise ValueError('`patch_size` must be divisible by `scale`')
+        if patch_size is not None:
+            if self.model in ['resnet_spc', 'resnet_rc', 'resnet_dc', 'recresnet_spc', 'recresnet_rc', 'recresnet_dc']: 
+                if not self.patch_size % self.scale == 0:   
+                    raise ValueError('`patch_size` must be divisible by `scale`')
 
     def __len__(self):
         """
@@ -409,7 +473,7 @@ class DataGenerator(tf.keras.utils.Sequence):
                     patch_size=self.patch_size, 
                     topography=self.topography, 
                     landocean=self.landocean, 
-                    tuple_predictors=array_predictors[i],
+                    tuple_predictors=array_predictors,
                     model=self.model,
                     interpolation=self.interpolation)
                 hr_array, lr_array = res
@@ -457,31 +521,3 @@ class DataGenerator(tf.keras.utils.Sequence):
         """
         """
         np.random.shuffle(self.indices)
-
-
-def create_batch_hr_lr(x_train, batch_size, tuple_predictors, scale, topography, 
-                       landocean, patch_size, model, interpolation, shuffle=True):
-    """Create a batch of HR/LR samples. Used in the training of the CGAN models.
-    """
-    if shuffle:
-        indices = np.random.choice(x_train.shape[0], batch_size, replace=False)
-    else:
-        indices = np.arange(x_train.shape[0])
-    batch_hr_images = []
-    batch_lr_images = []
-
-    for i in indices:
-        hr_array, lr_array = create_pair_hr_lr(x_train[i],
-                    tuple_predictors=tuple_predictors, 
-                    scale=scale, 
-                    topography=topography, 
-                    landocean=landocean, 
-                    patch_size=patch_size, 
-                    model=model, 
-                    interpolation=interpolation)
-        batch_lr_images.append(lr_array)
-        batch_hr_images.append(hr_array)
-
-    batch_lr_images = np.asarray(batch_lr_images)
-    batch_hr_images = np.asarray(batch_hr_images) 
-    return batch_hr_images, batch_lr_images
