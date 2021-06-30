@@ -246,7 +246,7 @@ def plot_sample(model, lr_image, topography=None, landocean=None,
         return image
     
     model_architecture = model.name
-    if model_architecture  in ['resnet_spc', 'resnet_rec']:
+    if model_architecture  in ['resnet_spc', 'resnet_rc']:
         input_image = check_image_dims_for_inference(lr_image)
         
         # expecting a 3d ndarray, [lat, lon, variables]
@@ -268,7 +268,7 @@ def plot_sample(model, lr_image, topography=None, landocean=None,
         
         pred_image = model.predict(input_image)
     
-    elif model_architecture == 'resnet_int':
+    elif model_architecture == 'resnet_bi':
         if scale is None:
             raise ValueError('`scale` must be set for `rint` model')
         lr_y, lr_x = np.squeeze(lr_image).shape    
