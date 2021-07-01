@@ -13,7 +13,8 @@ def resnet_postupsampling(
     n_filters, 
     n_res_blocks, 
     n_channels_out=1, 
-    attention=False):
+    attention=False,
+    output_activation=None):
     """
     Residual network with different post-upsampling modules (depending on the 
     argument ``upsampling``):
@@ -37,16 +38,19 @@ def resnet_postupsampling(
     
     if upsampling == 'spc':
         x = subpixel_convolution_layer(x, scale, n_filters)
-        x = Conv2D(n_channels_out, (3, 3), padding='same')(x)
-        return Model(inputs=x_in, outputs=x, name="resnet_spc")  
+        x = Conv2D(n_channels_out, (3, 3), padding='same', 
+                   activation=output_activation)(x)
+        model_name = 'resnet_spc'
     elif upsampling == 'rc':
         x = UpSampling2D(scale, interpolation='bilinear')(x)
-        x = Conv2D(n_channels_out, (3, 3), padding='same')(x)
-        return Model(inputs=x_in, outputs=x, name="resnet_rc")  
+        x = Conv2D(n_channels_out, (3, 3), padding='same', 
+                   activation=output_activation)(x)
+        model_name = 'resnet_rc'
     elif upsampling == 'dc':
-        x = deconvolution_layer(x, scale)
-        return Model(inputs=x_in, outputs=x, name="resnet_dc")       
-
+        x = deconvolution_layer(x, scale, output_activation)
+        model_name = 'resnet_dc'      
+    
+    return Model(inputs=x_in, outputs=x, name=model_name)  
 
 def recresnet_postupsampling(
     upsampling,
@@ -56,7 +60,8 @@ def recresnet_postupsampling(
     n_res_blocks, 
     n_channels_out=1, 
     time_window=None, 
-    attention=False):
+    attention=False,
+    output_activation=None):
     """
     Recurrent residual network different post-upsampling modules (depending on the 
     argument ``upsampling``):
@@ -95,14 +100,16 @@ def recresnet_postupsampling(
     
     if upsampling == 'spc':
         x = subpixel_convolution_layer(x, scale, n_filters)
-        x = Conv2D(n_channels_out, (3, 3), padding='same')(x)
+        x = Conv2D(n_channels_out, (3, 3), padding='same', 
+                   activation=output_activation)(x)
         model_name = 'recresnet_spc'
     elif upsampling == 'rc':
         x = UpSampling2D(scale, interpolation='bilinear')(x)
-        x = Conv2D(n_channels_out, (3, 3), padding='same')(x)
+        x = Conv2D(n_channels_out, (3, 3), padding='same', 
+                   activation=output_activation)(x)
         model_name = "recresnet_rc"
     elif upsampling == 'dc':
-        x = deconvolution_layer(x, scale)
+        x = deconvolution_layer(x, scale, output_activation)
         model_name = "recresnet_dc"
 
     if static_arr:
@@ -138,7 +145,7 @@ def pixel_shuffle(scale):
     return lambda x: tf.nn.depth_to_space(x, scale)
 
 
-def deconvolution_layer(x, scale):
+def deconvolution_layer(x, scale, output_activation):
     """
     FSRCNN: https://arxiv.org/abs/1608.00367
     """
@@ -146,13 +153,16 @@ def deconvolution_layer(x, scale):
         x = Conv2DTranspose(1, (9, 9), strides=(2, 2), padding='same', 
                             name='deconv_1of2_scale_2')(x)
         x = Conv2DTranspose(1, (9, 9), strides=(2, 2), padding='same', 
-                            name='deconv_2of2_scale_2')(x)
+                            name='deconv_2of2_scale_2', 
+                            activation=output_activation)(x)
     elif scale == 20:
         x = Conv2DTranspose(1, (9, 9), strides=(4, 4), padding='same', 
                             name='deconv_1of2_scale_5')(x)
         x = Conv2DTranspose(1, (9, 9), strides=(5, 5), padding='same', 
-                            name='deconv_2of2_scale_4')(x)
+                            name='deconv_2of2_scale_4', 
+                            activation=output_activation)(x)
     else:
         x = Conv2DTranspose(1, (9, 9), strides=(scale, scale), padding='same', 
-                            name='deconv_scale_' + str(scale))(x)
+                            name='deconv_scale_' + str(scale, 
+                            activation=output_activation))(x)
     return x
