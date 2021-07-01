@@ -4,9 +4,19 @@ from tensorflow.keras.models import Model
 from .blocks import residual_block, recurrent_block
 
 
-def resnet_bi(n_channels, n_filters, n_res_blocks, n_channels_out=1, attention=False):
+def resnet_bi(
+    n_channels, 
+    n_filters, 
+    n_res_blocks, 
+    n_channels_out=1, 
+    attention=False,
+    output_activation=None):
     """
-    ResNet-INT. ResNet with EDSR residual blocks and pre-upsampling via interpolation.
+    ResNet-INT. ResNet with EDSR residual blocks and pre-upsampling via (bicubic)
+    interpolation.
+
+    The interpolation method depends on the ``interpolation`` argument used in
+    the training procedure (which is passed to the DataGenerator).
     """
     x_in = Input(shape=(None, None, n_channels))
     x = b = Conv2D(n_filters, (3, 3), padding='same')(x_in)
@@ -15,13 +25,20 @@ def resnet_bi(n_channels, n_filters, n_res_blocks, n_channels_out=1, attention=F
     b = Conv2D(n_filters, (3, 3), padding='same')(b)
     x = Add()([x, b])
     
-    x = Conv2D(n_channels_out, (3, 3), padding='same')(x)
+    x = Conv2D(n_channels_out, (3, 3), padding='same', 
+               activation=output_activation)(x)
 
     return Model(inputs=x_in, outputs=x, name="resnet_bi")
 
 
-def recresnet_bi(n_channels, n_filters, n_res_blocks, n_channels_out=1, 
-                        time_window=None, attention=False):
+def recresnet_bi(
+    n_channels, 
+    n_filters, 
+    n_res_blocks, 
+    n_channels_out=1, 
+    time_window=None, 
+    attention=False,
+    output_activation=None):
     """
     Recurrent ResNet-INT. Recurrent Residual network with EDSR residual blocks 
     and pre-upsampling via interpolation.
@@ -48,7 +65,8 @@ def recresnet_bi(n_channels, n_filters, n_res_blocks, n_channels_out=1,
     b = Conv2D(n_filters, (3, 3), padding='same')(b)
     x = Add()([x, b])
     
-    x = Conv2D(n_channels_out, (3, 3), padding='same')(x)
+    x = Conv2D(n_channels_out, (3, 3), padding='same', 
+               activation=output_activation)(x)
 
     if static_arr:
         return Model(inputs=[x_in, s_in], outputs=x, name="recresnet_bi")
