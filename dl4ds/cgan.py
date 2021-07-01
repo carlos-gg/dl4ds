@@ -103,7 +103,7 @@ def discriminator_loss(disc_real_output, disc_generated_output):
 
 def train_step(lr_array, hr_array, generator, discriminator, generator_optimizer, 
                discriminator_optimizer, epoch, gen_pxloss_function, 
-               summary_writer, first_batch):
+               summary_writer, first_batch, static_array=None, time_window=None):
     """
     Training:
     * For each example input generate an output.
@@ -115,10 +115,18 @@ def train_step(lr_array, hr_array, generator, discriminator, generator_optimizer
     """
     lr_array = tf.cast(lr_array, tf.float32)
     hr_array = tf.cast(hr_array, tf.float32)
+    if static_array is not None:
+        static_array = tf.cast(static_array, tf.float32)
+        input_generator = [lr_array, static_array]
+    else:
+        input_generator = lr_array
     
+    if time_window is not None:
+        lr_array = lr_array[:,-1]  # taking the last temporal slice
+
     with tf.GradientTape() as gen_tape, tf.GradientTape() as disc_tape:
         # running the generator
-        gen_array = generator(lr_array, training=True)
+        gen_array = generator(input_generator, training=True)
         # running the discriminator using both the reference and generated HR images
         disc_real_output = discriminator([lr_array, hr_array], training=True)
         disc_generated_output = discriminator([lr_array, gen_array], training=True)
