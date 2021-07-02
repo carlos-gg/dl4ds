@@ -2,7 +2,7 @@ import tensorflow as tf
 import numpy as np
 
 import sys
-sys.path.append('/esarchive/scratch/cgomez/src/ecubevis/')
+sys.path.append('/gpfs/home/bsc32/bsc32409/src/ecubevis/')
 import ecubevis as ecv
 
 from .utils import crop_array, resize_array, checkarg_model
