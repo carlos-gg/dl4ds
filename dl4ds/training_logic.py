@@ -15,7 +15,7 @@ import horovod.tensorflow.keras as hvd
 from .utils import (Timing, list_devices, set_gpu_memory_growth, 
                     set_visible_gpus, checkarg_model, MODELS)
 from .dataloader import DataGenerator, create_batch_hr_lr
-from .losses import dssim, dssim_mae, dssim_mae_mse, dssim_mse
+from .losses import mae, mse, dssim, dssim_mae, dssim_mae_mse, dssim_mse
 from .resnet_preupsampling import resnet_bi, recresnet_bi
 from .resnet_postupsampling import resnet_postupsampling, recresnet_postupsampling
 from .cgan import train_step
@@ -88,10 +88,10 @@ class Trainer(ABC):
         self.model_name = checkarg_model(self.model_name, model_list)
 
         ### Choosing the loss function
-        if loss == 'mae':  # L1 pixel loss
-            self.lossf = tf.keras.losses.MeanAbsoluteError()
-        elif loss == 'mse':  # L2 pixel loss
-            self.lossf = tf.keras.losses.MeanSquaredError()
+        if loss == 'mae':  
+            self.lossf = mae
+        elif loss == 'mse':  
+            self.lossf = mse
         elif loss == 'dssim':
             self.lossf = dssim
         elif loss == 'dssim_mae':
@@ -300,7 +300,7 @@ class SupervisedTrainer(Trainer):
         if self.patch_size is not None and self.patch_size % self.scale != 0:
             raise ValueError('`patch_size` must be divisible by `scale` (remainder must be zero)')
 
-        recmodels = ['recresnet_spc', 'recresnet_rc', 'recresnet_bi']
+        recmodels = ['recresnet_spc', 'recresnet_rc', 'recresnet_bi', 'recresnet_dc']
         if self.time_window is not None and self.model_name not in recmodels:
             msg = f'``time_window={self.time_window}``, choose a model that handles samples with a temporal dimension'
             raise ValueError(msg)
@@ -471,6 +471,7 @@ class CGANTrainer(Trainer):
         data_test,
         scale=5, 
         patch_size=50, 
+        time_window=None,
         loss='mae',
         epochs=60, 
         batch_size=16,
@@ -544,6 +545,7 @@ class CGANTrainer(Trainer):
         self.data_test = data_test
         self.scale = scale
         self.patch_size = patch_size
+        self.time_window = time_window
         self.epochs = epochs
         self.learning_rates = learning_rates
         self.steps_per_epoch = steps_per_epoch
@@ -562,12 +564,14 @@ class CGANTrainer(Trainer):
         self.gen_pxloss = []
         self.disc = []
         
-        self.n_channels = 1
-        if self.topography is not None:
-            self.n_channels += 1
-        if self.landocean is not None:
-            self.n_channels += 1
-        
+        self.recres_models = ['recresnet_spc', 'recresnet_rc', 'recresnet_bi', 'recresnet_dc']
+        if self.time_window is not None and self.model_name not in self.recres_models:
+            msg = f'``time_window={self.time_window}``, choose a model that handles samples with a temporal dimension'
+            raise ValueError(msg)
+        if self.model_name in self.recres_models and self.time_window is None:
+            msg = f'``model={self.model_name}``, the argument ``time_window`` must be a postive integer'
+            raise ValueError(msg)
+
         self.setup_model()
         self.run()
         if self.save:
@@ -576,20 +580,55 @@ class CGANTrainer(Trainer):
     def setup_model(self):
         """
         """
+        ### number of channels
+        if self.model_name in ['resnet_spc', 'resnet_bi', 'resnet_rc', 'resnet_dc']:
+            n_channels = self.data_train.shape[-1]
+            if self.topography is not None:
+                n_channels += 1
+            if self.landocean is not None:
+                n_channels += 1
+            # if self.predictors_train is not None:
+            #     n_channels += len(self.predictors_train)
+        elif self.model_name in self.recres_models:
+            n_var_channels = self.data_train.shape[-1]
+            n_st_channels = 0
+            # if self.predictors_train is not None:
+            #     n_var_channels += len(self.predictors_train)
+            if self.topography is not None:
+                n_st_channels += 1
+            if self.landocean is not None:
+                n_st_channels += 1
+            n_channels = (n_var_channels, n_st_channels)
+
         # Generator
         if self.model_name in ['resnet_spc', 'resnet_rc', 'resnet_dc']:
             upsampling_module_name = self.model_name.split('_')[-1]
             self.generator = resnet_postupsampling(
                 upsampling=upsampling_module_name,
                 scale=self.scale, 
-                n_channels=self.n_channels,
+                n_channels=n_channels,
                 **self.generator_params)
         elif self.model_name == 'resnet_bi':
-            self.generator = resnet_bi(n_channels=self.n_channels, 
-                                       **self.generator_params)
-            
+            self.generator = resnet_bi(
+                n_channels=n_channels, 
+                **self.generator_params)
+        elif self.model_name in ['recresnet_spc', 'recresnet_rc', 'recresnet_dc']:
+            upsampling_module_name = self.model_name.split('_')[-1]
+            self.generator = recresnet_postupsampling(
+                upsampling=upsampling_module_name, 
+                scale=self.scale, 
+                n_channels=n_channels, 
+                time_window=self.time_window, 
+                **self.generator_params)
+        elif self.model_name == 'recresnet_bi':
+            self.generator = recresnet_bi(
+                n_channels=n_channels, 
+                time_window=self.time_window, 
+                **self.generator_params)
+
         # Discriminator
-        self.discriminator = residual_discriminator(n_channels=self.n_channels, 
+        n_channels_disc = n_channels[0] if isinstance(n_channels, tuple) else n_channels
+        self.discriminator = residual_discriminator(n_channels=n_channels_disc, 
                                                     scale=self.scale, 
                                                     model=self.model_name,
                                                     **self.discriminator_params)
@@ -637,7 +676,7 @@ class CGANTrainer(Trainer):
                                                                    'disc_loss'])
 
             for i in range(self.steps_per_epoch):
-                hr_array, lr_array = create_batch_hr_lr(
+                res = create_batch_hr_lr(
                     self.data_train,
                     batch_size=self.global_batch_size,
                     tuple_predictors=None, 
@@ -645,8 +684,18 @@ class CGANTrainer(Trainer):
                     topography=self.topography, 
                     landocean=self.landocean, 
                     patch_size=self.patch_size, 
+                    time_window=self.time_window,
                     model=self.model_name, 
                     interpolation=self.interpolation)
+
+                hr_array = res[0]
+                lr_array = res[1]
+                static_array = None
+                if self.model_name in self.recres_models:
+                    # Only for these models the static grids are not concatenated as 
+                    # but passed are separate inputs channels
+                    if self.topography is not None or self.landocean is not None:
+                        static_array = res[2]
 
                 losses = train_step(
                     lr_array, 
@@ -658,7 +707,9 @@ class CGANTrainer(Trainer):
                     epoch, 
                     self.lossf,
                     summary_writer, 
-                    first_batch=True if epoch==0 and i==0 else False)
+                    first_batch=True if epoch==0 and i==0 else False,
+                    static_array=static_array,
+                    time_window=self.time_window)
                 
                 gen_total_loss, gen_gan_loss, gen_px_loss, disc_loss = losses
                 lossvals = [('gen_total_loss', gen_total_loss), 
@@ -696,7 +747,7 @@ class CGANTrainer(Trainer):
         if self.running_on_first_worker:
             test_steps = int(self.data_test.shape[0] / self.batch_size)
             
-            hr_arrtest, lr_arrtest = create_batch_hr_lr(
+            res = create_batch_hr_lr(
                 self.data_test,
                 batch_size=test_steps,
                 tuple_predictors=None, 
@@ -704,15 +755,26 @@ class CGANTrainer(Trainer):
                 topography=self.topography, 
                 landocean=self.landocean, 
                 patch_size=self.patch_size, 
+                time_window=self.time_window,
                 model=self.model_name, 
                 interpolation=self.interpolation,
                 shuffle=False)
 
-            lr_arrtest = tf.cast(lr_arrtest, tf.float32)
-            hr_arrtest = tf.cast(hr_arrtest, tf.float32)
-            y_test_pred = self.generator.predict(lr_arrtest)
+            hr_arrtest = tf.cast(res[0], tf.float32)
+            lr_arrtest = tf.cast(res[1], tf.float32)
+            static_array_test = None
+            if self.model_name in self.recres_models:
+                # Only for these models the static grids are not concatenated as 
+                # but passed are separate inputs channels
+                if self.topography is not None or self.landocean is not None:
+                    static_array_test = tf.cast(res[2], tf.float32)
+                input_test = [lr_arrtest, static_array_test]
+            else:
+                input_test = lr_arrtest
+            
+            y_test_pred = self.generator.predict(input_test)
             test_loss = self.lossf(hr_arrtest, y_test_pred)
-            print(f'\n{self.lossf} on the test set: {test_loss}')
+            print(f'\n{self.lossf.__name__} on the test set: {test_loss}')
         
         self.timing.runtime()
 
