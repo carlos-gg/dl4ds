@@ -1,58 +1,74 @@
 import tensorflow as tf
 from tensorflow.keras.layers import (Add, Conv2D, Input, Lambda, UpSampling2D, 
-                                     concatenate, Conv2DTranspose)
+                                     Concatenate, Conv2DTranspose)
 from tensorflow.keras.models import Model
 
-from .blocks import residual_block, recurrent_block
+from .blocks import (recurrent_residual_block, ResidualBlock, ConvBlock, 
+                     DenseBlock, TransitionBlock)
+from .utils import checkarg_backbone, checkarg_upsampling
 
 
-def resnet_postupsampling(
+def net_postupsampling(
+    backbone_block,
     upsampling,
     scale, 
     n_channels, 
     n_filters, 
     n_res_blocks, 
     n_channels_out=1, 
+    normalization=None,
     attention=False,
     output_activation=None):
     """
-    Residual network with different post-upsampling modules (depending on the 
-    argument ``upsampling``):
+    Deep neural network with different backbone architectures (according to the
+    ``backbone_block``) and post-upsampling methods (according to 
+    ``upsampling``).
 
-    * ResNet-SPC. ResNet with EDSR-style residual blocks and pixel shuffle 
-    post-upscaling
-    * ResNet-RC. ResNet with EDSR residual blocks and resize convolution (via 
-    bilinear interpolation) in post-upsampling
-    * ResNet-DC. ResNet with EDSR residual blocks and transposed convolution (or 
-    deconvolution) in post-upsampling
+    Parameters
+    ----------
+    normalization : str or None, optional
+        Normalization method in the residual or dense block. Can be either 'bn'
+        for BatchNormalization or 'ln' for LayerNormalization. If None, then no
+        normalization is performed. For the 'resnet' backbone, it results in the
+        EDSR-style residual block.
     """
-    if not isinstance(upsampling, str) and upsampling in ['spc', 'rc', 'dc']:
-        raise ValueError('Unknown upsampling module')
+    backbone_block = checkarg_backbone(backbone_block)
+    upsampling = checkarg_upsampling(upsampling)
 
     x_in = Input(shape=(None, None, n_channels))
     x = b = Conv2D(n_filters, (3, 3), padding='same')(x_in)
     for i in range(n_res_blocks):
-        b = residual_block(b, n_filters, attention=attention)
+        if backbone_block == 'convnet':
+            b = ConvBlock(n_filters, normalization=normalization, attention=attention)(b)
+        elif backbone_block == 'resnet':
+            b = ResidualBlock(n_filters, normalization=normalization, attention=attention)(b)
+        elif backbone_block == 'densenet':
+            b = DenseBlock(n_filters, normalization=normalization, attention=attention)(b)
+            b = TransitionBlock(n_filters // 2)(b)  # another option: half of the DenseBlock channels
     b = Conv2D(n_filters, (3, 3), padding='same')(b)
-    x = Add()([x, b])
+
+    if backbone_block == 'convnet':
+        x = b
+    elif backbone_block == 'resnet':
+        x = Add()([x, b])
+    elif backbone_block == 'densenet':
+        x = Concatenate()([x, b])
     
+    model_name = backbone_block + '_' + upsampling
     if upsampling == 'spc':
         x = subpixel_convolution_layer(x, scale, n_filters)
-        x = Conv2D(n_channels_out, (3, 3), padding='same', 
-                   activation=output_activation)(x)
-        model_name = 'resnet_spc'
+        x = Conv2D(n_channels_out, (3, 3), padding='same', activation=output_activation)(x)
     elif upsampling == 'rc':
         x = UpSampling2D(scale, interpolation='bilinear')(x)
-        x = Conv2D(n_channels_out, (3, 3), padding='same', 
-                   activation=output_activation)(x)
-        model_name = 'resnet_rc'
+        x = Conv2D(n_channels_out, (3, 3), padding='same', activation=output_activation)(x)
     elif upsampling == 'dc':
         x = deconvolution_layer(x, scale, output_activation)
-        model_name = 'resnet_dc'      
     
     return Model(inputs=x_in, outputs=x, name=model_name)  
 
-def recresnet_postupsampling(
+
+def recnet_postupsampling(
+    backbone_block,
     upsampling,
     scale, 
     n_channels, 
@@ -60,21 +76,18 @@ def recresnet_postupsampling(
     n_res_blocks, 
     n_channels_out=1, 
     time_window=None, 
+    normalization=None,
     attention=False,
     output_activation=None):
     """
-    Recurrent residual network different post-upsampling modules (depending on the 
-    argument ``upsampling``):
+    Recurrent deep neural network with different backbone architectures 
+    (according to the ``backbone_block``) and post-upsampling methods (according 
+    to ``upsampling``). These models are capable of exploiting spatio-temporal
+    samples.
 
-    * Recurrent ResNet-SPC. Recurrent Residual Network with EDSR-style residual 
-    blocks and pixel shuffle post-upscaling
-    * Recurrent ResNet-RC. Recurrent Residual Network with EDSR residual blocks 
-    and resize convolution (via bilinear interpolation) in post-upsampling
-    * Recurrent ResNet-RC. Recurrent Residual Network with EDSR residual blocks 
-    and transposed convolution (or deconvolution) in post-upsampling
     """
-    if not isinstance(upsampling, str) and upsampling in ['spc', 'rc', 'dc']:
-        raise ValueError('Unknown upsampling module')
+    backbone_block = checkarg_backbone(backbone_block)
+    upsampling = checkarg_upsampling(upsampling)
         
     static_arr = True if isinstance(n_channels, tuple) else False
     if static_arr:
@@ -84,34 +97,44 @@ def recresnet_postupsampling(
         x_n_channels = n_channels
 
     x_in = Input(shape=(time_window, None, None, x_n_channels))
-    x = b =recurrent_block(x_in, n_filters, full_sequence=False)
+    x = b = recurrent_residual_block(x_in, n_filters, full_sequence=False)
 
     if static_arr:
         s_in = Input(shape=(None, None, static_n_channels))
         x = Conv2D(n_filters - static_n_channels, (1, 1), padding='same')(x)
-        x = concatenate([x, s_in])
+        x = Concatenate()([x, s_in])
         b = Conv2D(n_filters - static_n_channels, (1, 1), padding='same')(b)
-        b = concatenate([b, s_in])
+        b = Concatenate()([b, s_in])
 
     for i in range(n_res_blocks):
-        b = residual_block(b, n_filters, attention=attention)
+        if backbone_block == 'convnet':
+            b = ConvBlock(n_filters, normalization=normalization, attention=attention)(b)
+        elif backbone_block == 'resnet':
+            b = ResidualBlock(n_filters, normalization=normalization, attention=attention)(b)
+        elif backbone_block == 'densenet':
+            b = DenseBlock(n_filters, normalization=normalization, attention=attention)(b)
+            b = TransitionBlock(n_filters // 2)(b)  # another option: half of the DenseBlock channels
     b = Conv2D(n_filters, (3, 3), padding='same')(b)
-    x = Add()([x, b])
+    
+    if backbone_block == 'convnet':
+        x = b
+    elif backbone_block == 'resnet':
+        x = Add()([x, b])
+    elif backbone_block == 'densenet':
+        x = Concatenate()([x, b])
     
     if upsampling == 'spc':
         x = subpixel_convolution_layer(x, scale, n_filters)
         x = Conv2D(n_channels_out, (3, 3), padding='same', 
                    activation=output_activation)(x)
-        model_name = 'recresnet_spc'
     elif upsampling == 'rc':
         x = UpSampling2D(scale, interpolation='bilinear')(x)
         x = Conv2D(n_channels_out, (3, 3), padding='same', 
                    activation=output_activation)(x)
-        model_name = "recresnet_rc"
     elif upsampling == 'dc':
         x = deconvolution_layer(x, scale, output_activation)
-        model_name = "recresnet_dc"
 
+    model_name = 'rec' + backbone_block + '_' + upsampling
     if static_arr:
         return Model(inputs=[x_in, s_in], outputs=x, name=model_name)
     else:
