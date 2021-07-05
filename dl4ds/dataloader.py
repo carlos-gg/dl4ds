@@ -5,7 +5,7 @@ import sys
 sys.path.append('/gpfs/home/bsc32/bsc32409/src/ecubevis/')
 import ecubevis as ecv
 
-from .utils import crop_array, resize_array, checkarg_model
+from .utils import (crop_array, resize_array, checkarg_model, POSTUPSAMPLING_METHODS)
 
 
 def create_pair_temp_hr_lr(
@@ -41,8 +41,7 @@ def create_pair_temp_hr_lr(
         predictor variables in HR. To be concatenated to the LR version of 
         `array`.
     model : str, optional
-        String with the name of the model architecture, either 'resnet_spc', 
-        'resnet_bi' or 'resnet_rc'.
+        String with the name of the model architecture.
     interpolation : str, optional
         Interpolation used when upsampling/downsampling the training samples.
         By default 'bicubic'. 
@@ -54,11 +53,12 @@ def create_pair_temp_hr_lr(
     hr_y = array.shape[1] 
     hr_x = array.shape[2]
     hr_array = array  # 4D array [time,y,x,1ch]
+    upsampling_method = model.split('_')[-1]
 
     if array_predictors is not None:
         hr_array = np.concatenate([hr_array, array_predictors], axis=-1)
 
-    if model == 'recresnet_bi': 
+    if upsampling_method == 'pin': 
         lr_x, lr_y = int(hr_x / scale), int(hr_y / scale) 
         # HR array is downsampled and upsampled via interpolation
         lr_array_resized = resize_array(hr_array, (lr_x, lr_y), interpolation, squeezed=False)
@@ -69,7 +69,7 @@ def create_pair_temp_hr_lr(
             hr_array, crop_y, crop_x = crop_array(hr_array, patch_size, yx=None, position=True)
             lr_array = crop_array(lr_array, patch_size, yx=(crop_y, crop_x))
     
-    elif model in ['recresnet_spc', 'recresnet_rc', 'recresnet_dc']:
+    elif upsampling_method in POSTUPSAMPLING_METHODS:
         if patch_size is not None:
             lr_x, lr_y = int(patch_size / scale), int(patch_size / scale) 
             hr_array, crop_y, crop_x = crop_array(hr_array, patch_size, yx=None, position=True)
@@ -81,9 +81,9 @@ def create_pair_temp_hr_lr(
     if topography is not None:
         if patch_size is not None:
             topography = crop_array(topography, patch_size, yx=(crop_y, crop_x))
-        if model == 'recresnet_bi':
+        if upsampling_method == 'pin': 
             static_array = np.expand_dims(topography, -1)
-        elif model in ['recresnet_spc', 'recresnet_rc', 'recresnet_dc']:  
+        elif upsampling_method in POSTUPSAMPLING_METHODS:
             # downsizing the topography
             topography_lr = resize_array(topography, (lr_x, lr_y), interpolation)
             static_array = np.expand_dims(topography_lr, -1)
@@ -91,13 +91,13 @@ def create_pair_temp_hr_lr(
     if landocean is not None:
         if patch_size is not None:
             landocean = crop_array(landocean, patch_size, yx=(crop_y, crop_x))  
-        if model == 'recresnet_bi':
+        if upsampling_method == 'pin': 
             landocean = np.expand_dims(landocean, -1)
             if static_array is not None:
                 static_array = np.concatenate([static_array, landocean], axis=-1)
             else:
                 static_array = landocean
-        elif model in ['recresnet_spc', 'recresnet_rc', 'recresnet_dc']:  
+        elif upsampling_method in POSTUPSAMPLING_METHODS:
             # downsizing the land-ocean mask
             # integer array can only be interpolated with nearest method
             landocean_lr = resize_array(landocean, (lr_x, lr_y), interpolation='nearest')
@@ -123,14 +123,14 @@ def create_pair_temp_hr_lr(
             ecv.plot_ndarray(np.squeeze(lr_array[:,:,:,i]), dpi=80, interactive=False, 
                              plot_title=(f'LR array, variable {i+1}'))
         
-        if model in ['recresnet_spc', 'recresnet_rc', 'recresnet_dc']:
+        if upsampling_method in POSTUPSAMPLING_METHODS:
             if topography is not None:
                 ecv.plot_ndarray((topography, topography_lr), interactive=False, dpi=80, 
                                 subplot_titles=('HR Topography', 'LR Topography'))
             if landocean is not None:
                 ecv.plot_ndarray((landocean, landocean_lr), interactive=False, dpi=80, 
                                 subplot_titles=('HR Land Ocean mask', 'LR  Land Ocean mask'))
-        elif model == 'recresnet_bi':
+        elif upsampling_method == 'pin':
             if static_array is not None:
                 if topography is not None and landocean is not None:
                     subpti = ('HR Topography', 'HR Land-Ocean mask')
@@ -177,8 +177,7 @@ def create_pair_hr_lr(
         in low (target) resolution. Assumed to be in LR for r-spc. To be 
         concatenated to the LR version of `array`.
     model : str, optional
-        String with the name of the model architecture, either 'resnet_spc', 
-        'resnet_bi' or 'resnet_rc'.
+        String with the name of the model architecture.
     interpolation : str, optional
         Interpolation used when upsampling/downsampling the training samples.
         By default 'bicubic'. 
@@ -188,8 +187,9 @@ def create_pair_hr_lr(
     """
     hr_array = np.squeeze(array)
     hr_y, hr_x = hr_array.shape
+    upsampling_method = model.split('_')[-1]
 
-    if model == 'resnet_bi': 
+    if upsampling_method == 'pin': 
         lr_x, lr_y = int(hr_x / scale), int(hr_y / scale) 
         # whole image is downsampled and upsampled via interpolation
         lr_array_resized = resize_array(hr_array, (lr_x, lr_y), interpolation)
@@ -204,7 +204,7 @@ def create_pair_hr_lr(
             lr_array = lr_array_resized
         hr_array = np.expand_dims(hr_array, -1)
         lr_array = np.expand_dims(lr_array, -1)
-    elif model in ['resnet_spc', 'resnet_rc', 'resnet_dc']:
+    elif upsampling_method in POSTUPSAMPLING_METHODS:
         if patch_size is not None:
             lr_x, lr_y = int(patch_size / scale), int(patch_size / scale) 
         else:
@@ -215,7 +215,7 @@ def create_pair_hr_lr(
         array_predictors = np.asarray(tuple_predictors)
         array_predictors = np.rollaxis(np.squeeze(array_predictors), 0, 3)
 
-    if model == 'resnet_bi':
+    if upsampling_method == 'pin':
         if tuple_predictors is not None:
             # upsampling the lr predictors
             array_predictors = resize_array(array_predictors, (hr_x, hr_y), interpolation)
@@ -227,7 +227,7 @@ def create_pair_hr_lr(
                                                                  position=True)
             # concatenating the predictors to the lr image
             lr_array = np.concatenate([lr_array, lr_array_predictors], axis=2)
-    elif model in ['resnet_spc', 'resnet_rc', 'resnet_dc']:
+    elif upsampling_method in POSTUPSAMPLING_METHODS:
         if tuple_predictors is not None:
             if patch_size is not None:
                 # cropping first the predictors 
@@ -256,10 +256,10 @@ def create_pair_hr_lr(
             topo_hr = crop_array(np.squeeze(topography), patch_size, yx=(crop_y, crop_x))
         else:
             topo_hr = topography
-        if model in ['resnet_spc', 'resnet_rc', 'resnet_dc']:  # downsizing the topography
+        if upsampling_method in POSTUPSAMPLING_METHODS:  # downsizing the topography
             topo_lr = resize_array(topo_hr, (lr_x, lr_y), interpolation)
             lr_array = np.concatenate([lr_array, np.expand_dims(topo_lr, -1)], axis=2)
-        elif model == 'resnet_bi':  # topography in HR 
+        elif upsampling_method == 'pin':  # topography in HR 
             lr_array = np.concatenate([lr_array, np.expand_dims(topo_hr, -1)], axis=2)
 
     if landocean is not None:
@@ -267,11 +267,11 @@ def create_pair_hr_lr(
             landocean_hr = crop_array(np.squeeze(landocean), patch_size, yx=(crop_y, crop_x))
         else:
             landocean_hr = landocean
-        if model in ['resnet_spc', 'resnet_rc', 'resnet_dc']:  # downsizing the land-ocean mask
+        if upsampling_method in POSTUPSAMPLING_METHODS:  # downsizing the land-ocean mask
             # integer array can only be interpolated with nearest method
             landocean_lr = resize_array(landocean_hr, (lr_x, lr_y), interpolation='nearest')
             lr_array = np.concatenate([lr_array, np.expand_dims(landocean_lr, -1)], axis=2)
-        elif model == 'resnet_bi':  # lando in HR 
+        elif upsampling_method == 'pin':  # lando in HR 
             lr_array = np.concatenate([lr_array, np.expand_dims(landocean_hr, -1)], axis=2)
     
     hr_array = np.asarray(hr_array, 'float32')
@@ -290,7 +290,7 @@ def create_pair_hr_lr(
         ecv.plot_ndarray((np.squeeze(hr_array), lr_array_plot), dpi=80, interactive=False, 
                          subplot_titles=('HR array', 'LR array'))
         
-        if model in ['resnet_spc', 'resnet_rc', 'resnet_dc']:
+        if upsampling_method in POSTUPSAMPLING_METHODS:
             if topography is not None:
                 ecv.plot_ndarray((topo_hr, topo_lr), 
                                 interactive=False, dpi=80, 
@@ -299,7 +299,7 @@ def create_pair_hr_lr(
                 ecv.plot_ndarray((landocean_hr, landocean_lr), 
                                 interactive=False, dpi=80, 
                                 subplot_titles=('HR Land Ocean mask', 'LR  Land Ocean mask'))
-        elif model == 'resnet_bi':
+        elif upsampling_method == 'pin':
             if topography is not None:
                 ecv.plot_ndarray(topography, interactive=False, dpi=80, 
                                  subplot_titles=('HR Topography'))
@@ -421,6 +421,7 @@ class DataGenerator(tf.keras.utils.Sequence):
         self.landocean = landocean
         self.predictors = predictors
         self.model = checkarg_model(model)
+        self.upsampling = self.model.split('_')[-1]
         self.interpolation = interpolation
         self.repeat = repeat
         self.n = array.shape[0]
@@ -433,7 +434,7 @@ class DataGenerator(tf.keras.utils.Sequence):
             self.indices = np.hstack([self.indices for i in range(self.repeat)])
 
         if patch_size is not None:
-            if self.model in ['resnet_spc', 'resnet_rc', 'resnet_dc', 'recresnet_spc', 'recresnet_rc', 'recresnet_dc']: 
+            if self.upsampling in POSTUPSAMPLING_METHODS: 
                 if not self.patch_size % self.scale == 0:   
                     raise ValueError('`patch_size` must be divisible by `scale`')
 
