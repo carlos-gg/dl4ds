@@ -1,7 +1,7 @@
 from tensorflow.keras.layers import Add, Conv2D, Input, Concatenate
 from tensorflow.keras.models import Model
 
-from .blocks import (recurrent_residual_block, ResidualBlock, ConvBlock, 
+from .blocks import (RecurrentConvBlock, ResidualBlock, ConvBlock, 
                      DenseBlock, TransitionBlock)
 from .utils import checkarg_backbone
  
@@ -72,7 +72,14 @@ def recnet_pin(
         x_n_channels = n_channels
 
     x_in = Input(shape=(time_window, None, None, x_n_channels))
-    x = b = recurrent_residual_block(x_in, n_filters, full_sequence=False)
+    if backbone_block == 'convnet':
+        skipcon = None
+    elif backbone_block == 'resnet':
+        skipcon = 'residual'
+    elif backbone_block == 'densenet':
+        skipcon = 'dense'
+    x = b = RecurrentConvBlock(n_filters, output_full_sequence=False, skip_connection_type=skipcon,  
+                               normalization=normalization)(x_in)
 
     if static_arr:
         s_in = Input(shape=(None, None, static_n_channels))
