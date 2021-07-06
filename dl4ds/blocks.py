@@ -161,12 +161,3 @@ class RecurrentConvBlock(tf.keras.Model):
             Y = self.convlstm4(Y)
         return Y
 
-
-def normalize(params):
-    x, x_train_mean, x_train_std = params
-    return (x - x_train_mean) / x_train_std
-
-
-def denormalize(params):
-    x, x_train_mean, x_train_std = params
-    return x * x_train_std + x_train_mean
