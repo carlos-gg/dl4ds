@@ -12,12 +12,12 @@ from tensorflow.keras.utils import Progbar
 from matplotlib.pyplot import show
 import horovod.tensorflow.keras as hvd
 
-from .utils import (Timing, list_devices, set_gpu_memory_growth, 
-                    set_visible_gpus, checkarg_model, MODELS)
+from .utils import (POSTUPSAMPLING_METHODS, Timing, list_devices, set_gpu_memory_growth, set_visible_gpus, 
+                    checkarg_model, MODELS, SPATIAL_MODELS, SPATIOTEMP_MODELS)
 from .dataloader import DataGenerator, create_batch_hr_lr
 from .losses import mae, mse, dssim, dssim_mae, dssim_mae_mse, dssim_mse
-from .resnet_preupsampling import resnet_bi, recresnet_bi
-from .resnet_postupsampling import resnet_postupsampling, recresnet_postupsampling
+from .net_preupsampling import net_pin, recnet_pin
+from .net_postupsampling import net_postupsampling, recnet_postupsampling
 from .cgan import train_step
 from .discriminator import residual_discriminator
 
@@ -30,6 +30,9 @@ class Trainer(ABC):
         model_name, 
         loss='mae',
         batch_size=64, 
+        patch_size=None,
+        scale=4,
+        time_window=None,
         device='GPU', 
         gpu_memory_growth=True,
         use_multiprocessing=False,
@@ -42,7 +45,10 @@ class Trainer(ABC):
         """
         self.model_name = model_name
         self.batch_size = batch_size
+        self.patch_size = patch_size
         self.loss = loss
+        self.scale = scale
+        self.time_window = time_window
         self.device = device
         self.gpu_memory_growth = gpu_memory_growth
         self.use_multiprocessing = use_multiprocessing
@@ -50,6 +56,13 @@ class Trainer(ABC):
         self.save = save
         self.save_path = save_path
         self.timing = Timing()
+        self.upsampling = model_name.split('_')[-1]
+        self.backbone = self.model_name.split('_')[0]
+        if self.backbone.startswith('rec'):
+            self.backbone = self.backbone[3:]
+            self.model_is_spatiotemp = True
+        else:
+            self.model_is_spatiotemp = False
        
         ### Initializing Horovod
         hvd.init()
@@ -86,6 +99,16 @@ class Trainer(ABC):
         if model_list is None:
             model_list = MODELS
         self.model_name = checkarg_model(self.model_name, model_list)
+        
+        ### Checking parameters
+        if self.patch_size is not None and self.patch_size % self.scale != 0:
+            raise ValueError('`patch_size` must be divisible by `scale` (remainder must be zero)')
+
+        if self.time_window is not None and not self.model_is_spatiotemp:
+            self.time_window = None
+        if self.model_is_spatiotemp and self.time_window is None:
+            msg = f'``model={self.model_name}``, the argument ``time_window`` must be a postive integer'
+            raise ValueError(msg)
 
         ### Choosing the loss function
         if loss == 'mae':  
@@ -259,8 +282,10 @@ class SupervisedTrainer(Trainer):
             Dictionary with additional parameters passed to the neural network 
             model.
         """
-        super().__init__(model_name, loss, batch_size, device, gpu_memory_growth,
-                         use_multiprocessing, verbose, model_list, save, save_path)
+        super().__init__(model_name, loss, batch_size, patch_size, scale, 
+                         time_window, device, gpu_memory_growth,
+                         use_multiprocessing, verbose, model_list, save, 
+                         save_path)
         self.data_train = data_train
         self.data_val = data_val
         self.data_test = data_test
@@ -269,10 +294,7 @@ class SupervisedTrainer(Trainer):
         self.predictors_test = predictors_test
         self.topography = topography 
         self.landocean = landocean
-        self.scale = scale
         self.interpolation = interpolation 
-        self.patch_size = patch_size 
-        self.time_window = time_window
         self.epochs = epochs
         self.steps_per_epoch = steps_per_epoch
         self.validation_steps = validation_steps
@@ -297,17 +319,6 @@ class SupervisedTrainer(Trainer):
     def setup_datagen(self):
         """Setting up the data generators
         """
-        if self.patch_size is not None and self.patch_size % self.scale != 0:
-            raise ValueError('`patch_size` must be divisible by `scale` (remainder must be zero)')
-
-        recmodels = ['recresnet_spc', 'recresnet_rc', 'recresnet_bi', 'recresnet_dc']
-        if self.time_window is not None and self.model_name not in recmodels:
-            msg = f'``time_window={self.time_window}``, choose a model that handles samples with a temporal dimension'
-            raise ValueError(msg)
-        if self.model_name in recmodels and self.time_window is None:
-            msg = f'``model={self.model_name}``, the argument ``time_window`` must be a postive integer'
-            raise ValueError(msg)
-
         datagen_params = dict(
             scale=self.scale, 
             batch_size=self.global_batch_size,
@@ -325,7 +336,7 @@ class SupervisedTrainer(Trainer):
         """Setting up the model
         """
         ### number of channels
-        if self.model_name in ['resnet_spc', 'resnet_bi', 'resnet_rc', 'resnet_dc']:
+        if self.model_name in SPATIAL_MODELS:
             n_channels = self.data_train.shape[-1]
             if self.topography is not None:
                 n_channels += 1
@@ -333,7 +344,7 @@ class SupervisedTrainer(Trainer):
                 n_channels += 1
             if self.predictors_train is not None:
                 n_channels += len(self.predictors_train)
-        elif self.model_name in ['recresnet_spc', 'recresnet_rc', 'recresnet_dc', 'recresnet_bi']:
+        elif self.model_name in SPATIOTEMP_MODELS:
             n_var_channels = self.data_train.shape[-1]
             n_st_channels = 0
             if self.predictors_train is not None:
@@ -345,30 +356,34 @@ class SupervisedTrainer(Trainer):
             n_channels = (n_var_channels, n_st_channels)
 
         ### instantiating and fitting the model
-        if self.model_name in ['resnet_spc', 'resnet_rc', 'resnet_dc']:
-            upsampling_module_name = self.model_name.split('_')[-1]
-            self.model = resnet_postupsampling(
-                upsampling=upsampling_module_name, 
-                scale=self.scale, 
-                n_channels=n_channels, 
-                **self.architecture_params)
-        elif self.model_name == 'resnet_bi':
-            self.model = resnet_bi(
-                n_channels=n_channels, 
-                **self.architecture_params)        
-        elif self.model_name in ['recresnet_spc', 'recresnet_rc', 'recresnet_dc']:
-            upsampling_module_name = self.model_name.split('_')[-1]
-            self.model = recresnet_postupsampling(
-                upsampling=upsampling_module_name, 
-                scale=self.scale, 
-                n_channels=n_channels, 
-                time_window=self.time_window, 
-                **self.architecture_params)
-        elif self.model_name == 'recresnet_bi':
-            self.model = recresnet_bi(
-                n_channels=n_channels, 
-                time_window=self.time_window, 
-                **self.architecture_params)
+        if self.upsampling in POSTUPSAMPLING_METHODS:
+            if not self.model_is_spatiotemp:
+                self.model = net_postupsampling(
+                    backbone_block=self.backbone,
+                    upsampling=self.upsampling, 
+                    scale=self.scale, 
+                    n_channels=n_channels, 
+                    **self.architecture_params)
+            else:
+                self.model = recnet_postupsampling(
+                    backbone_block=self.backbone,
+                    upsampling=self.upsampling, 
+                    scale=self.scale, 
+                    n_channels=n_channels, 
+                    time_window=self.time_window, 
+                    **self.architecture_params)
+        elif self.upsampling == 'pin':
+            if not self.model_is_spatiotemp:
+                self.model = net_pin(
+                    backbone_block=self.backbone,
+                    n_channels=n_channels, 
+                    **self.architecture_params)        
+            else:
+                self.model = recnet_pin(
+                    backbone_block=self.backbone,
+                    n_channels=n_channels, 
+                    time_window=self.time_window, 
+                    **self.architecture_params)
 
         if self.verbose == 1 and self.running_on_first_worker:
             self.model.summary(line_length=150)
@@ -538,7 +553,8 @@ class CGANTrainer(Trainer):
             Verbosity mode. False or 0 = silent. True or 1, max amount of 
             information is printed out. When equal 2, then less info is shown.
         """
-        super().__init__(model_name, loss, batch_size, device, gpu_memory_growth,
+        super().__init__(model_name, loss, batch_size, patch_size, scale, 
+                         time_window, device, gpu_memory_growth,
                          verbose=verbose, model_list=model_list, save=save, 
                          save_path=save_path)
         self.data_train = data_train
@@ -558,19 +574,10 @@ class CGANTrainer(Trainer):
         self.save_logs = save_logs
         self.generator_params = generator_params
         self.discriminator_params = discriminator_params
-        
         self.gentotal = []
         self.gengan = []
         self.gen_pxloss = []
         self.disc = []
-        
-        self.recres_models = ['recresnet_spc', 'recresnet_rc', 'recresnet_bi', 'recresnet_dc']
-        if self.time_window is not None and self.model_name not in self.recres_models:
-            msg = f'``time_window={self.time_window}``, choose a model that handles samples with a temporal dimension'
-            raise ValueError(msg)
-        if self.model_name in self.recres_models and self.time_window is None:
-            msg = f'``model={self.model_name}``, the argument ``time_window`` must be a postive integer'
-            raise ValueError(msg)
 
         self.setup_model()
         self.run()
@@ -581,7 +588,7 @@ class CGANTrainer(Trainer):
         """
         """
         ### number of channels
-        if self.model_name in ['resnet_spc', 'resnet_bi', 'resnet_rc', 'resnet_dc']:
+        if self.model_name in SPATIAL_MODELS:
             n_channels = self.data_train.shape[-1]
             if self.topography is not None:
                 n_channels += 1
@@ -589,7 +596,7 @@ class CGANTrainer(Trainer):
                 n_channels += 1
             # if self.predictors_train is not None:
             #     n_channels += len(self.predictors_train)
-        elif self.model_name in self.recres_models:
+        elif self.model_name in SPATIOTEMP_MODELS:
             n_var_channels = self.data_train.shape[-1]
             n_st_channels = 0
             # if self.predictors_train is not None:
@@ -601,30 +608,34 @@ class CGANTrainer(Trainer):
             n_channels = (n_var_channels, n_st_channels)
 
         # Generator
-        if self.model_name in ['resnet_spc', 'resnet_rc', 'resnet_dc']:
-            upsampling_module_name = self.model_name.split('_')[-1]
-            self.generator = resnet_postupsampling(
-                upsampling=upsampling_module_name,
-                scale=self.scale, 
-                n_channels=n_channels,
-                **self.generator_params)
-        elif self.model_name == 'resnet_bi':
-            self.generator = resnet_bi(
-                n_channels=n_channels, 
-                **self.generator_params)
-        elif self.model_name in ['recresnet_spc', 'recresnet_rc', 'recresnet_dc']:
-            upsampling_module_name = self.model_name.split('_')[-1]
-            self.generator = recresnet_postupsampling(
-                upsampling=upsampling_module_name, 
-                scale=self.scale, 
-                n_channels=n_channels, 
-                time_window=self.time_window, 
-                **self.generator_params)
-        elif self.model_name == 'recresnet_bi':
-            self.generator = recresnet_bi(
-                n_channels=n_channels, 
-                time_window=self.time_window, 
-                **self.generator_params)
+        if self.upsampling in POSTUPSAMPLING_METHODS:
+            if not self.model_is_spatiotemp:
+                self.generator = net_postupsampling(
+                    backbone_block=self.backbone,
+                    upsampling=self.upsampling,
+                    scale=self.scale, 
+                    n_channels=n_channels,
+                    **self.generator_params)
+            else:
+                self.generator = recnet_postupsampling(
+                    backbone_block=self.backbone,
+                    upsampling=self.upsampling, 
+                    scale=self.scale, 
+                    n_channels=n_channels, 
+                    time_window=self.time_window, 
+                    **self.generator_params)
+        elif self.upsampling == 'pin':
+            if not self.model_is_spatiotemp:
+                self.generator = net_pin(
+                    backbone_block=self.backbone,
+                    n_channels=n_channels, 
+                    **self.generator_params)            
+            else:
+                self.generator = recnet_pin(
+                    backbone_block=self.backbone,
+                    n_channels=n_channels, 
+                    time_window=self.time_window, 
+                    **self.generator_params)
 
         # Discriminator
         n_channels_disc = n_channels[0] if isinstance(n_channels, tuple) else n_channels
@@ -660,9 +671,6 @@ class CGANTrainer(Trainer):
             checkpoint = tf.train.Checkpoint(generator_optimizer=generator_optimizer,
                                             discriminator_optimizer=discriminator_optimizer,
                                             generator=self.generator, discriminator=self.discriminator)
-        
-        if self.patch_size is not None and self.patch_size % self.scale != 0:
-            raise ValueError('`patch_size` must be divisible by `scale` (remainder must be zero)')
 
         n_samples = self.data_train.shape[0]
         if self.steps_per_epoch is None:
@@ -691,7 +699,7 @@ class CGANTrainer(Trainer):
                 hr_array = res[0]
                 lr_array = res[1]
                 static_array = None
-                if self.model_name in self.recres_models:
+                if self.model_name in SPATIOTEMP_MODELS:
                     # Only for these models the static grids are not concatenated as 
                     # but passed are separate inputs channels
                     if self.topography is not None or self.landocean is not None:
@@ -763,7 +771,7 @@ class CGANTrainer(Trainer):
             hr_arrtest = tf.cast(res[0], tf.float32)
             lr_arrtest = tf.cast(res[1], tf.float32)
             static_array_test = None
-            if self.model_name in self.recres_models:
+            if self.model_name in SPATIOTEMP_MODELS:
                 # Only for these models the static grids are not concatenated as 
                 # but passed are separate inputs channels
                 if self.topography is not None or self.landocean is not None:
