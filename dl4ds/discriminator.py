@@ -1,23 +1,23 @@
 import tensorflow as tf
-from tensorflow.keras.layers import (Input, Dropout, Dense, Conv2D, Add, concatenate, 
+from tensorflow.keras.layers import (Input, Dropout, Dense, Conv2D, Add, Concatenate, 
                                      GlobalAveragePooling2D, Cropping2D)
-from .blocks import residual_block
+from .blocks import ResidualBlock
 
 
-def residual_discriminator(n_channels, model, scale, n_filters, n_res_blocks, attention=False):
+def residual_discriminator(n_channels, model, scale, n_filters, n_res_blocks, normalization=None, attention=False):
     """
     """
     x_in = Input(shape=(None, None, n_channels))    
     x_1 = b = Conv2D(n_filters, (3, 3), padding='same')(x_in)
     for i in range(n_res_blocks):
-        b = residual_block(b, n_filters, attention=attention)
+        b = ResidualBlock(n_filters, normalization=normalization, attention=attention)(b)
     b = Conv2D(n_filters, (3, 3), padding='same')(b)
     x_1 = Add()([x_1, b])
     
     x_ref = Input(shape=(None, None, 1))    
     x_2 = c = Conv2D(n_filters, (3, 3), padding='same')(x_ref)
     for i in range(n_res_blocks):
-        c = residual_block(c, n_filters, attention=attention)
+        c = ResidualBlock(n_filters, normalization=normalization, attention=attention)(c)
 
     if model in ['resnet_spc', 'resnet_rc', 'resnet_dc', 'recresnet_spc', 'recresnet_rc', 'recresnet_dc']:  
         if scale == 5:      
@@ -31,9 +31,9 @@ def residual_discriminator(n_channels, model, scale, n_filters, n_res_blocks, at
         c = Conv2D(n_filters, (3, 3), padding='same')(c)
         x_2 = Add()([x_2, c])
 
-    x = concatenate([x_1, x_2])
+    x = Concatenate()([x_1, x_2])
     
-    x = residual_block(x, x.shape[-1], attention=attention)
+    x = ResidualBlock(x.shape[-1], normalization=normalization, attention=attention)(x)
     
     # global average pooling operation for spatial data
     x = GlobalAveragePooling2D()(x)
