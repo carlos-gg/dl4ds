@@ -6,13 +6,15 @@ import os
 import tensorflow as tf
 import horovod.tensorflow as hvd
 
-from .resnet_preupsampling import resnet_bi, recresnet_bi
-from .resnet_postupsampling import resnet_postupsampling, recresnet_postupsampling
+from .net_preupsampling import net_pin, recnet_pin
+from .net_postupsampling import net_postupsampling, recnet_postupsampling
 from .discriminator import residual_discriminator
+from .utils import (checkarg_model, POSTUPSAMPLING_METHODS, SPATIAL_MODELS, 
+                    SPATIOTEMP_MODELS)
 
 
 def load_checkpoint(checkpoint_dir, checkpoint_number, scale, model='resnet_spc', 
-                    topography=None, landocean=None, 
+                    topography=None, landocean=None, time_window=None,
                     n_res_blocks=(20, 4), n_filters=64, attention=False):
     """
     """
@@ -23,17 +25,33 @@ def load_checkpoint(checkpoint_dir, checkpoint_number, scale, model='resnet_spc'
         n_channels += 1
 
     # generator
-    if model not in ['resnet_spc', 'resnet_bi', 'resnet_rc']:
-        raise ValueError('`model` not recognized. Must be one of the following: resnet_spc, resnet_bi, resnet_rc')
+    model = checkarg_model(model)
+    upsampling = model.split('_')[-1]
+    backbone = model.split('_')[0]
+    if backbone.startswith('rec'):
+        backbone = backbone[3:]
 
-    if model in ['resnet_spc', 'resnet_rc', 'resnet_dc']:
-        upsampling_module_name = model.split('_')[-1]
-        generator = model = resnet_postupsampling(upsampling=upsampling_module_name, scale=scale, n_channels=n_channels, 
-                                                  n_filters=n_filters, n_res_blocks=n_res_blocks[0], n_channels_out=1, 
-                                                  attention=attention)
-    elif model == 'resnet_bi':
-        generator = resnet_bi(n_channels=n_channels, n_filters=n_filters, 
-                               n_res_blocks=n_res_blocks[0], n_channels_out=1, attention=attention)
+    if upsampling in POSTUPSAMPLING_METHODS:
+        if model in SPATIAL_MODELS:
+            generator = model = net_postupsampling(
+                backbone_block=backbone, upsampling=upsampling, scale=scale, 
+                n_channels=n_channels, n_filters=n_filters, n_res_blocks=n_res_blocks[0], 
+                n_channels_out=1, attention=attention)
+        elif model in SPATIOTEMP_MODELS:
+            generator = model = recnet_postupsampling(
+                backbone_block=backbone, upsampling=upsampling, scale=scale, 
+                n_channels=n_channels, n_filters=n_filters, n_res_blocks=n_res_blocks[0], 
+                n_channels_out=1, time_window=time_window, attention=attention)
+    elif upsampling == 'pin':
+        if model in SPATIAL_MODELS:
+            generator = net_pin(backbone_block=backbone, n_channels=n_channels, 
+                                n_filters=n_filters, n_res_blocks=n_res_blocks[0], 
+                                n_channels_out=1, attention=attention)
+        elif model in SPATIOTEMP_MODELS:
+            generator = recnet_pin(backbone_block=backbone, n_channels=n_channels, 
+                                   n_filters=n_filters, n_res_blocks=n_res_blocks[0], 
+                                   n_channels_out=1, time_window=time_window, 
+                                   attention=attention)
         
     # discriminator
     discriminator = residual_discriminator(n_channels=n_channels, n_filters=n_filters, scale=scale,
