@@ -4,37 +4,54 @@ import cv2
 from datetime import datetime
 
 
-MODELS = (
-    'resnet_spc', 
-    'resnet_bi', 
-    'resnet_rc', 
-    'resnet_dc', 
-    'recresnet_spc', 
-    'recresnet_bi', 
-    'recresnet_rc',
-    'recresnet_dc')
+BACKBONE_BLOCKS = ('convnet', 'resnet', 'densenet')
+PREFIX_SAMPLE_TYPE = ('', 'rec')
+NETS = [p + b for p in PREFIX_SAMPLE_TYPE for b in BACKBONE_BLOCKS]
+UPSAMPLING_METHODS = ('spc',  # pixel shuffle or subpixel convolution in post-upscaling
+                      'rc',  # resize convolution in post-upscaling
+                      'dc',  # deconvolution or transposed convolution in post-upscaling
+                      'pin')  # pre-upsampling via (bicubic) interpolation
+POSTUPSAMPLING_METHODS = ('spc', 'rc', 'dc')
+SPATIAL_MODELS = [p + '_' + u for p in BACKBONE_BLOCKS for u in UPSAMPLING_METHODS]
+SPATIOTEMP_MODELS = ['rec' + p + '_' + u for p in BACKBONE_BLOCKS for u in UPSAMPLING_METHODS]
+MODELS = [n + '_' + u for n in NETS for u in UPSAMPLING_METHODS]
 
 
 def spatial_to_temporal_samples(array, time_window):
-    """
-    """
+    """ """
     n_samples, y, x, n_channels = array.shape
-    n_t_samples = n_samples - time_window
+    n_t_samples = n_samples - (time_window - 1)
     array_out = np.zeros((n_t_samples, time_window, y, x, n_channels))
     for i in range(n_t_samples):
-        j = i + time_window
-        array_out[i] = array[j - time_window:j]
+        array_out[i] = array[i: i+time_window]
     return array_out
 
 
 def checkarg_model(model, model_list=MODELS):
-    """
-    """
+    """ """
     if not isinstance(model, str) or model not in model_list:
         msg = f'`model` not recognized. Must be one of the following: {model_list}'
         raise ValueError(msg)
     else:
         return model
+
+
+def checkarg_backbone(backbone_block):
+    """ """ 
+    if not isinstance(backbone_block, str) or backbone_block not in BACKBONE_BLOCKS:
+        msg = f'`backbone_block` not recognized. Must be one of the following: {BACKBONE_BLOCKS}'
+        raise ValueError(msg)
+    else:
+        return backbone_block
+
+
+def checkarg_upsampling(upsampling):
+    """ """ 
+    if not isinstance(upsampling, str) or upsampling not in UPSAMPLING_METHODS:
+        msg = f'`upsampling` not recognized. Must be one of the following: {UPSAMPLING_METHODS}'
+        raise ValueError(msg)
+    else:
+        return upsampling
 
 
 def set_gpu_memory_growth(verbose=True):
