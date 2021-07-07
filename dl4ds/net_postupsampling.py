@@ -14,7 +14,7 @@ def net_postupsampling(
     scale, 
     n_channels, 
     n_filters, 
-    n_res_blocks, 
+    n_blocks, 
     n_channels_out=1, 
     normalization=None,
     attention=False,
@@ -37,7 +37,7 @@ def net_postupsampling(
 
     x_in = Input(shape=(None, None, n_channels))
     x = b = Conv2D(n_filters, (3, 3), padding='same')(x_in)
-    for i in range(n_res_blocks):
+    for i in range(n_blocks):
         if backbone_block == 'convnet':
             b = ConvBlock(n_filters, normalization=normalization, attention=attention)(b)
         elif backbone_block == 'resnet':
@@ -73,7 +73,7 @@ def recnet_postupsampling(
     scale, 
     n_channels, 
     n_filters, 
-    n_res_blocks, 
+    n_blocks, 
     n_channels_out=1, 
     time_window=None, 
     normalization=None,
@@ -113,7 +113,7 @@ def recnet_postupsampling(
         b = Conv2D(n_filters - static_n_channels, (1, 1), padding='same')(b)
         b = Concatenate()([b, s_in])
 
-    for i in range(n_res_blocks):
+    for i in range(n_blocks):
         if backbone_block == 'convnet':
             b = ConvBlock(n_filters, normalization=normalization, attention=attention)(b)
         elif backbone_block == 'resnet':

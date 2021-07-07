@@ -98,12 +98,18 @@ def compute_correlation(y, y_hat, over='time', mode='spearman', n_jobs=40):
         return list_corrs
 
 
-def compute_metrics(y_test, y_test_hat, dpi=150, n_jobs=40, save_path=None):
+def compute_metrics(y_test, y_test_hat, dpi=150, n_jobs=40, mean_std=None, save_path=None):
     """ 
     MSE
     https://keras.io/api/losses/regression_losses/#mean_squared_error-function
 
     """
+    # assuming y_test_hat has been destandardized
+    if mean_std is not None:
+        mean, std = mean_std
+        y_test *= std
+        y_test += mean
+
     if y_test.ndim == 5:
         y_test = np.squeeze(y_test, -1)
         y_test_hat = np.squeeze(y_test_hat, -1)
@@ -138,9 +144,9 @@ def compute_metrics(y_test, y_test_hat, dpi=150, n_jobs=40, save_path=None):
     mean_temp_rmse = np.mean(temp_rmse_map)
     std_temp_rmse = np.std(temp_rmse_map)
 
-    subpti = f'MSE map ($\mu$ = {mean_temp_rmse:.6f})'
+    subpti = f'RMSE map ($\mu$ = {mean_temp_rmse:.6f})'
     if save_path is not None:
-        savepath = os.path.join(save_path, 'mse.png')
+        savepath = os.path.join(save_path, 'rmse.png')
     else:
         savepath = None
     ecv.plot_ndarray(temp_rmse_map, dpi=dpi, subplot_titles=(subpti), cmap='viridis', 
