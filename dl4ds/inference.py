@@ -1,7 +1,8 @@
 import os
 import numpy as np
 
-from .utils import resize_array, spatial_to_temporal_samples
+from .utils import (resize_array, spatial_to_temporal_samples, SPATIAL_MODELS, 
+                    SPATIOTEMP_MODELS, POSTUPSAMPLING_METHODS)
 
 
 def predict_with_gt(
@@ -13,8 +14,9 @@ def predict_with_gt(
     predictors=None, 
     time_window=None,
     interpolation='bicubic', 
+    mean_std=None,
     save_path=None,
-    save_fname='x_test_pred.npy',
+    save_fname='y_hat.npy',
     return_lr=False):
     """Predict with a groudtruth. The HR gridded input is downsampled, then 
     super-resolved or downscaled using the trained super-resolution model. 
@@ -40,13 +42,14 @@ def predict_with_gt(
         If not None, the prediction (gridded variable at HR) is saved to disk.
     save_fname : str, optional
         Filename to complete the path were the prediciton is saved. 
-    """ 
+    """     
     model_architecture = model.name
+    upsampling = model_architecture.split('_')[-1]
 
     if time_window is not None:
         data_test = spatial_to_temporal_samples(data_test, time_window)
 
-    if model_architecture in ['resnet_spc', 'resnet_rc', 'resnet_dc', 'resnet_bi']:
+    if model_architecture in SPATIAL_MODELS:
         _, hr_y, hr_x, _ = data_test.shape
         lr_x = int(hr_x / scale)
         lr_y = int(hr_y / scale)
@@ -64,7 +67,7 @@ def predict_with_gt(
         if landocean is not None:
             n_channels += 1
         
-        if model_architecture in ['resnet_spc', 'resnet_rc', 'resnet_dc']:
+        if upsampling in POSTUPSAMPLING_METHODS:
             if topography is not None:
                 topo_interp = resize_array(topography, (lr_x, lr_y), interpolation)
             if landocean is not None:
@@ -90,7 +93,7 @@ def predict_with_gt(
 
             x_test_pred = model.predict(x_test_lr)
 
-        elif model_architecture == 'resnet_bi':
+        else:
             x_test_lr = np.zeros((data_test.shape[0], hr_y, hr_x, n_channels))
 
             for i in range(data_test.shape[0]):
@@ -114,7 +117,7 @@ def predict_with_gt(
             print('Downsampled x_test shape: ', x_test_lr.shape)
             x_test_pred = model.predict(x_test_lr)
     
-    elif model_architecture in ['recresnet_spc', 'recresnet_rc', 'recresnet_dc']:
+    elif model_architecture in SPATIOTEMP_MODELS:
         n_samples, n_t, hr_y, hr_x, n_channels = data_test.shape
         lr_x = int(hr_x / scale)
         lr_y = int(hr_y / scale)
@@ -135,7 +138,7 @@ def predict_with_gt(
         else:
             x_test_pred = model.predict(x_test_lr)
 
-    elif model_architecture == 'recresnet_bi':
+    elif upsampling == 'pin':
         n_samples, n_t, hr_y, hr_x, n_channels = data_test.shape
         lr_x = int(hr_x / scale)
         lr_y = int(hr_y / scale)
@@ -155,6 +158,11 @@ def predict_with_gt(
         else:
             x_test_pred = model.predict(x_test_lr)
 
+    if mean_std is not None:
+        mean, std = mean_std
+        x_test_pred *= std
+        x_test_pred += mean
+    
     if save_path is not None and save_fname is not None:
         name = os.path.join(save_path, save_fname)
         np.save(name, x_test_pred.astype('float32'))
