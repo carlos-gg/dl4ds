@@ -12,6 +12,7 @@ def net_pin(
     n_filters, 
     n_blocks, 
     n_channels_out=1, 
+    activation='relu',
     normalization=None,
     attention=False,
     output_activation=None):
@@ -55,6 +56,7 @@ def recnet_pin(
     n_blocks, 
     n_channels_out=1, 
     time_window=None, 
+    activation='relu',
     normalization=None,
     attention=False,
     output_activation=None):

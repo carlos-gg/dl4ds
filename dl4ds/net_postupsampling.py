@@ -18,6 +18,7 @@ def net_postupsampling(
     n_channels_out=1, 
     normalization=None,
     attention=False,
+    activation='relu',
     output_activation=None):
     """
     Deep neural network with different backbone architectures (according to the
@@ -39,13 +40,13 @@ def net_postupsampling(
     x = b = Conv2D(n_filters, (3, 3), padding='same')(x_in)
     for i in range(n_blocks):
         if backbone_block == 'convnet':
-            b = ConvBlock(n_filters, normalization=normalization, attention=attention)(b)
+            b = ConvBlock(n_filters, activation=activation, normalization=normalization, attention=attention)(b)
         elif backbone_block == 'resnet':
-            b = ResidualBlock(n_filters, normalization=normalization, attention=attention)(b)
+            b = ResidualBlock(n_filters, activation=activation, normalization=normalization, attention=attention)(b)
         elif backbone_block == 'densenet':
-            b = DenseBlock(n_filters, normalization=normalization, attention=attention)(b)
+            b = DenseBlock(n_filters, activation=activation, normalization=normalization, attention=attention)(b)
             b = TransitionBlock(n_filters // 2)(b)  # another option: half of the DenseBlock channels
-    b = Conv2D(n_filters, (3, 3), padding='same')(b)
+    b = Conv2D(n_filters, (3, 3), padding='same', activation=activation)(b)
 
     if backbone_block == 'convnet':
         x = b
@@ -76,6 +77,7 @@ def recnet_postupsampling(
     n_blocks, 
     n_channels_out=1, 
     time_window=None, 
+    activation='relu',
     normalization=None,
     attention=False,
     output_activation=None):
@@ -148,7 +150,7 @@ def recnet_postupsampling(
         return Model(inputs=x_in, outputs=x, name=model_name)
 
 
-def subpixel_convolution_layer(x, scale, n_filters):
+def subpixel_convolution_layer(x, scale, n_filters, **kwargs):
     def upsample_conv(x, factor, **kwargs):
         """Sub-pixel convolution
         """
@@ -156,15 +158,15 @@ def subpixel_convolution_layer(x, scale, n_filters):
         return Lambda(pixel_shuffle(scale=factor))(x)
 
     if scale == 2:
-        x = upsample_conv(x, 2, name='conv2d_scale_2')
+        x = upsample_conv(x, 2, name='conv2d_scale_2', **kwargs)
     elif scale == 4:
-        x = upsample_conv(x, 2, name='conv2d_1of2_scale_2')
-        x = upsample_conv(x, 2, name='conv2d_2of2_scale_2')
+        x = upsample_conv(x, 2, name='conv2d_1of2_scale_2', **kwargs)
+        x = upsample_conv(x, 2, name='conv2d_2of2_scale_2', **kwargs)
     elif scale == 20:
-        x = upsample_conv(x, 5, name='conv2d_1of2_scale_5')
-        x = upsample_conv(x, 4, name='conv2d_2of2_scale_4')
+        x = upsample_conv(x, 5, name='conv2d_1of2_scale_5', **kwargs)
+        x = upsample_conv(x, 4, name='conv2d_2of2_scale_4', **kwargs)
     else:
-        x = upsample_conv(x, scale, name='conv2d_scale_' + str(scale))
+        x = upsample_conv(x, scale, name='conv2d_scale_' + str(scale, **kwargs))
     return x
 
 
