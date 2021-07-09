@@ -1,14 +1,15 @@
 import tensorflow as tf
-from tensorflow.keras.layers import (Add, Conv2D, Lambda, ReLU, ConvLSTM2D,
-                                     BatchNormalization, LayerNormalization,
-                                     Activation, Concatenate)
+from tensorflow.keras.layers import (Add, Conv2D, ConvLSTM2D, BatchNormalization, 
+                                     LayerNormalization, Activation, Concatenate)
 from .attention import ChannelAttention2D
 
 
 class ConvBlock(tf.keras.Model): 
     """Convolutional block.
     """
-    def __init__(self, filters, strides=1, ks_cl1=(3,3), ks_cl2=(3,3), normalization=None, attention=False, **conv_kwargs):
+    def __init__(self, filters, strides=1, ks_cl1=(3,3), ks_cl2=(3,3), 
+                 activation='relu', normalization=None, attention=False, 
+                 **conv_kwargs):
         super().__init__()
         self.normalization = normalization
         self.attention = attention
@@ -23,7 +24,7 @@ class ConvBlock(tf.keras.Model):
                 self.norm2 = LayerNormalization()
         if self.attention:
             self.att = ChannelAttention2D(filters)
-        self.relu = Activation('relu')
+        self.relu = Activation(activation)
 
     def call(self, X):
         """Model's forward pass.
@@ -52,8 +53,11 @@ class ResidualBlock(ConvBlock):
     [1] Kaiming He, Xiangyu Zhang, Shaoqing Ren, Jian Sun
         Deep Residual Learning for Image Recognition. https://arxiv.org/abs/1512.03385
     """
-    def __init__(self, filters, strides=1, ks_cl1=(3,3), ks_cl2=(3,3), normalization=None, attention=False, **conv_kwargs):
-        super().__init__(filters, strides, ks_cl1, ks_cl2, normalization, attention, **conv_kwargs)
+    def __init__(self, filters, strides=1, ks_cl1=(3,3), ks_cl2=(3,3), 
+                 activation='relu', normalization=None, attention=False, 
+                 **conv_kwargs):
+        super().__init__(filters, strides, ks_cl1, ks_cl2, activation, 
+                         normalization, attention, **conv_kwargs)
 
     def call(self, X):
         Y = self.conv1(X)
@@ -79,8 +83,11 @@ class DenseBlock(ConvBlock):
     [1] Gao Huang, Zhuang Liu, Laurens van der Maaten, Kilian Q. Weinberger
         Densely Connected Convolutional Networks: https://arxiv.org/abs/1608.06993
     """
-    def __init__(self, filters, strides=1, ks_cl1=(1,1), ks_cl2=(3,3), normalization=None, attention=False, **conv_kwargs):
-        super().__init__(filters, strides, ks_cl1, ks_cl2, normalization, attention, **conv_kwargs)
+    def __init__(self, filters, strides=1, ks_cl1=(1,1), ks_cl2=(3,3), 
+                 activation='relu', normalization=None, attention=False, 
+                 **conv_kwargs):
+        super().__init__(filters, strides, ks_cl1, ks_cl2, activation, 
+                         normalization, attention, **conv_kwargs)
         self.conv1 = Conv2D(4 * filters, padding='same', kernel_size=ks_cl1, strides=strides, **conv_kwargs)
         self.conv2 = Conv2D(filters, kernel_size=ks_cl2, padding='same', **conv_kwargs)
         self.concat = Concatenate()
@@ -103,10 +110,10 @@ class DenseBlock(ConvBlock):
 
 
 class TransitionBlock(tf.keras.layers.Layer):
-    def __init__(self, filters, **kwargs):
+    def __init__(self, filters, activation='relu', **kwargs):
         super().__init__(**kwargs)
         self.batch_norm = BatchNormalization()
-        self.relu = Activation('relu')
+        self.relu = Activation(activation)
         self.conv = Conv2D(filters, kernel_size=1)
 
     def call(self, X):
@@ -120,8 +127,8 @@ class RecurrentConvBlock(tf.keras.Model):
     """Recurrent convolutional block with a skip connection.
     """
     def __init__(self, filters, output_full_sequence, skip_connection_type=None, 
-                 ks_cl1=(3,3), ks_cl2=(3,3), ks_cl3=(3,3), normalization=None, 
-                 **conv_kwargs):
+                 ks_cl1=(3,3), ks_cl2=(3,3), ks_cl3=(3,3), activation='relu', 
+                 normalization=None, **conv_kwargs):
         super().__init__()
         self.normalization = normalization
         self.output_full_sequence = output_full_sequence
@@ -136,7 +143,7 @@ class RecurrentConvBlock(tf.keras.Model):
                 self.norm = BatchNormalization()
             elif self.normalization == 'ln':
                 self.norm = LayerNormalization()
-        self.relu = Activation('relu')
+        self.relu = Activation(activation)
         if self.skip_connection_type == 'residual':
             self.skipcon = Add()
         elif self.skip_connection_type == 'dense':
