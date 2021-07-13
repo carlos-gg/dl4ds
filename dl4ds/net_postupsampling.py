@@ -1,6 +1,6 @@
 import tensorflow as tf
 from tensorflow.keras.layers import (Add, Conv2D, Input, Lambda, UpSampling2D, 
-                                     Concatenate, Conv2DTranspose)
+                                     Dropout, Concatenate, Conv2DTranspose)
 from tensorflow.keras.models import Model
 
 from .blocks import (RecurrentConvBlock, ResidualBlock, ConvBlock, 
@@ -17,6 +17,7 @@ def net_postupsampling(
     n_blocks, 
     n_channels_out=1, 
     normalization=None,
+    dropout=None,
     attention=False,
     activation='relu',
     output_activation=None):
@@ -32,6 +33,8 @@ def net_postupsampling(
         for BatchNormalization or 'ln' for LayerNormalization. If None, then no
         normalization is performed. For the 'resnet' backbone, it results in the
         EDSR-style residual block.
+    dropout : float or None, optional
+        Float between 0 and 1. Fraction of the input units to drop.
     """
     backbone_block = checkarg_backbone(backbone_block)
     upsampling = checkarg_upsampling(upsampling)
@@ -47,6 +50,8 @@ def net_postupsampling(
             b = DenseBlock(n_filters, activation=activation, normalization=normalization, attention=attention)(b)
             b = TransitionBlock(n_filters // 2)(b)  # another option: half of the DenseBlock channels
     b = Conv2D(n_filters, (3, 3), padding='same', activation=activation)(b)
+    if dropout is not None:
+        b = Dropout(dropout)(b)
 
     if backbone_block == 'convnet':
         x = b
@@ -78,6 +83,7 @@ def recnet_postupsampling(
     n_channels_out=1, 
     time_window=None, 
     activation='relu',
+    dropout=None,
     normalization=None,
     attention=False,
     output_activation=None):
@@ -106,7 +112,7 @@ def recnet_postupsampling(
     elif backbone_block == 'densenet':
         skipcon = 'dense'
     x = b = RecurrentConvBlock(n_filters, output_full_sequence=False, skip_connection_type=skipcon,  
-                               normalization=normalization)(x_in)
+                               activation=activation, normalization=normalization)(x_in)
 
     if static_arr:
         s_in = Input(shape=(None, None, static_n_channels))
@@ -117,14 +123,16 @@ def recnet_postupsampling(
 
     for i in range(n_blocks):
         if backbone_block == 'convnet':
-            b = ConvBlock(n_filters, normalization=normalization, attention=attention)(b)
+            b = ConvBlock(n_filters, activation=activation, normalization=normalization, attention=attention)(b)
         elif backbone_block == 'resnet':
-            b = ResidualBlock(n_filters, normalization=normalization, attention=attention)(b)
+            b = ResidualBlock(n_filters, activation=activation, normalization=normalization, attention=attention)(b)
         elif backbone_block == 'densenet':
-            b = DenseBlock(n_filters, normalization=normalization, attention=attention)(b)
+            b = DenseBlock(n_filters, activation=activation, normalization=normalization, attention=attention)(b)
             b = TransitionBlock(n_filters // 2)(b)  # another option: half of the DenseBlock channels
     b = Conv2D(n_filters, (3, 3), padding='same')(b)
-    
+    if dropout is not None:
+        b = Dropout(dropout)(b)
+
     if backbone_block == 'convnet':
         x = b
     elif backbone_block == 'resnet':
@@ -134,12 +142,10 @@ def recnet_postupsampling(
     
     if upsampling == 'spc':
         x = subpixel_convolution_layer(x, scale, n_filters)
-        x = Conv2D(n_channels_out, (3, 3), padding='same', 
-                   activation=output_activation)(x)
+        x = Conv2D(n_channels_out, (3, 3), padding='same', activation=output_activation)(x)
     elif upsampling == 'rc':
         x = UpSampling2D(scale, interpolation='bilinear')(x)
-        x = Conv2D(n_channels_out, (3, 3), padding='same', 
-                   activation=output_activation)(x)
+        x = Conv2D(n_channels_out, (3, 3), padding='same', activation=output_activation)(x)
     elif upsampling == 'dc':
         x = deconvolution_layer(x, scale, output_activation)
 
