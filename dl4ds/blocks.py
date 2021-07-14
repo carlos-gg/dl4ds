@@ -1,6 +1,7 @@
 import tensorflow as tf
 from tensorflow.keras.layers import (Add, Conv2D, ConvLSTM2D, BatchNormalization, 
-                                     LayerNormalization, Activation, Concatenate)
+                                     LayerNormalization, Activation, 
+                                     SpatialDropout2D, Concatenate)
 from .attention import ChannelAttention2D
 
 
@@ -9,10 +10,12 @@ class ConvBlock(tf.keras.Model):
     """
     def __init__(self, filters, strides=1, ks_cl1=(3,3), ks_cl2=(3,3), 
                  activation='relu', normalization=None, attention=False, 
-                 **conv_kwargs):
+                 dropout_rate=0, dropout_variant=None, **conv_kwargs):
         super().__init__()
         self.normalization = normalization
         self.attention = attention
+        self.dropout_variant = dropout_variant
+        self.dropout_rate = dropout_rate
         self.conv1 = Conv2D(filters, padding='same', kernel_size=ks_cl1, strides=strides, **conv_kwargs)
         self.conv2 = Conv2D(filters, kernel_size=ks_cl2, padding='same', **conv_kwargs)
         if self.normalization is not None:
@@ -25,14 +28,23 @@ class ConvBlock(tf.keras.Model):
         if self.attention:
             self.att = ChannelAttention2D(filters)
         self.relu = Activation(activation)
+        self.apply_dropout = False
+        # Only spatial dropout is applied inside convolutional blocks
+        if self.dropout_variant == 'spatial' and self.dropout_rate > 0:
+            self.apply_dropout = True
+            self.dropout1 = SpatialDropout2D(self.dropout_rate)
+            self.dropout2 = SpatialDropout2D(self.dropout_rate)
 
     def call(self, X):
         """Model's forward pass.
         """
-        Y = self.conv1(X)
+        Y = self.dropout1(X) if self.apply_dropout else X
+        Y = self.conv1(Y)
         if self.normalization is not None:
             Y = self.norm1(Y)
         Y = self.relu(Y)
+        if self.apply_dropout:
+            Y = self.dropout2(Y)
         Y = self.conv2(Y)
         if self.normalization is not None:
             Y = self.norm2(Y)
@@ -44,7 +56,7 @@ class ConvBlock(tf.keras.Model):
 
 class ResidualBlock(ConvBlock): 
     """
-    Residual block. Two main flavours are possible:
+    Residual block. Two examples:
     * Standard residual block [1]: Conv2D -> BN -> ReLU -> Conv2D -> BN -> Add _> ReLU
     * EDSR-style block: Conv2D -> ReLU -> Conv2D -> Add -> ReLU
 
@@ -55,15 +67,19 @@ class ResidualBlock(ConvBlock):
     """
     def __init__(self, filters, strides=1, ks_cl1=(3,3), ks_cl2=(3,3), 
                  activation='relu', normalization=None, attention=False, 
-                 **conv_kwargs):
+                 dropout_rate=0, dropout_variant=None, **conv_kwargs):
         super().__init__(filters, strides, ks_cl1, ks_cl2, activation, 
-                         normalization, attention, **conv_kwargs)
+                         normalization, attention, dropout_rate, 
+                         dropout_variant, **conv_kwargs)
 
     def call(self, X):
-        Y = self.conv1(X)
+        Y = self.dropout1(X) if self.apply_dropout else X
+        Y = self.conv1(Y)
         if self.normalization is not None:
             Y = self.norm1(Y)
         Y = self.relu(Y)
+        if self.apply_dropout:
+            Y = self.dropout2(Y) 
         Y = self.conv2(Y)
         if self.normalization is not None:
             Y = self.norm2(Y)
@@ -85,23 +101,25 @@ class DenseBlock(ConvBlock):
     """
     def __init__(self, filters, strides=1, ks_cl1=(1,1), ks_cl2=(3,3), 
                  activation='relu', normalization=None, attention=False, 
-                 **conv_kwargs):
+                 dropout_rate=0, dropout_variant=None, **conv_kwargs):
         super().__init__(filters, strides, ks_cl1, ks_cl2, activation, 
-                         normalization, attention, **conv_kwargs)
+                         normalization, attention, dropout_rate, 
+                         dropout_variant, **conv_kwargs)
         self.conv1 = Conv2D(4 * filters, padding='same', kernel_size=ks_cl1, strides=strides, **conv_kwargs)
         self.conv2 = Conv2D(filters, kernel_size=ks_cl2, padding='same', **conv_kwargs)
         self.concat = Concatenate()
 
     def call(self, X):
-        if self.normalization is not None:
-            Y = self.norm1(X)
-        else:
-            Y = X
+        Y = self.norm1(X) if self.normalization is not None else X
         Y = self.relu(Y)
+        if self.apply_dropout:
+            Y = self.dropout1(Y)
         Y = self.conv1(X)       
         if self.normalization is not None:
             Y = self.norm2(Y)
         Y = self.relu(Y)
+        if self.apply_dropout:
+            Y = self.dropout2(Y)
         Y = self.conv2(Y)
         Y = self.concat([Y, X])
         if self.attention:
@@ -148,7 +166,6 @@ class RecurrentConvBlock(tf.keras.Model):
             self.skipcon = Add()
         elif self.skip_connection_type == 'dense':
             self.skipcon = Concatenate()
-        
 
     def call(self, X):
         """Model's forward pass. Closer to the structre of the residual block.
