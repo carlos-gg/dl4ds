@@ -54,6 +54,16 @@ def checkarg_upsampling(upsampling):
         return upsampling
 
 
+def checkarg_dropout_variant(dropout):
+    """ """
+    if dropout is None:
+        return dropout
+    elif isinstance(dropout, str):
+        if dropout not in ['spatial', 'gaussian']:
+            msg = '`dropout_variant` must be either None or str (`gaussian` or `spatial`)'
+            raise ValueError(msg)
+
+
 def set_gpu_memory_growth(verbose=True):
     physical_devices = list_devices(verbose=verbose) 
     for gpu in physical_devices:
