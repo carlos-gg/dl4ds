@@ -1,9 +1,10 @@
-from tensorflow.keras.layers import Add, Conv2D, Input, Concatenate, Dropout
+from tensorflow.keras.layers import (Add, Conv2D, Input, Concatenate, Dropout, 
+                                     GaussianDropout)
 from tensorflow.keras.models import Model
 
 from .blocks import (RecurrentConvBlock, ResidualBlock, ConvBlock, 
                      DenseBlock, TransitionBlock)
-from .utils import checkarg_backbone
+from .utils import checkarg_backbone, checkarg_dropout_variant
  
 
 def net_pin(
@@ -13,7 +14,8 @@ def net_pin(
     n_blocks, 
     n_channels_out=1, 
     activation='relu',
-    dropout=None, 
+    dropout_rate=0,
+    dropout_variant=None,
     normalization=None,
     attention=False,
     output_activation=None):
@@ -25,20 +27,33 @@ def net_pin(
     the training procedure (which is passed to the DataGenerator).
     """
     backbone_block = checkarg_backbone(backbone_block)
+    dropout_variant = checkarg_dropout_variant(dropout_variant)
 
     x_in = Input(shape=(None, None, n_channels))
     x = b = Conv2D(n_filters, (3, 3), padding='same')(x_in)
     for i in range(n_blocks):
         if backbone_block == 'convnet':
-            b = ConvBlock(n_filters, activation=activation, normalization=normalization, attention=attention)(b)
+            b = ConvBlock(
+                n_filters, activation=activation, dropout_rate=dropout_rate, 
+                dropout_variant=dropout_variant, normalization=normalization, 
+                attention=attention)(b)
         elif backbone_block == 'resnet':
-            b = ResidualBlock(n_filters, activation=activation, normalization=normalization, attention=attention)(b)
+            b = ResidualBlock(
+                n_filters, activation=activation, dropout_rate=dropout_rate, 
+                dropout_variant=dropout_variant, normalization=normalization, 
+                attention=attention)(b)
         elif backbone_block == 'densenet':
-            b = DenseBlock(n_filters, activation=activation, normalization=normalization, attention=attention)(b)
+            b = DenseBlock(
+                n_filters, activation=activation, dropout_rate=dropout_rate, 
+                dropout_variant=dropout_variant, normalization=normalization, 
+                attention=attention)(b)
             b = TransitionBlock(n_filters // 2)(b)  # another option: half of the DenseBlock channels
     b = Conv2D(n_filters, (3, 3), padding='same')(b)
-    if dropout is not None:
-        b = Dropout(dropout)(b)
+    if dropout_rate > 0:
+        if dropout_variant is None:
+            b = Dropout(dropout_rate)(b)
+        elif dropout_variant == 'gaussian':
+            b = GaussianDropout(dropout_rate)(b)
 
     if backbone_block == 'convnet':
         x = b
@@ -61,7 +76,8 @@ def recnet_pin(
     time_window=None, 
     activation='relu',
     normalization=None,
-    dropout=None,
+    dropout_rate=0,
+    dropout_variant=None,
     attention=False,
     output_activation=None):
     """
@@ -70,6 +86,7 @@ def recnet_pin(
     These models are capable of exploiting spatio-temporal samples.
     """
     backbone_block = checkarg_backbone(backbone_block)
+    dropout_variant = checkarg_dropout_variant(dropout_variant)
     static_arr = True if isinstance(n_channels, tuple) else False
     if static_arr:
         x_n_channels = n_channels[0]
@@ -96,15 +113,27 @@ def recnet_pin(
 
     for i in range(n_blocks):
         if backbone_block == 'convnet':
-            b = ConvBlock(n_filters, activation=activation, normalization=normalization, attention=attention)(b)
+            b = ConvBlock(
+                n_filters, activation=activation, dropout_rate=dropout_rate, 
+                dropout_variant=dropout_variant, normalization=normalization, 
+                attention=attention)(b)
         elif backbone_block == 'resnet':
-            b = ResidualBlock(n_filters, activation=activation, normalization=normalization, attention=attention)(b)
+            b = ResidualBlock(
+                n_filters, activation=activation, dropout_rate=dropout_rate, 
+                dropout_variant=dropout_variant, normalization=normalization, 
+                attention=attention)(b)
         elif backbone_block == 'densenet':
-            b = DenseBlock(n_filters, activation=activation, normalization=normalization, attention=attention)(b)
+            b = DenseBlock(
+                n_filters, activation=activation, dropout_rate=dropout_rate, 
+                dropout_variant=dropout_variant, normalization=normalization, 
+                attention=attention)(b)
             b = TransitionBlock(n_filters // 2)(b)  # another option: half of the DenseBlock channels
     b = Conv2D(n_filters, (3, 3), padding='same')(b)
-    if dropout is not None:
-        b = Dropout(dropout)(b)
+    if dropout_rate > 0:
+        if dropout_variant is None:
+            b = Dropout(dropout_rate)(b)
+        elif dropout_variant == 'gaussian':
+            b = GaussianDropout(dropout_rate)(b)
 
     if backbone_block == 'convnet':
         x = b
