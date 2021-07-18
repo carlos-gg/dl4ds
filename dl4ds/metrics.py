@@ -106,6 +106,7 @@ def compute_metrics(y_test, y_test_hat, dpi=150, n_jobs=40, mean_std=None, save_
     """
     # assuming y_test_hat has been destandardized
     if mean_std is not None:
+        y_test = y_test.copy()
         mean, std = mean_std
         y_test *= std
         y_test += mean
@@ -161,12 +162,6 @@ def compute_metrics(y_test, y_test_hat, dpi=150, n_jobs=40, mean_std=None, save_
     temp_spearman_corrmap = compute_correlation(y_test, y_test_hat, n_jobs=n_jobs)
     mean_temp_spcorr = np.mean(temp_spearman_corrmap)
     subpti = f'Spearman correlation map ($\mu$ = {mean_temp_spcorr:.6f})'
-    if save_path is not None:
-        savepath = os.path.join(save_path, 'corr_spear.png')
-    else:
-        savepath = None
-    #ecv.plot_ndarray(temp_spearman_corrmap, dpi=dpi, subplot_titles=(subpti), cmap='magma', 
-    #                 plot_size_px=800, interactive=False, save=savepath)
 
     ### Pearson correlation coefficient
     spatial_pearson_corr = compute_correlation(y_test, y_test_hat, mode='pearson', n_jobs=n_jobs, over='space')
@@ -183,10 +178,10 @@ def compute_metrics(y_test, y_test_hat, dpi=150, n_jobs=40, mean_std=None, save_
         savepath = None
     ecv.plot_ndarray(pearson_corrmap, dpi=dpi, subplot_titles=(subpti), cmap='magma', 
                      plot_size_px=800, interactive=False, save=savepath)
-     
-    ### Plotting violin plots
-    # http://seaborn.pydata.org/tutorial/aesthetics.html
-    sns.set_style("darkgrid", {"axes.facecolor": ".9"})
+    
+    ### Plotting violin plots: http://seaborn.pydata.org/tutorial/aesthetics.html
+    sns.set_style("whitegrid") #{"axes.facecolor": ".9"}
+    sns.despine(left=True)
     sns.set_context("notebook")
     f, ax = plt.subplots(1, 6, figsize=(15, 5), dpi=dpi)
     for axis in f.axes:
@@ -219,22 +214,31 @@ def compute_metrics(y_test, y_test_hat, dpi=150, n_jobs=40, mean_std=None, save_
     f.tight_layout()
     if save_path is not None: 
         plt.savefig(os.path.join(save_path, 'violin_plots.png'))
+        plt.close()
     else:
         plt.show()
     
     sns.set_style("white")
-    
-    print('Metrics on y_test and y_test_hat:\n')
-    print(f'PSNR \tmu = {mean_psnr} \tsigma = {std_psnr}')
-    print(f'SSIM \tmu = {mean_ssim} \tsigma = {std_ssim}')
-    print(f'MAE \tmu = {mean_mae} \tsigma = {std_mae}')
-    print(f'Temporal RMSE \tmu = {mean_temp_rmse} \tsigma = {std_temp_rmse}')
-    print(f'Temporal Spearman correlation \tmu = {mean_spatial_spearman_corr}')
-    print(f'Temporal Pearson correlation \tmu = {mean_spatial_pearson_corr}')
-    print()
-    print(f'Spatial MSE \tmu = {mean_spatial_rmse} \tsigma = {std_spatial_rmse}')
-    print(f'Spatial Spearman correlation \tmu = {mean_spatial_spearman_corr} \tsigma = {std_spatial_spearman_corr}')
-    print(f'Spatial Pearson correlation \tmu = {mean_spatial_pearson_corr} \tsigma = {std_spatial_pearson_corr}')
+
+    if save_path is not None: 
+        f = open(os.path.join(save_path, 'metrics.txt'), "a")
+    else:
+        f = None
+
+    print('Metrics on y_test and y_test_hat:\n', file=f)
+    print(f'PSNR \tmu = {mean_psnr} \tsigma = {std_psnr}', file=f)
+    print(f'SSIM \tmu = {mean_ssim} \tsigma = {std_ssim}', file=f)
+    print(f'MAE \tmu = {mean_mae} \tsigma = {std_mae}', file=f)
+    print(f'Temporal RMSE \tmu = {mean_temp_rmse} \tsigma = {std_temp_rmse}', file=f)
+    print(f'Temporal Spearman correlation \tmu = {mean_spatial_spearman_corr}', file=f)
+    print(f'Temporal Pearson correlation \tmu = {mean_spatial_pearson_corr}', file=f)
+    print(file=f)
+    print(f'Spatial MSE \tmu = {mean_spatial_rmse} \tsigma = {std_spatial_rmse}', file=f)
+    print(f'Spatial Spearman correlation \tmu = {mean_spatial_spearman_corr} \tsigma = {std_spatial_spearman_corr}', file=f)
+    print(f'Spatial Pearson correlation \tmu = {mean_spatial_pearson_corr} \tsigma = {std_spatial_pearson_corr}', file=f)
+
+    if save_path is not None:
+        f.close()
 
     return spatial_rmse, spatial_pearson_corr
 
