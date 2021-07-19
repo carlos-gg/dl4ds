@@ -1,5 +1,6 @@
 import os
 import numpy as np
+import tensorflow as tf
 
 from .utils import (resize_array, spatial_to_temporal_samples, SPATIAL_MODELS, 
                     SPATIOTEMP_MODELS, POSTUPSAMPLING_METHODS)
@@ -17,7 +18,8 @@ def predict_with_gt(
     mean_std=None,
     save_path=None,
     save_fname='y_hat.npy',
-    return_lr=False):
+    return_lr=False,
+    stochastic_output=False):
     """Predict with a groudtruth. The HR gridded input is downsampled, then 
     super-resolved or downscaled using the trained super-resolution model. 
 
@@ -87,11 +89,8 @@ def predict_with_gt(
             if topography is not None:                                                          
                 x_test_lr[:, :, :, pos['topo']] = topo_interp
             if landocean is not None:
-                x_test_lr[:, :, :, pos['laoc']] = lando_interp
-        
+                x_test_lr[:, :, :, pos['laoc']] = lando_interp        
             print('Downsampled x_test shape: ', x_test_lr.shape)
-
-            x_test_pred = model.predict(x_test_lr)
 
         else:
             x_test_lr = np.zeros((data_test.shape[0], hr_y, hr_x, n_channels))
@@ -113,9 +112,7 @@ def predict_with_gt(
                 x_test_lr[:, :, :, pos['topo']] = topography
             if landocean is not None:
                 x_test_lr[:, :, :, pos['laoc']] = landocean
-        
             print('Downsampled x_test shape: ', x_test_lr.shape)
-            x_test_pred = model.predict(x_test_lr)
     
     elif model_architecture in SPATIOTEMP_MODELS:
         n_samples, n_t, hr_y, hr_x, n_channels = data_test.shape
@@ -134,9 +131,6 @@ def predict_with_gt(
             static_array = np.concatenate([topography, landocean], axis=-1)
             static_array = np.expand_dims(static_array, 0)
             static_array = np.repeat(static_array, n_samples, 0)
-            x_test_pred = model.predict([x_test_lr, static_array])
-        else:
-            x_test_pred = model.predict(x_test_lr)
 
     elif upsampling == 'pin':
         n_samples, n_t, hr_y, hr_x, n_channels = data_test.shape
@@ -154,9 +148,23 @@ def predict_with_gt(
             static_array = np.concatenate([topography, landocean], axis=-1)
             static_array = np.expand_dims(static_array, 0)
             static_array = np.repeat(static_array, n_samples, 0)
-            x_test_pred = model.predict([x_test_lr, static_array])
+
+    ### Casting as TF tensors
+    x_test_lr = tf.cast(x_test_lr, tf.float32)
+    if model_architecture in SPATIAL_MODELS:
+        inputs = x_test_lr
+    elif model_architecture in SPATIOTEMP_MODELS:
+        if topography is not None or landocean is not None:
+            static_array = tf.cast(static_array, tf.float32)
+            inputs = [x_test_lr, static_array]
         else:
-            x_test_pred = model.predict(x_test_lr)
+            inputs = x_test_lr
+    ### Inference
+    # Stochasticity via Dropout. It usually only applies when training (no values 
+    # are dropped during inference). With training=True, the layer will behave 
+    # in training mode and dropout will be applied at inference time
+    x_test_pred = model(inputs, training=stochastic_output)
+    x_test_pred = x_test_pred.numpy()
 
     if mean_std is not None:
         mean, std = mean_std

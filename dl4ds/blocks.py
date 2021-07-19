@@ -121,9 +121,9 @@ class DenseBlock(ConvBlock):
         if self.apply_dropout:
             Y = self.dropout2(Y)
         Y = self.conv2(Y)
-        Y = self.concat([Y, X])
         if self.attention:
             Y = self.att(Y)
+        Y = self.concat([Y, X])
         return Y
 
 
