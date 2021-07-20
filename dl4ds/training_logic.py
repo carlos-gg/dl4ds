@@ -12,7 +12,8 @@ from tensorflow.keras.utils import Progbar
 from matplotlib.pyplot import show
 import horovod.tensorflow.keras as hvd
 
-from .utils import (POSTUPSAMPLING_METHODS, Timing, list_devices, set_gpu_memory_growth, set_visible_gpus, 
+from .utils import (POSTUPSAMPLING_METHODS, Timing, list_devices, 
+                    set_gpu_memory_growth, set_visible_gpus, 
                     checkarg_model, MODELS, SPATIAL_MODELS, SPATIOTEMP_MODELS)
 from .dataloader import DataGenerator, create_batch_hr_lr
 from .losses import mae, mse, dssim, dssim_mae, dssim_mae_mse, dssim_mse
@@ -55,6 +56,8 @@ class Trainer(ABC):
         self.verbose = verbose
         self.save = save
         self.save_path = save_path
+        if self.save_path is None:
+            self.save_path = './'
         self.timing = Timing()
         self.upsampling = model_name.split('_')[-1]
         self.backbone = self.model_name.split('_')[0]
@@ -130,20 +133,24 @@ class Trainer(ABC):
     def run(self):
         pass
 
-    def save_model(self, model_to_save=None, folder_prefix=None):
+    def save_results(self, model_to_save=None, folder_prefix=None):
+        """ 
+        Save the TF model, running time and test score. 
+        """
         if model_to_save is None:
             model_to_save = self.model
 
-        if self.save_path is None:
-            if folder_prefix is not None:
-                self.save_path = './' + folder_prefix + self.model_name + '/'
-            else:
-                self.save_path = './' + self.model_name + '/'
-    
         if self.running_on_first_worker:
-            os.makedirs(self.save_path, exist_ok=True)
-            model_to_save.save(self.save_path, save_format='tf')        
-        
+            if folder_prefix is not None:
+                self.model_save_path = self.save_path + folder_prefix + self.model_name + '/'
+            else:
+                self.model_save_path = self.save_path + self.model_name + '/'
+
+            os.makedirs(self.model_save_path, exist_ok=True)
+            model_to_save.save(self.model_save_path, save_format='tf')        
+            np.save(self.save_path + 'running_time.npy', self.timing.running_time)
+            np.save(self.save_path + 'test_loss.npy', self.test_loss)
+
 
 class SupervisedTrainer(Trainer):
     """Procedure for training the supervised residual models
@@ -255,9 +262,9 @@ class SupervisedTrainer(Trainer):
         save : bool, optional
             Whether to save the final model. 
         save_path : None or str
-            Path for saving the final model. If None, then ``'./saved_model/'`` 
-            is used. The SavedModel format is a directory containing a protobuf 
-            binary and a TensorFlow checkpoint.
+            Path for saving the final model, running time and test score. If 
+            None, then ``'./saved_model/'`` is used. The SavedModel format is a 
+            directory containing a protobuf binary and a TensorFlow checkpoint.
         savecheckpoint_path : None or str
             Path for saving the training checkpoints. If None, then no 
             checkpoints are saved during training. 
@@ -314,7 +321,7 @@ class SupervisedTrainer(Trainer):
         self.setup_model()
         self.run()
         if self.save:
-            self.save_model(self.model)
+            self.save_results(self.model)
 
     def setup_datagen(self):
         """Setting up the data generators
@@ -456,17 +463,17 @@ class SupervisedTrainer(Trainer):
             verbose=self.verbose, 
             callbacks=callbacks,
             use_multiprocessing=self.use_multiprocessing)
-        self.score = self.model.evaluate(
+        self.test_loss = self.model.evaluate(
             self.ds_test, 
             steps=self.test_steps, 
             verbose=verbose)
-        print(f'\nScore on the test set: {self.score}')
+        print(f'\nScore on the test set: {self.test_loss}')
         
         self.timing.runtime()
         
         if self.plot == 'plt':
             if self.save_plot:
-                learning_curve_fname = self.model_name + '_learning_curve.png'
+                learning_curve_fname = self.save_path + self.model_name + '_learning_curve.png'
             else:
                 learning_curve_fname = None
             
@@ -582,7 +589,7 @@ class CGANTrainer(Trainer):
         self.setup_model()
         self.run()
         if self.save:
-            self.save_model(self.generator, folder_prefix='cgan_')
+            self.save_results(self.generator, folder_prefix='cgan_')
 
     def setup_model(self):
         """
@@ -781,8 +788,8 @@ class CGANTrainer(Trainer):
                 input_test = lr_arrtest
             
             y_test_pred = self.generator.predict(input_test)
-            test_loss = self.lossf(hr_arrtest, y_test_pred)
-            print(f'\n{self.lossf.__name__} on the test set: {test_loss}')
+            self.test_loss = self.lossf(hr_arrtest, y_test_pred)
+            print(f'\n{self.lossf.__name__} on the test set: {self.test_loss}')
         
         self.timing.runtime()
 
