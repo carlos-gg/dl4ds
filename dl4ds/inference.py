@@ -41,6 +41,10 @@ def predict(
         Binary land-ocean mask.
     predictors : tuple of 4D ndarrays 
         Predictor variables, with dimensions [nsamples, lat, lon, 1].
+    time_window : int or None, optional
+        If None, then the function assumes the ``model`` is spatial only. If an 
+        integer is given, then the ``model`` should be spatio-temporal and the 
+        samples are pre-processed accordingly.
     interpolation : str, optional
         Interpolation used when upsampling/downsampling the training samples.
         By default 'bicubic'. 
@@ -48,6 +52,12 @@ def predict(
         If not None, the prediction (gridded variable at HR) is saved to disk.
     save_fname : str, optional
         Filename to complete the path were the prediciton is saved. 
+    return_lr : bool, optional
+        If True, the LR array is returned along with the downscaled one. 
+    stochastic_output : bool, optional
+        If True, the output will be stochastic rather than deterministic. This 
+        works only when certain layers, such as dropout, are present in the 
+        trained ``model``.
     """     
     model_architecture = model.name
     upsampling = model_architecture.split('_')[-1]
