@@ -5,7 +5,14 @@ from .blocks import ResidualBlock
 from .utils import POSTUPSAMPLING_METHODS
 
 
-def residual_discriminator(n_channels, model, scale, n_filters, n_res_blocks, normalization=None, attention=False):
+def residual_discriminator(
+    n_channels, 
+    model, 
+    scale, 
+    n_filters, 
+    n_res_blocks, 
+    normalization=None, 
+    attention=False):
     """
     """
     upsampling = model.split('_')[-1]

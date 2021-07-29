@@ -14,8 +14,8 @@ def net_pin(
     n_blocks, 
     n_channels_out=1, 
     activation='relu',
-    dropout_rate=0,
-    dropout_variant=None,
+    dropout_rate=0.2,
+    dropout_variant='spatial',
     normalization=None,
     attention=False,
     output_activation=None):
@@ -76,8 +76,8 @@ def recnet_pin(
     time_window=None, 
     activation='relu',
     normalization=None,
-    dropout_rate=0,
-    dropout_variant=None,
+    dropout_rate=0.2,
+    dropout_variant='spatial',
     attention=False,
     output_activation=None):
     """

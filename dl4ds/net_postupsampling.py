@@ -18,8 +18,8 @@ def net_postupsampling(
     n_blocks, 
     n_channels_out=1, 
     normalization=None,
-    dropout_rate=0,
-    dropout_variant=None,
+    dropout_rate=0.2,
+    dropout_variant='spatial',
     attention=False,
     activation='relu',
     output_activation=None):
@@ -101,8 +101,8 @@ def recnet_postupsampling(
     n_channels_out=1, 
     time_window=None, 
     activation='relu',
-    dropout_rate=0,
-    dropout_variant=None,
+    dropout_rate=0.2,
+    dropout_variant='spatial',
     normalization=None,
     attention=False,
     output_activation=None):
@@ -197,15 +197,22 @@ def subpixel_convolution_layer(x, scale, n_filters, **kwargs):
         return Lambda(pixel_shuffle(scale=factor))(x)
 
     if scale == 2:
-        x = upsample_conv(x, 2, name='conv2d_scale_2', **kwargs)
+        x = upsample_conv(x, 2, name='conv2d_scale_x2', **kwargs)
     elif scale == 4:
-        x = upsample_conv(x, 2, name='conv2d_1of2_scale_2', **kwargs)
-        x = upsample_conv(x, 2, name='conv2d_2of2_scale_2', **kwargs)
+        x = upsample_conv(x, 2, name='conv2d_1of2_scale_x2', **kwargs)
+        x = upsample_conv(x, 2, name='conv2d_2of2_scale_x2', **kwargs)
+    elif scale == 8:
+        x = upsample_conv(x, 2, name='conv2d_1of3_scale_x2', **kwargs)
+        x = upsample_conv(x, 2, name='conv2d_2of3_scale_x2', **kwargs)
+        x = upsample_conv(x, 2, name='conv2d_3of3_scale_x2', **kwargs)
+    elif scale == 10:
+        x = upsample_conv(x, 2, name='conv2d_1of2_scale_x2', **kwargs)
+        x = upsample_conv(x, 5, name='conv2d_2of2_scale_x5', **kwargs)
     elif scale == 20:
-        x = upsample_conv(x, 5, name='conv2d_1of2_scale_5', **kwargs)
-        x = upsample_conv(x, 4, name='conv2d_2of2_scale_4', **kwargs)
+        x = upsample_conv(x, 5, name='conv2d_1of2_scale_x5', **kwargs)
+        x = upsample_conv(x, 4, name='conv2d_2of2_scale_x4', **kwargs)
     else:
-        x = upsample_conv(x, scale, name='conv2d_scale_' + str(scale, **kwargs))
+        x = upsample_conv(x, scale, name='conv2d_scale_x' + str(scale, **kwargs))
     return x
 
 
@@ -222,18 +229,12 @@ def deconvolution_layer(x, scale, output_activation):
     """
     if scale == 4:
         x = Conv2DTranspose(1, (9, 9), strides=(2, 2), padding='same', 
-                            name='deconv_1of2_scale_2')(x)
+                            name='deconv_1of2_scale_x2', use_bias=False)(x)
         x = Conv2DTranspose(1, (9, 9), strides=(2, 2), padding='same', 
-                            name='deconv_2of2_scale_2', 
-                            activation=output_activation)(x)
-    elif scale == 20:
-        x = Conv2DTranspose(1, (9, 9), strides=(4, 4), padding='same', 
-                            name='deconv_1of2_scale_5')(x)
-        x = Conv2DTranspose(1, (9, 9), strides=(5, 5), padding='same', 
-                            name='deconv_2of2_scale_4', 
-                            activation=output_activation)(x)
+                            name='deconv_2of2_scale_x2', 
+                            activation=output_activation, use_bias=False)(x)
     else:
         x = Conv2DTranspose(1, (9, 9), strides=(scale, scale), padding='same', 
-                            name='deconv_scale_' + str(scale, 
-                            activation=output_activation))(x)
+                            name='deconv_scale_x' + str(scale), 
+                            activation=output_activation, use_bias=False)(x)
     return x
