@@ -5,7 +5,7 @@ from tensorflow.keras.layers import (Add, Conv2D, ConvLSTM2D, BatchNormalization
 from .attention import ChannelAttention2D
 
 
-class ConvBlock(tf.keras.Model): 
+class ConvBlock(tf.keras.layers.Layer): 
     """Convolutional block.
     """
     def __init__(self, filters, strides=1, ks_cl1=(3,3), ks_cl2=(3,3), 
@@ -141,7 +141,7 @@ class TransitionBlock(tf.keras.layers.Layer):
         return Y
 
 
-class RecurrentConvBlock(tf.keras.Model): 
+class RecurrentConvBlock(tf.keras.layers.Layer): 
     """Recurrent convolutional block with a skip connection.
     """
     def __init__(self, filters, output_full_sequence, skip_connection_type=None, 
