@@ -29,6 +29,7 @@ class Trainer(ABC):
     def __init__(
         self,
         model_name, 
+        data_train,
         loss='mae',
         batch_size=64, 
         patch_size=None,
@@ -45,6 +46,7 @@ class Trainer(ABC):
         """
         """
         self.model_name = model_name
+        self.data_train = data_train
         self.batch_size = batch_size
         self.patch_size = patch_size
         self.loss = loss
@@ -54,6 +56,7 @@ class Trainer(ABC):
         self.gpu_memory_growth = gpu_memory_growth
         self.use_multiprocessing = use_multiprocessing
         self.verbose = verbose
+        self.model_list = model_list
         self.save = save
         self.save_path = save_path
         if self.save_path is None:
@@ -99,13 +102,21 @@ class Trainer(ABC):
             self.running_on_first_worker = False
 
         ### Checking the model argument
-        if model_list is None:
-            model_list = MODELS
-        self.model_name = checkarg_model(self.model_name, model_list)
+        if self.model_list is None:
+            self.model_list = MODELS
+        self.model_name = checkarg_model(self.model_name, self.model_list)
         
-        ### Checking parameters
-        if self.patch_size is not None and self.patch_size % self.scale != 0:
-            raise ValueError('`patch_size` must be divisible by `scale` (remainder must be zero)')
+        ### Checking scale wrt image size
+        if self.patch_size is not None: 
+            imsize = self.patch_size
+        else:
+            imsize = self.data_train.shape[-2]
+        
+        if self.scale is not None:
+            if imsize % self.scale != 0:
+                msg = 'The image size must be divisible by `scale` (remainder must be zero). '
+                msg += 'Crop the images or set `patch_size` accordingly'
+                raise ValueError(msg)  
 
         if self.time_window is not None and not self.model_is_spatiotemp:
             self.time_window = None
@@ -289,11 +300,10 @@ class SupervisedTrainer(Trainer):
             Dictionary with additional parameters passed to the neural network 
             model.
         """
-        super().__init__(model_name, loss, batch_size, patch_size, scale, 
-                         time_window, device, gpu_memory_growth,
+        super().__init__(model_name, data_train, loss, batch_size, patch_size, 
+                         scale, time_window, device, gpu_memory_growth,
                          use_multiprocessing, verbose, model_list, save, 
                          save_path)
-        self.data_train = data_train
         self.data_val = data_val
         self.data_test = data_test
         self.predictors_train = predictors_train
@@ -560,11 +570,10 @@ class CGANTrainer(Trainer):
             Verbosity mode. False or 0 = silent. True or 1, max amount of 
             information is printed out. When equal 2, then less info is shown.
         """
-        super().__init__(model_name, loss, batch_size, patch_size, scale, 
-                         time_window, device, gpu_memory_growth,
+        super().__init__(model_name, data_train, loss, batch_size, patch_size, 
+                         scale, time_window, device, gpu_memory_growth,
                          verbose=verbose, model_list=model_list, save=save, 
                          save_path=save_path)
-        self.data_train = data_train
         self.data_test = data_test
         self.scale = scale
         self.patch_size = patch_size
