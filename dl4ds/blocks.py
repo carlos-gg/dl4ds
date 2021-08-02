@@ -1,7 +1,7 @@
 import tensorflow as tf
-from tensorflow.keras.layers import (Add, Conv2D, ConvLSTM2D, BatchNormalization, 
-                                     LayerNormalization, Activation, 
-                                     SpatialDropout2D, Concatenate)
+from tensorflow.keras.layers import (Add, Conv2D, ConvLSTM2D, SeparableConv2D, 
+                                     BatchNormalization, LayerNormalization, 
+                                     Activation, SpatialDropout2D, Concatenate)
 from .attention import ChannelAttention2D
 
 
@@ -10,14 +10,20 @@ class ConvBlock(tf.keras.layers.Layer):
     """
     def __init__(self, filters, strides=1, ks_cl1=(3,3), ks_cl2=(3,3), 
                  activation='relu', normalization=None, attention=False, 
-                 dropout_rate=0, dropout_variant=None, **conv_kwargs):
+                 dropout_rate=0, dropout_variant=None, depthwise_separable=False,
+                 **conv_kwargs):
         super().__init__()
         self.normalization = normalization
         self.attention = attention
         self.dropout_variant = dropout_variant
         self.dropout_rate = dropout_rate
-        self.conv1 = Conv2D(filters, padding='same', kernel_size=ks_cl1, strides=strides, **conv_kwargs)
-        self.conv2 = Conv2D(filters, kernel_size=ks_cl2, padding='same', **conv_kwargs)
+        self.depthwise_separable = depthwise_separable
+        if self.depthwise_separable:
+            self.conv1 = SeparableConv2D(filters, kernel_size=ks_cl1, padding='same', strides=strides, **conv_kwargs)
+            self.conv2 = SeparableConv2D(filters, kernel_size=ks_cl2, padding='same', **conv_kwargs)
+        else:
+            self.conv1 = Conv2D(filters, kernel_size=ks_cl1, padding='same', strides=strides, **conv_kwargs)
+            self.conv2 = Conv2D(filters, kernel_size=ks_cl2, padding='same', **conv_kwargs)
         if self.normalization is not None:
             if self.normalization == 'bn':
                 self.norm1 = BatchNormalization()
