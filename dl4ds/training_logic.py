@@ -41,7 +41,8 @@ class Trainer(ABC):
         verbose=True, 
         model_list=None,
         save=True,
-        save_path=None
+        save_path=None,
+        show_plot=False,
         ):
         """
         """
@@ -59,9 +60,12 @@ class Trainer(ABC):
         self.model_list = model_list
         self.save = save
         self.save_path = save_path
+        self.show_plot = show_plot
         if self.save_path is None:
             self.save_path = './'
-        self.timing = Timing()
+        else:
+            if not self.save_path.endswith('/'):
+                self.save_path += '/'
         self.upsampling = model_name.split('_')[-1]
         self.backbone = self.model_name.split('_')[0]
         if self.backbone.startswith('rec'):
@@ -144,23 +148,37 @@ class Trainer(ABC):
     def run(self):
         pass
 
+    @abstractmethod
+    def setup_datagen(self):
+        pass
+
+    @abstractmethod
+    def setup_model(self):
+        pass
+
     def save_results(self, model_to_save=None, folder_prefix=None):
         """ 
-        Save the TF model, running time and test score. 
+        Save the TF model, learning curve, running time and test score. 
         """
-        if model_to_save is None:
-            model_to_save = self.model
+        if self.save:     
+            if model_to_save is None:
+                model_to_save = self.model
 
-        if self.running_on_first_worker:
             if folder_prefix is not None:
                 self.model_save_path = self.save_path + folder_prefix + self.model_name + '/'
             else:
                 self.model_save_path = self.save_path + self.model_name + '/'
 
-            os.makedirs(self.model_save_path, exist_ok=True)
-            model_to_save.save(self.model_save_path, save_format='tf')        
-            np.save(self.save_path + 'running_time.npy', self.timing.running_time)
-            np.save(self.save_path + 'test_loss.npy', self.test_loss)
+            if self.running_on_first_worker:
+                os.makedirs(self.model_save_path, exist_ok=True)
+                model_to_save.save(self.model_save_path, save_format='tf')        
+                np.savetxt(self.save_path + 'running_time.txt', [self.timing.running_time], fmt='%s')
+                np.savetxt(self.save_path + 'test_loss.txt', [self.test_loss], fmt='%0.6f')
+
+            learning_curve_fname = self.save_path + 'learning_curve.png'
+            plot_history(self.fithist.history, path=learning_curve_fname)
+            if self.show_plot:
+                show()
 
 
 class SupervisedTrainer(Trainer):
@@ -196,16 +214,14 @@ class SupervisedTrainer(Trainer):
         early_stopping=False, 
         patience=6, 
         min_delta=0, 
-        plot='plt', 
         show_plot=True, 
-        save_plot=False,
         save=False,
         save_path=None, 
         savecheckpoint_path='./checkpoints/',
         verbose=True,
         **architecture_params
         ):
-        """Procedure for training the supervised residual models
+        """Procedure for training supervised models
 
         Parameters
         ----------
@@ -285,10 +301,6 @@ class SupervisedTrainer(Trainer):
             By default, TensorFlow maps nearly all of the GPU memory of all GPUs.
             If True, we request to only grow the memory usage as is needed by 
             the process.
-        plot : str, optional
-            Either 'plt' for static plot of the learning curves or 'llp' for 
-            interactive plotting (useful on jupyterlab as an alternative to 
-            Tensorboard).
         show_plot : bool, optional
             If True the static plot is shown after training. 
         save_plot : bool, optional
@@ -303,7 +315,7 @@ class SupervisedTrainer(Trainer):
         super().__init__(model_name, data_train, loss, batch_size, patch_size, 
                          scale, time_window, device, gpu_memory_growth,
                          use_multiprocessing, verbose, model_list, save, 
-                         save_path)
+                         save_path, show_plot)
         self.data_val = data_val
         self.data_test = data_test
         self.predictors_train = predictors_train
@@ -322,17 +334,9 @@ class SupervisedTrainer(Trainer):
         self.patience = patience
         self.min_delta = min_delta
         self.savecheckpoint_path = savecheckpoint_path
-        self.plot = plot
         self.show_plot = show_plot
-        self.save_plot = save_plot
         self.architecture_params = architecture_params
-
-        self.setup_datagen()
-        self.setup_model()
-        self.run()
-        if self.save:
-            self.save_results(self.model)
-
+        
     def setup_datagen(self):
         """Setting up the data generators
         """
@@ -408,6 +412,10 @@ class SupervisedTrainer(Trainer):
     def run(self):
         """Compiling, training and saving the model
         """
+        self.timing = Timing(self.verbose)
+        self.setup_datagen()
+        self.setup_model()
+
         ### Setting up the optimizer
         if isinstance(self.learning_rate, tuple):
             ### Adam optimizer with a scheduler 
@@ -426,10 +434,6 @@ class SupervisedTrainer(Trainer):
             earlystop = EarlyStopping(monitor='val_loss', mode='min', patience=self.patience, 
                                       min_delta=self.min_delta, verbose=self.verbose)
             callbacks.append(earlystop)
-        # loss plotting
-        if self.plot == 'llp':
-            plotlosses = livelossplot.PlotLossesKerasTF()
-            callbacks.append(plotlosses) 
 
         # Horovod: add Horovod DistributedOptimizer.
         self.optimizer = hvd.DistributedOptimizer(self.optimizer)
@@ -477,20 +481,13 @@ class SupervisedTrainer(Trainer):
             self.ds_test, 
             steps=self.test_steps, 
             verbose=verbose)
-        print(f'\nScore on the test set: {self.test_loss}')
+        
+        if self.verbose:
+            print(f'\nScore on the test set: {self.test_loss}')
         
         self.timing.runtime()
-        
-        if self.plot == 'plt':
-            if self.save_plot:
-                learning_curve_fname = self.save_path + self.model_name + '_learning_curve.png'
-            else:
-                learning_curve_fname = None
-            
-            if self.running_on_first_worker:
-                plot_history(self.fithist.history, path=learning_curve_fname)
-                if self.show_plot:
-                    show()
+
+        self.save_results(self.model)
 
 
 class CGANTrainer(Trainer):
@@ -573,7 +570,7 @@ class CGANTrainer(Trainer):
         super().__init__(model_name, data_train, loss, batch_size, patch_size, 
                          scale, time_window, device, gpu_memory_growth,
                          verbose=verbose, model_list=model_list, save=save, 
-                         save_path=save_path)
+                         save_path=save_path, show_plot=False)
         self.data_test = data_test
         self.scale = scale
         self.patch_size = patch_size
@@ -597,8 +594,7 @@ class CGANTrainer(Trainer):
 
         self.setup_model()
         self.run()
-        if self.save:
-            self.save_results(self.generator, folder_prefix='cgan_')
+        self.save_results(self.generator, folder_prefix='cgan_')
 
     def setup_model(self):
         """
