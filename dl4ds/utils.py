@@ -3,18 +3,7 @@ import tensorflow as tf
 import cv2
 from datetime import datetime
 
-
-BACKBONE_BLOCKS = ('convnet', 'resnet', 'densenet')
-PREFIX_SAMPLE_TYPE = ('', 'rec')
-NETS = [p + b for p in PREFIX_SAMPLE_TYPE for b in BACKBONE_BLOCKS]
-UPSAMPLING_METHODS = ('spc',  # pixel shuffle or subpixel convolution in post-upscaling
-                      'rc',  # resize convolution in post-upscaling
-                      'dc',  # deconvolution or transposed convolution in post-upscaling
-                      'pin')  # pre-upsampling via (bicubic) interpolation
-POSTUPSAMPLING_METHODS = ('spc', 'rc', 'dc')
-SPATIAL_MODELS = [p + '_' + u for p in BACKBONE_BLOCKS for u in UPSAMPLING_METHODS]
-SPATIOTEMP_MODELS = ['rec' + p + '_' + u for p in BACKBONE_BLOCKS for u in UPSAMPLING_METHODS]
-MODELS = [n + '_' + u for n in NETS for u in UPSAMPLING_METHODS]
+from . import MODELS, BACKBONE_BLOCKS, UPSAMPLING_METHODS
 
 
 def spatial_to_temporal_samples(array, time_window):

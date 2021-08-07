@@ -5,7 +5,8 @@ import sys
 sys.path.append('/gpfs/home/bsc32/bsc32409/src/ecubevis/')
 import ecubevis as ecv
 
-from .utils import (crop_array, resize_array, checkarg_model, POSTUPSAMPLING_METHODS)
+from . import POSTUPSAMPLING_METHODS
+from .utils import crop_array, resize_array, checkarg_model
 
 
 def create_pair_temp_hr_lr(

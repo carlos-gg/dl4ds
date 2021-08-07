@@ -2,8 +2,8 @@ import os
 import numpy as np
 import tensorflow as tf
 
-from .utils import (resize_array, spatial_to_temporal_samples, SPATIAL_MODELS, 
-                    SPATIOTEMP_MODELS, POSTUPSAMPLING_METHODS)
+from .utils import resize_array, spatial_to_temporal_samples
+from . import SPATIAL_MODELS, SPATIOTEMP_MODELS, POSTUPSAMPLING_METHODS
 
 
 def predict(

@@ -2,7 +2,7 @@ import tensorflow as tf
 from tensorflow.keras.layers import (Input, Dropout, Dense, Conv2D, Add, Concatenate, 
                                      GlobalAveragePooling2D, Cropping2D)
 from .blocks import ResidualBlock
-from .utils import POSTUPSAMPLING_METHODS
+from . import POSTUPSAMPLING_METHODS
 
 
 def residual_discriminator(

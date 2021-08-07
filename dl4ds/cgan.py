@@ -9,8 +9,8 @@ import horovod.tensorflow as hvd
 from .net_preupsampling import net_pin, recnet_pin
 from .net_postupsampling import net_postupsampling, recnet_postupsampling
 from .discriminator import residual_discriminator
-from .utils import (checkarg_model, POSTUPSAMPLING_METHODS, SPATIAL_MODELS, 
-                    SPATIOTEMP_MODELS)
+from .utils import checkarg_model
+from . import POSTUPSAMPLING_METHODS, SPATIAL_MODELS, SPATIOTEMP_MODELS
 
 
 def load_checkpoint(checkpoint_dir, checkpoint_number, scale, model='resnet_spc', 

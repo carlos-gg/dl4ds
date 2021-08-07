@@ -12,9 +12,9 @@ from tensorflow.keras.utils import Progbar
 from matplotlib.pyplot import show
 import horovod.tensorflow.keras as hvd
 
-from .utils import (POSTUPSAMPLING_METHODS, Timing, list_devices, 
-                    set_gpu_memory_growth, set_visible_gpus, 
-                    checkarg_model, MODELS, SPATIAL_MODELS, SPATIOTEMP_MODELS)
+from . import POSTUPSAMPLING_METHODS, MODELS, SPATIAL_MODELS, SPATIOTEMP_MODELS
+from .utils import (Timing, list_devices, set_gpu_memory_growth, 
+                    set_visible_gpus, checkarg_model)
 from .dataloader import DataGenerator, create_batch_hr_lr
 from .losses import mae, mse, dssim, dssim_mae, dssim_mae_mse, dssim_mse
 from .net_preupsampling import net_pin, recnet_pin
