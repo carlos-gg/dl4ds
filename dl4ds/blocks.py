@@ -1,7 +1,7 @@
 import tensorflow as tf
 from tensorflow.keras.layers import (Add, Conv2D, ConvLSTM2D, SeparableConv2D, 
                                      BatchNormalization, LayerNormalization, 
-                                     Activation, SpatialDropout2D, 
+                                     Activation, SpatialDropout2D, Conv2DTranspose, 
                                      SpatialDropout3D, Concatenate)
 from .attention import ChannelAttention2D
 
@@ -208,3 +208,90 @@ class RecurrentConvBlock(tf.keras.layers.Layer):
             Y = self.convlstm3(Y)
         return Y
 
+
+class SubpixelConvolution(tf.keras.layers.Layer):
+    """
+    """
+    def __init__(self, scale, n_filters, **kwargs):
+        """
+        See: https://arxiv.org/abs/1609.05158
+        """
+        super().__init__()
+        self.scale = scale
+        self.n_filters = n_filters
+        self.conv = Conv2D(self.n_filters * (self.scale ** 2), 3, padding='same', **kwargs)
+        self.conv2x = Conv2D(self.n_filters * (2 ** 2), 3, padding='same', **kwargs)
+        self.conv5x = Conv2D(self.n_filters * (5 ** 2), 3, padding='same', **kwargs)
+
+
+    def upsample_conv(self, x, factor):
+        """Sub-pixel convolution (pixel shuffle)
+        """
+        if factor == 2:
+            x = self.conv2x(x)
+        elif factor == 5:
+            x = self.conv5x(x)
+        else:
+            x = self.conv(x)
+        return tf.nn.depth_to_space(x, factor)
+
+    def compute_output_shape(self, input_shape):
+        return (input_shape[0], int(input_shape[1] * self.scale), 
+                int(input_shape[2] * self.scale), input_shape[3])
+
+    def call(self, x):
+        """ """
+        if self.scale == 2:
+            x = self.upsample_conv(x, 2)
+        elif self.scale == 4:
+            x = self.upsample_conv(x, 2)
+            x = self.upsample_conv(x, 2)
+        elif self.scale == 8:
+            x = self.upsample_conv(x, 2)
+            x = self.upsample_conv(x, 2)
+            x = self.upsample_conv(x, 2)
+        elif self.scale == 10:
+            x = self.upsample_conv(x, 2)
+            x = self.upsample_conv(x, 5)
+        elif self.scale == 20:
+            x = self.upsample_conv(x, 2)
+            x = self.upsample_conv(x, 2)
+            x = self.upsample_conv(x, 5)
+        else:
+            x = self.upsample_conv(x, self.scale)
+        return x
+
+
+class Deconvolution(tf.keras.layers.Layer):
+    """
+    FSRCNN: https://arxiv.org/abs/1608.00367
+    """
+    def __init__(self, scale, n_filters, output_activation=None):
+        """
+        """
+        super().__init__()
+        self.scale = scale
+        self.output_activation = output_activation
+        self.conv2dtranspose1 = Conv2DTranspose(n_filters, (9, 9), strides=(2, 2), 
+            padding='same', name='deconv_1of2_scale_x2', use_bias=False)
+        self.conv2dtranspose2 = Conv2DTranspose(n_filters, (9, 9), strides=(2, 2), 
+            padding='same', name='deconv_2of2_scale_x2', 
+            activation=output_activation, use_bias=False)
+        self.conv2dtranspose = Conv2DTranspose(n_filters, (9, 9), 
+            strides=(self.scale, self.scale), padding='same', 
+            name='deconv_scale_x' + str(self.scale), 
+            activation=output_activation, use_bias=False)
+
+    def compute_output_shape(self, input_shape):
+        return (input_shape[0], int(input_shape[1] * self.scale), 
+                int(input_shape[2] * self.scale), input_shape[3])
+
+    def call(self, x):
+        """
+        """
+        if self.scale == 4:
+            x = self.conv2dtranspose1(x)
+            x = self.conv2dtranspose2(x)
+        else:
+            x = self.conv2dtranspose(x)
+        return x
