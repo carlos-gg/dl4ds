@@ -1,3 +1,4 @@
+import tensorflow as tf
 from tensorflow.keras.layers import (Add, Conv2D, Input, Concatenate, Dropout, 
                                      GaussianDropout)
 from tensorflow.keras.models import Model
@@ -74,6 +75,7 @@ def recnet_pin(
     n_blocks, 
     n_channels_out=1, 
     time_window=None, 
+    return_sequence=False,
     activation='relu',
     normalization=None,
     dropout_rate=0.2,
@@ -94,22 +96,32 @@ def recnet_pin(
     else:
         x_n_channels = n_channels
 
-    x_in = Input(shape=(time_window, None, None, x_n_channels))
+    x_in = Input(shape=(None, None, None, x_n_channels))
     if backbone_block == 'convnet':
         skipcon = None
     elif backbone_block == 'resnet':
         skipcon = 'residual'
     elif backbone_block == 'densenet':
         skipcon = 'dense'
-    x = b = RecurrentConvBlock(n_filters, output_full_sequence=False, skip_connection_type=skipcon,  
-                               activation=activation, normalization=normalization)(x_in)
+
+    x = b = RecurrentConvBlock(
+        n_filters, 
+        output_full_sequence=return_sequence, 
+        skip_connection_type=skipcon,  
+        activation=activation, 
+        normalization=normalization)(x_in)
 
     if static_arr:
         s_in = Input(shape=(None, None, static_n_channels))
+        if return_sequence:
+            s_in_concat = tf.expand_dims(s_in, 1)
+            s_in_concat = tf.repeat(s_in_concat, time_window, axis=1)
+        else:
+            s_in_concat = s_in
         x = Conv2D(n_filters - static_n_channels, (1, 1), padding='same')(x)
-        x = Concatenate()([x, s_in])
+        x = Concatenate()([x, s_in_concat])
         b = Conv2D(n_filters - static_n_channels, (1, 1), padding='same')(b)
-        b = Concatenate()([b, s_in])
+        b = Concatenate()([b, s_in_concat])
 
     for i in range(n_blocks):
         if backbone_block == 'convnet':
