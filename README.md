@@ -19,3 +19,4 @@ For adversarial training, we traing a discriminator network simultaneosly as we 
 multiple predictors and static information such as the elevation and the land-ocean mask.
 
 DL4DS is built on top of Tensorflow/Keras and supports distributed GPU training (data parallelism) thanks to Horovod.
+

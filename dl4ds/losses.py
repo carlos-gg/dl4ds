@@ -35,10 +35,7 @@ def dssim(y_true, y_pred):
     maxv = tfk.maximum(tfk.max(y_true), tfk.max(y_pred))
     minv = tfk.minimum(tfk.min(y_true), tfk.min(y_pred))
     drange = maxv - minv
-    if len(y_true.get_shape()) == 5:
-        ssim = tf.image.ssim(y_true[:,:,:,:,0], y_pred[:,:,:,:,0], drange) 
-    elif len(y_true.get_shape()) in [3, 4]:
-        ssim = tf.image.ssim(y_true, y_pred, drange)
+    ssim = tf.image.ssim(y_true, y_pred, drange)
     dssim = tf.reduce_mean(1 - ssim / 2.0)
     return dssim
 
