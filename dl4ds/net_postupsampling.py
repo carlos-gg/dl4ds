@@ -1,12 +1,14 @@
 import tensorflow as tf
-from tensorflow.keras.layers import (Add, Conv2D, Input, Lambda, UpSampling2D, 
-                                     Dropout, GaussianDropout, Concatenate, 
-                                     Conv2DTranspose)
+from tensorflow.keras.layers import (Add, Conv2D, Input, UpSampling2D, Dropout, 
+                                     GaussianDropout, Concatenate, 
+                                     TimeDistributed)
 from tensorflow.keras.models import Model
 
 from .blocks import (RecurrentConvBlock, ResidualBlock, ConvBlock, 
-                     DenseBlock, TransitionBlock)
-from .utils import checkarg_backbone, checkarg_upsampling, checkarg_dropout_variant
+                     DenseBlock, TransitionBlock, SubpixelConvolution, 
+                     Deconvolution)
+from .utils import (checkarg_backbone, checkarg_upsampling, 
+                    checkarg_dropout_variant)
 
 
 def net_postupsampling(
@@ -80,13 +82,13 @@ def net_postupsampling(
     
     model_name = backbone_block + '_' + upsampling
     if upsampling == 'spc':
-        x = subpixel_convolution_layer(x, scale, n_filters)
+        x = SubpixelConvolution(scale, n_filters)(x)
         x = Conv2D(n_channels_out, (3, 3), padding='same', activation=output_activation)(x)
     elif upsampling == 'rc':
         x = UpSampling2D(scale, interpolation='bilinear')(x)
         x = Conv2D(n_channels_out, (3, 3), padding='same', activation=output_activation)(x)
     elif upsampling == 'dc':
-        x = deconvolution_layer(x, scale, output_activation)
+        x = Deconvolution(scale, n_channels_out, output_activation)(x)
     
     return Model(inputs=x_in, outputs=x, name=model_name)  
 
@@ -98,8 +100,10 @@ def recnet_postupsampling(
     n_channels, 
     n_filters, 
     n_blocks, 
+    lr_size,
+    time_window, 
+    return_sequence=False,
     n_channels_out=1, 
-    time_window=None, 
     activation='relu',
     dropout_rate=0.2,
     dropout_variant='spatial',
@@ -124,42 +128,66 @@ def recnet_postupsampling(
     else:
         x_n_channels = n_channels
 
-    x_in = Input(shape=(time_window, None, None, x_n_channels))
+    h_lr = lr_size[0]
+    w_lr = lr_size[1]
+
+    x_in = Input(shape=(None, None, None, x_n_channels))
     if backbone_block == 'convnet':
         skipcon = None
     elif backbone_block == 'resnet':
         skipcon = 'residual'
     elif backbone_block == 'densenet':
         skipcon = 'dense'
+    
     x = b = RecurrentConvBlock(
-        n_filters, output_full_sequence=False, skip_connection_type=skipcon,  
-        activation=activation, normalization=normalization)(x_in)
+        n_filters, 
+        output_full_sequence=return_sequence, 
+        skip_connection_type=skipcon,  
+        activation=activation, 
+        normalization=normalization)(x_in)
 
     if static_arr:
         s_in = Input(shape=(None, None, static_n_channels))
-        x = Conv2D(n_filters - static_n_channels, (1, 1), padding='same')(x)
-        x = Concatenate()([x, s_in])
-        b = Conv2D(n_filters - static_n_channels, (1, 1), padding='same')(b)
-        b = Concatenate()([b, s_in])
+        s_in_lr = tf.image.resize(images=s_in, size=(h_lr, w_lr), method='bilinear')
 
-    for i in range(n_blocks):
-        if backbone_block == 'convnet':
-            b = ConvBlock(
-                n_filters, activation=activation, dropout_rate=dropout_rate, 
-                dropout_variant=dropout_variant, normalization=normalization, 
-                attention=attention)(b)
-        elif backbone_block == 'resnet':
-            b = ResidualBlock(
-                n_filters, activation=activation, dropout_rate=dropout_rate, 
-                dropout_variant=dropout_variant, normalization=normalization, 
-                attention=attention)(b)
-        elif backbone_block == 'densenet':
-            b = DenseBlock(
-                n_filters, activation=activation, dropout_rate=dropout_rate, 
-                dropout_variant=dropout_variant, normalization=normalization, 
-                attention=attention)(b)
-            b = TransitionBlock(n_filters // 2)(b)  # another option: half of the DenseBlock channels
-    b = Conv2D(n_filters, (3, 3), padding='same')(b)
+        if return_sequence:
+            s_in_lr = tf.expand_dims(s_in_lr, 1)
+            s_in_lr = tf.repeat(s_in_lr, time_window, axis=1)
+        
+        x = Conv2D(n_filters - static_n_channels, (1, 1), padding='same')(x)
+        x = Concatenate()([x, s_in_lr])
+        b = Conv2D(n_filters - static_n_channels, (1, 1), padding='same')(b)
+        b = Concatenate()([b, s_in_lr])
+
+    if return_sequence:
+        b = RecurrentConvBlock(
+            n_filters, 
+            output_full_sequence=return_sequence, 
+            skip_connection_type=skipcon,  
+            activation=activation, 
+            normalization='ln',
+            dropout_rate=dropout_rate,
+            dropout_variant=dropout_variant)(b)
+    else:
+        for i in range(n_blocks):
+            if backbone_block == 'convnet':
+                b = ConvBlock(
+                    n_filters, activation=activation, dropout_rate=dropout_rate, 
+                    dropout_variant=dropout_variant, normalization=normalization, 
+                    attention=attention)(b)
+            elif backbone_block == 'resnet':
+                b = ResidualBlock(
+                    n_filters, activation=activation, dropout_rate=dropout_rate, 
+                    dropout_variant=dropout_variant, normalization=normalization, 
+                    attention=attention)(b)
+            elif backbone_block == 'densenet':
+                b = DenseBlock(
+                    n_filters, activation=activation, dropout_rate=dropout_rate, 
+                    dropout_variant=dropout_variant, normalization=normalization, 
+                    attention=attention)(b)
+                b = TransitionBlock(n_filters // 2)(b)  # another option: half of the DenseBlock channels
+        b = Conv2D(n_filters, (3, 3), padding='same')(b)     
+    
     if dropout_rate > 0:
         if dropout_variant is None:
             b = Dropout(dropout_rate)(b)
@@ -173,14 +201,33 @@ def recnet_postupsampling(
     elif backbone_block == 'densenet':
         x = Concatenate()([x, b])
     
-    if upsampling == 'spc':
-        x = subpixel_convolution_layer(x, scale, n_filters)
-        x = Conv2D(n_channels_out, (3, 3), padding='same', activation=output_activation)(x)
-    elif upsampling == 'rc':
-        x = UpSampling2D(scale, interpolation='bilinear')(x)
-        x = Conv2D(n_channels_out, (3, 3), padding='same', activation=output_activation)(x)
-    elif upsampling == 'dc':
-        x = deconvolution_layer(x, scale, output_activation)
+    if return_sequence:
+        if upsampling == 'spc':
+            upsampling_layer = SubpixelConvolution(scale, n_filters)
+        elif upsampling == 'rc':
+            upsampling_layer = UpSampling2D(scale, interpolation='bilinear')
+        elif upsampling == 'dc':
+            upsampling_layer = Deconvolution(scale, n_filters)
+        x = TimeDistributed(upsampling_layer, name='upsampling_' + upsampling)(x)
+    else:
+        if upsampling == 'spc':
+            x = SubpixelConvolution(scale, n_filters)(x)
+        elif upsampling == 'rc':
+            x = UpSampling2D(scale, interpolation='bilinear')(x)
+        elif upsampling == 'dc':
+            x = Deconvolution(scale, n_channels_out, output_activation)(x)  
+            
+    # concatenating the HR version of the static array
+    if static_arr:
+        # x = Concatenate()([x, s_in])
+        s = ConvBlock(n_filters, activation=activation, dropout_rate=0, 
+                        normalization=None, attention=False)(s_in)
+        if return_sequence:
+            s = tf.expand_dims(s, 1)
+            s = tf.repeat(s, time_window, axis=1)
+        x = Concatenate()([x, s])
+        
+    x = Conv2D(n_channels_out, (3, 3), padding='same', activation=output_activation)(x)
 
     model_name = 'rec' + backbone_block + '_' + upsampling
     if static_arr:
@@ -188,53 +235,3 @@ def recnet_postupsampling(
     else:
         return Model(inputs=x_in, outputs=x, name=model_name)
 
-
-def subpixel_convolution_layer(x, scale, n_filters, **kwargs):
-    def upsample_conv(x, factor, **kwargs):
-        """Sub-pixel convolution
-        """
-        x = Conv2D(n_filters * (factor ** 2), 3, padding='same', **kwargs)(x)
-        return Lambda(pixel_shuffle(scale=factor))(x)
-
-    if scale == 2:
-        x = upsample_conv(x, 2, name='conv2d_scale_x2', **kwargs)
-    elif scale == 4:
-        x = upsample_conv(x, 2, name='conv2d_1of2_scale_x2', **kwargs)
-        x = upsample_conv(x, 2, name='conv2d_2of2_scale_x2', **kwargs)
-    elif scale == 8:
-        x = upsample_conv(x, 2, name='conv2d_1of3_scale_x2', **kwargs)
-        x = upsample_conv(x, 2, name='conv2d_2of3_scale_x2', **kwargs)
-        x = upsample_conv(x, 2, name='conv2d_3of3_scale_x2', **kwargs)
-    elif scale == 10:
-        x = upsample_conv(x, 2, name='conv2d_1of2_scale_x2', **kwargs)
-        x = upsample_conv(x, 5, name='conv2d_2of2_scale_x5', **kwargs)
-    elif scale == 20:
-        x = upsample_conv(x, 5, name='conv2d_1of2_scale_x5', **kwargs)
-        x = upsample_conv(x, 4, name='conv2d_2of2_scale_x4', **kwargs)
-    else:
-        x = upsample_conv(x, scale, name='conv2d_scale_x' + str(scale, **kwargs))
-    return x
-
-
-def pixel_shuffle(scale):
-    """
-    See: https://arxiv.org/abs/1609.05158
-    """
-    return lambda x: tf.nn.depth_to_space(x, scale)
-
-
-def deconvolution_layer(x, scale, output_activation):
-    """
-    FSRCNN: https://arxiv.org/abs/1608.00367
-    """
-    if scale == 4:
-        x = Conv2DTranspose(1, (9, 9), strides=(2, 2), padding='same', 
-                            name='deconv_1of2_scale_x2', use_bias=False)(x)
-        x = Conv2DTranspose(1, (9, 9), strides=(2, 2), padding='same', 
-                            name='deconv_2of2_scale_x2', 
-                            activation=output_activation, use_bias=False)(x)
-    else:
-        x = Conv2DTranspose(1, (9, 9), strides=(scale, scale), padding='same', 
-                            name='deconv_scale_x' + str(scale), 
-                            activation=output_activation, use_bias=False)(x)
-    return x
