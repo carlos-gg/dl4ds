@@ -16,6 +16,14 @@ def spatial_to_temporal_samples(array, time_window):
     return array_out
 
 
+def checkarray_ndim(array, ndim=3, add_axis_position=-1):
+    """ """
+    if not array.ndim == ndim:
+        return np.expand_dims(array, axis=add_axis_position)
+    else:
+        return array
+
+
 def checkarg_model(model, model_list=MODELS):
     """ """
     if not isinstance(model, str) or model not in model_list:
