@@ -196,14 +196,17 @@ def recnet_postupsampling(
     
     if backbone_block == 'convnet':
         x = b
+        n_filters_spc = n_filters
     elif backbone_block == 'resnet':
         x = Add()([x, b])
+        n_filters_spc = n_filters
     elif backbone_block == 'densenet':
         x = Concatenate()([x, b])
+        n_filters_spc = x.get_shape()[-1]
     
     if return_sequence:
         if upsampling == 'spc':
-            upsampling_layer = SubpixelConvolution(scale, n_filters)
+            upsampling_layer = SubpixelConvolution(scale, n_filters_spc)
         elif upsampling == 'rc':
             upsampling_layer = UpSampling2D(scale, interpolation='bilinear')
         elif upsampling == 'dc':
@@ -211,11 +214,11 @@ def recnet_postupsampling(
         x = TimeDistributed(upsampling_layer, name='upsampling_' + upsampling)(x)
     else:
         if upsampling == 'spc':
-            x = SubpixelConvolution(scale, n_filters)(x)
+            x = SubpixelConvolution(scale, n_filters_spc)(x)
         elif upsampling == 'rc':
             x = UpSampling2D(scale, interpolation='bilinear')(x)
         elif upsampling == 'dc':
-            x = Deconvolution(scale, n_channels_out, output_activation)(x)  
+            x = Deconvolution(scale, n_filters)(x)  
             
     # concatenating the HR version of the static array
     if static_arr:
