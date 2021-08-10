@@ -152,7 +152,6 @@ def recnet_pin(
     elif backbone_block == 'resnet':
         x = Add()([x, b])
     elif backbone_block == 'densenet':
-
         x = Concatenate()([x, b])
     
     x = Conv2D(n_channels_out, (3, 3), padding='same', activation=output_activation)(x)

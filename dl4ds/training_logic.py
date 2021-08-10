@@ -149,10 +149,6 @@ class Trainer(ABC):
         pass
 
     @abstractmethod
-    def setup_datagen(self):
-        pass
-
-    @abstractmethod
     def setup_model(self):
         pass
 
@@ -175,10 +171,11 @@ class Trainer(ABC):
                 np.savetxt(self.save_path + 'running_time.txt', [self.timing.running_time], fmt='%s')
                 np.savetxt(self.save_path + 'test_loss.txt', [self.test_loss], fmt='%0.6f')
 
-            learning_curve_fname = self.save_path + 'learning_curve.png'
-            plot_history(self.fithist.history, path=learning_curve_fname)
-            if self.show_plot:
-                show()
+            if hasattr(self, 'fithist'):
+                learning_curve_fname = self.save_path + 'learning_curve.png'
+                plot_history(self.fithist.history, path=learning_curve_fname)
+                if self.show_plot:
+                    show()
 
 
 class SupervisedTrainer(Trainer):
@@ -205,6 +202,7 @@ class SupervisedTrainer(Trainer):
         interpolation='bicubic', 
         patch_size=50, 
         time_window=None,
+        return_sequence=False,
         epochs=60, 
         steps_per_epoch=None, 
         validation_steps=None, 
@@ -239,15 +237,18 @@ class SupervisedTrainer(Trainer):
         data_test : 4D ndarray
             Testing dataset with dims [nsamples, lat, lon, 1]. Holdout not used
             during training. 
-        predictors_train : tuple of 4D ndarray, optional
-            Predictor variables for trianing. Given as tuple of 4D ndarray with 
-            dims [nsamples, lat, lon, 1]. 
-        predictors_val : tuple of 4D ndarray, optional
-            Predictor variables for validation. Given as tuple of 4D ndarray 
-            with dims [nsamples, lat, lon, 1]. 
-        predictors_test : tuple of 4D ndarray, optional
-            Predictor variables for testing. Given as tuple of 4D ndarray with 
-            dims [nsamples, lat, lon, 1]. 
+        predictors_train : list of ndarray, optional
+            Predictor variables for trianing. Given as list of 4D ndarrays with 
+            dims [nsamples, lat, lon, 1] or 5D ndarrays with dims 
+            [nsamples, time, lat, lon, 1]. 
+        predictors_val : list of ndarray, optional
+            Predictor variables for validation. Given as list of 4D ndarrays
+            with dims [nsamples, lat, lon, 1] or 5D ndarrays with dims 
+            [nsamples, time, lat, lon, 1]. 
+        predictors_test : list of ndarrays, optional
+            Predictor variables for testing. Given as list of 4D ndarrays with 
+            dims [nsamples, lat, lon, 1] or 5D ndarrays with dims 
+            [nsamples, time, lat, lon, 1]. 
         topography : None or 2D ndarray, optional
             Elevation data.
         landocean : None or 2D ndarray, optional
@@ -319,10 +320,17 @@ class SupervisedTrainer(Trainer):
         self.data_val = data_val
         self.data_test = data_test
         self.predictors_train = predictors_train
-        self.predictors_val = predictors_val
+        if self.predictors_train is not None and not isinstance(self.predictors_train, list):
+            raise TypeError('`predictors_train` must be a list of ndarrays')
         self.predictors_test = predictors_test
+        if self.predictors_test is not None and not isinstance(self.predictors_test, list):
+            raise TypeError('`predictors_test` must be a list of ndarrays')
+        self.predictors_val = predictors_val
+        if self.predictors_val is not None and not isinstance(self.predictors_val, list):
+            raise TypeError('`predictors_val` must be a list of ndarrays')
         self.topography = topography 
         self.landocean = landocean
+        self.return_sequence = return_sequence
         self.interpolation = interpolation 
         self.epochs = epochs
         self.steps_per_epoch = steps_per_epoch
@@ -348,7 +356,8 @@ class SupervisedTrainer(Trainer):
             patch_size=self.patch_size, 
             model=self.model_name, 
             interpolation=self.interpolation,
-            time_window=self.time_window)
+            time_window=self.time_window,
+            return_sequence=self.return_sequence)
         self.ds_train = DataGenerator(self.data_train, predictors=self.predictors_train, **datagen_params)
         self.ds_val = DataGenerator(self.data_val, predictors=self.predictors_val, **datagen_params)
         self.ds_test = DataGenerator(self.data_test, predictors=self.predictors_test, **datagen_params)
@@ -376,6 +385,12 @@ class SupervisedTrainer(Trainer):
                 n_st_channels += 1
             n_channels = (n_var_channels, n_st_channels)
 
+            if self.patch_size is None:
+                lr_height = int(self.data_train.shape[1] / self.scale)
+                lr_width = int(self.data_train.shape[2] / self.scale)
+            else:
+                lr_height = lr_width = int(self.patch_size / self.scale)
+
         ### instantiating and fitting the model
         if self.upsampling in POSTUPSAMPLING_METHODS:
             if not self.model_is_spatiotemp:
@@ -391,7 +406,9 @@ class SupervisedTrainer(Trainer):
                     upsampling=self.upsampling, 
                     scale=self.scale, 
                     n_channels=n_channels, 
+                    lr_size=(lr_height, lr_width),
                     time_window=self.time_window, 
+                    return_sequence=self.return_sequence,
                     **self.architecture_params)
         elif self.upsampling == 'pin':
             if not self.model_is_spatiotemp:
@@ -404,6 +421,7 @@ class SupervisedTrainer(Trainer):
                     backbone_block=self.backbone,
                     n_channels=n_channels, 
                     time_window=self.time_window, 
+                    return_sequence=self.return_sequence,
                     **self.architecture_params)
 
         if self.verbose == 1 and self.running_on_first_worker:
@@ -498,9 +516,12 @@ class CGANTrainer(Trainer):
         model_name,
         data_train,
         data_test,
+        predictors_train=None,
+        predictors_test=None,
         scale=5, 
         patch_size=50, 
         time_window=None,
+        return_sequence=False,
         loss='mae',
         epochs=60, 
         batch_size=16,
@@ -529,11 +550,19 @@ class CGANTrainer(Trainer):
         model_name : str
             String with the name of the model architecture, either 'resnet_spc', 
             'resnet_bi' or 'resnet_rc'. Used as a the CGAN generator.
-        x_train : 4D ndarray
+        data_train : 4D ndarray
             Training dataset with dims [nsamples, lat, lon, 1].
-        x_test : 4D ndarray
+        data_test : 4D ndarray
             Testing dataset with dims [nsamples, lat, lon, 1]. Holdout not used
             during training. 
+        predictors_train : list of ndarray, optional
+            Predictor variables for trianing. Given as list of 4D ndarrays with 
+            dims [nsamples, lat, lon, 1] or 5D ndarrays with dims 
+            [nsamples, time, lat, lon, 1]. 
+        predictors_test : list of ndarray, optional
+            Predictor variables for testing. Given as list of 4D ndarrays with 
+            dims [nsamples, lat, lon, 1] or 5D ndarrays with dims 
+            [nsamples, time, lat, lon, 1]. 
         epochs : int, optional
             Number of epochs or passes through the whole training dataset. 
         steps_per_epoch : int, optional
@@ -575,6 +604,13 @@ class CGANTrainer(Trainer):
         self.scale = scale
         self.patch_size = patch_size
         self.time_window = time_window
+        self.predictors_train = predictors_train
+        if self.predictors_train is not None and not isinstance(self.predictors_train, list):
+            raise TypeError('`predictors_train` must be a list of ndarrays')
+        self.predictors_test = predictors_test
+        if self.predictors_test is not None and not isinstance(self.predictors_test, list):
+            raise TypeError('`predictors_test` must be a list of ndarrays')
+        self.return_sequence = return_sequence
         self.epochs = epochs
         self.learning_rates = learning_rates
         self.steps_per_epoch = steps_per_epoch
@@ -592,10 +628,6 @@ class CGANTrainer(Trainer):
         self.gen_pxloss = []
         self.disc = []
 
-        self.setup_model()
-        self.run()
-        self.save_results(self.generator, folder_prefix='cgan_')
-
     def setup_model(self):
         """
         """
@@ -606,18 +638,24 @@ class CGANTrainer(Trainer):
                 n_channels += 1
             if self.landocean is not None:
                 n_channels += 1
-            # if self.predictors_train is not None:
-            #     n_channels += len(self.predictors_train)
+            if self.predictors_train is not None:
+                n_channels += len(self.predictors_train)
         elif self.model_name in SPATIOTEMP_MODELS:
             n_var_channels = self.data_train.shape[-1]
             n_st_channels = 0
-            # if self.predictors_train is not None:
-            #     n_var_channels += len(self.predictors_train)
+            if self.predictors_train is not None:
+                n_var_channels += len(self.predictors_train)
             if self.topography is not None:
                 n_st_channels += 1
             if self.landocean is not None:
                 n_st_channels += 1
             n_channels = (n_var_channels, n_st_channels)
+
+            if self.patch_size is None:
+                lr_height = int(self.data_train.shape[1] / self.scale)
+                lr_width = int(self.data_train.shape[2] / self.scale)
+            else:
+                lr_height = lr_width = int(self.patch_size / self.scale)  
 
         # Generator
         if self.upsampling in POSTUPSAMPLING_METHODS:
@@ -634,7 +672,9 @@ class CGANTrainer(Trainer):
                     upsampling=self.upsampling, 
                     scale=self.scale, 
                     n_channels=n_channels, 
+                    lr_size=(lr_height, lr_width),
                     time_window=self.time_window, 
+                    return_sequence=self.return_sequence,
                     **self.generator_params)
         elif self.upsampling == 'pin':
             if not self.model_is_spatiotemp:
@@ -647,6 +687,7 @@ class CGANTrainer(Trainer):
                     backbone_block=self.backbone,
                     n_channels=n_channels, 
                     time_window=self.time_window, 
+                    return_sequence=self.return_sequence,
                     **self.generator_params)
 
         # Discriminator
@@ -654,6 +695,7 @@ class CGANTrainer(Trainer):
         self.discriminator = residual_discriminator(n_channels=n_channels_disc, 
                                                     scale=self.scale, 
                                                     model=self.model_name,
+                                                    return_sequence=self.return_sequence,
                                                     **self.discriminator_params)
         
         if self.verbose == 1 and self.running_on_first_worker:
@@ -663,6 +705,9 @@ class CGANTrainer(Trainer):
     def run(self):
         """
         """
+        self.timing = Timing(self.verbose)
+        self.setup_model()
+
         # Optimizers
         if isinstance(self.learning_rates, tuple):
             genlr, dislr = self.learning_rates
@@ -673,7 +718,8 @@ class CGANTrainer(Trainer):
         
         if self.save_logs:
             log_dir = "cgan_logs/"
-            summary_writer = tf.summary.create_file_writer(log_dir + "fit/" + datetime.datetime.now().strftime("%Y%m%d-%H%M%S"))
+            log_path = log_dir + "fit/" + datetime.datetime.now().strftime("%Y%m%d-%H%M%S")
+            summary_writer = tf.summary.create_file_writer(log_path)
         else:
             summary_writer = None
 
@@ -688,6 +734,12 @@ class CGANTrainer(Trainer):
         if self.steps_per_epoch is None:
             self.steps_per_epoch = int(n_samples / self.batch_size)
 
+        # creating a single ndarrays concatenating list of ndarray variables along the last dimension 
+        if self.predictors_train is not None:
+            self.predictors_train = np.concatenate(self.predictors_train, axis=-1)
+        else:
+            self.predictors_train = None
+
         for epoch in range(self.epochs):
             print(f'\nEpoch {epoch+1}/{self.epochs}')
             pb_i = Progbar(self.steps_per_epoch, stateful_metrics=['gen_total_loss', 
@@ -699,14 +751,15 @@ class CGANTrainer(Trainer):
                 res = create_batch_hr_lr(
                     self.data_train,
                     batch_size=self.global_batch_size,
-                    tuple_predictors=None, 
+                    predictors=self.predictors_train, 
                     scale=self.scale, 
                     topography=self.topography, 
                     landocean=self.landocean, 
                     patch_size=self.patch_size, 
                     time_window=self.time_window,
                     model=self.model_name, 
-                    interpolation=self.interpolation)
+                    interpolation=self.interpolation,
+                    return_sequence=self.return_sequence)
 
                 hr_array = res[0]
                 lr_array = res[1]
@@ -720,16 +773,17 @@ class CGANTrainer(Trainer):
                 losses = train_step(
                     lr_array, 
                     hr_array, 
-                    self.generator, 
-                    self.discriminator, 
-                    generator_optimizer, 
-                    discriminator_optimizer, 
-                    epoch, 
-                    self.lossf,
-                    summary_writer, 
+                    generator=self.generator, 
+                    discriminator=self.discriminator, 
+                    generator_optimizer=generator_optimizer, 
+                    discriminator_optimizer=discriminator_optimizer, 
+                    epoch=epoch, 
+                    gen_pxloss_function=self.lossf,
+                    summary_writer=summary_writer, 
                     first_batch=True if epoch==0 and i==0 else False,
                     static_array=static_array,
-                    time_window=self.time_window)
+                    time_window=self.time_window,
+                    return_sequence=self.return_sequence)
                 
                 gen_total_loss, gen_gan_loss, gen_px_loss, disc_loss = losses
                 lossvals = [('gen_total_loss', gen_total_loss), 
@@ -764,13 +818,18 @@ class CGANTrainer(Trainer):
         self.timing.checktime()
 
         ### Loss on the Test set
+        if self.predictors_test is not None:
+            self.predictors_test = np.concatenate(self.predictors_test, axis=-1)
+        else:
+            self.predictors_test = None
+            
         if self.running_on_first_worker:
             test_steps = int(self.data_test.shape[0] / self.batch_size)
             
             res = create_batch_hr_lr(
                 self.data_test,
                 batch_size=test_steps,
-                tuple_predictors=None, 
+                predictors=self.predictors_test, 
                 scale=self.scale, 
                 topography=self.topography, 
                 landocean=self.landocean, 
@@ -778,6 +837,7 @@ class CGANTrainer(Trainer):
                 time_window=self.time_window,
                 model=self.model_name, 
                 interpolation=self.interpolation,
+                return_sequence=self.return_sequence,
                 shuffle=False)
 
             hr_arrtest = tf.cast(res[0], tf.float32)
@@ -797,4 +857,7 @@ class CGANTrainer(Trainer):
             print(f'\n{self.lossf.__name__} on the test set: {self.test_loss}')
         
         self.timing.runtime()
+
+        self.save_results(self.generator, folder_prefix='cgan_')
+        
 
