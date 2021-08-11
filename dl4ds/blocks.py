@@ -3,6 +3,9 @@ from tensorflow.keras.layers import (Add, Conv2D, ConvLSTM2D, SeparableConv2D,
                                      BatchNormalization, LayerNormalization, 
                                      Activation, SpatialDropout2D, Conv2DTranspose, 
                                      SpatialDropout3D, Concatenate)
+from tensorflow_addons.layers import (WeightNormalization, SpectralNormalization,
+                                      InstanceNormalization)
+
 from .attention import ChannelAttention2D
 
 
@@ -25,13 +28,23 @@ class ConvBlock(tf.keras.layers.Layer):
         else:
             self.conv1 = Conv2D(filters, kernel_size=ks_cl1, padding='same', strides=strides, **conv_kwargs)
             self.conv2 = Conv2D(filters, kernel_size=ks_cl2, padding='same', **conv_kwargs)
-        if self.normalization is not None:
-            if self.normalization == 'bn':
-                self.norm1 = BatchNormalization()
-                self.norm2 = BatchNormalization()
-            elif self.normalization == 'ln':
-                self.norm1 = LayerNormalization()
-                self.norm2 = LayerNormalization()
+
+        if self.normalization == 'bn':
+            self.norm1 = BatchNormalization()
+            self.norm2 = BatchNormalization()
+        elif self.normalization == 'ln':
+            self.norm1 = LayerNormalization()
+            self.norm2 = LayerNormalization()
+        elif self.normalization == 'wn':
+            self.norm1 = WeightNormalization()
+            self.norm2 = WeightNormalization()
+        elif self.normalization == 'sn':
+            self.norm1 = SpectralNormalization()
+            self.norm2 = SpectralNormalization()
+        elif self.normalization == 'in':
+            self.norm1 = InstanceNormalization()
+            self.norm2 = InstanceNormalization()
+
         if self.attention:
             self.att = ChannelAttention2D(filters)
         self.activation = Activation(activation)
@@ -167,11 +180,23 @@ class RecurrentConvBlock(tf.keras.layers.Layer):
         self.convlstm2 = ConvLSTM2D(filters, kernel_size=ks_cl2, return_sequences=True, padding='same', **conv_kwargs)
         if not self.output_full_sequence:
             self.convlstm3 = ConvLSTM2D(filters, kernel_size=ks_cl3, return_sequences=False, padding='same', **conv_kwargs)
-        if self.normalization is not None:
-            if self.normalization == 'bn':
-                self.norm = BatchNormalization()
-            elif self.normalization == 'ln':
-                self.norm = LayerNormalization()
+ 
+        if self.normalization == 'bn':
+            self.norm1 = BatchNormalization()
+            self.norm2 = BatchNormalization()
+        elif self.normalization == 'ln':
+            self.norm1 = LayerNormalization()
+            self.norm2 = LayerNormalization()
+        elif self.normalization == 'wn':
+            self.norm1 = WeightNormalization()
+            self.norm2 = WeightNormalization()
+        elif self.normalization == 'sn':
+            self.norm1 = SpectralNormalization()
+            self.norm2 = SpectralNormalization()
+        elif self.normalization == 'in':
+            self.norm1 = InstanceNormalization()
+            self.norm2 = InstanceNormalization()
+
         self.activation = Activation(activation)
         if self.skip_connection_type == 'residual':
             self.skipcon = Add()
@@ -193,12 +218,15 @@ class RecurrentConvBlock(tf.keras.layers.Layer):
             Y = self.convlstm1(X)
         
         if self.normalization is not None:
-            Y = self.norm(Y)
+            Y = self.norm1(Y)
+        
         Y = self.activation(Y)
         
         Y = self.convlstm2(Y)
+        
         if self.normalization is not None:
-            Y = self.norm(Y)
+            Y = self.norm2(Y)
+        
         if self.skip_connection_type is not None:
             Y = self.skipcon([Y, Y_c])
         
