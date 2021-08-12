@@ -309,7 +309,8 @@ def create_pair_hr_lr(
 def create_batch_hr_lr(x_train, batch_size, predictors, scale, topography, 
                        landocean, patch_size, time_window, return_sequence, 
                        model, interpolation, shuffle=True):
-    """Create a batch of HR/LR samples. Used in the training of the CGAN models.
+    """Create a batch of HR/LR samples. Used in the adversarial conditional 
+    training.
     """
     if time_window is None:
         if shuffle:
@@ -342,7 +343,8 @@ def create_batch_hr_lr(x_train, batch_size, predictors, scale, topography,
     
     else:
         if shuffle:
-            indices = np.random.choice(np.arange(time_window, x_train.shape[0]), batch_size, replace=False)
+            rangevec = np.arange(time_window, x_train.shape[0])
+            indices = np.random.choice(rangevec, batch_size, replace=False)
         else:
             indices = np.arange(time_window, x_train.shape[0])
         batch_hr_images = []
@@ -370,6 +372,10 @@ def create_batch_hr_lr(x_train, batch_size, predictors, scale, topography,
                 batch_lr_images.append(lr_array)
                 batch_hr_images.append(hr_array)
                 batch_static_images.append(static_array)
+            else:
+                hr_array, lr_array = res 
+                batch_lr_images.append(lr_array)
+                batch_hr_images.append(hr_array)
 
         batch_lr_images = np.asarray(batch_lr_images)
         batch_hr_images = np.asarray(batch_hr_images) 
