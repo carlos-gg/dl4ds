@@ -2,6 +2,7 @@ import tensorflow as tf
 from tensorflow.keras.layers import (Input, Dropout, Dense, Conv2D, Add, 
                                      Concatenate, GlobalAveragePooling2D, 
                                      GlobalAveragePooling3D, Cropping2D)
+
 from .blocks import ResidualBlock, RecurrentConvBlock
 from . import POSTUPSAMPLING_METHODS
 
@@ -55,6 +56,7 @@ def residual_discriminator(
     b = Conv2D(n_filters, (3, 3), padding='same')(b)
     x_1 = Add()([x_1, b])
     
+    # Branch with the HR reference or HR generated array
     if return_sequence:
         x_ref = Input(shape=(None, None, None, 1))
     else:

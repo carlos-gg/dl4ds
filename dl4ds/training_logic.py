@@ -1,7 +1,6 @@
 import os
 import datetime
 import numpy as np
-import livelossplot
 import tensorflow as tf
 from abc import ABC, abstractmethod
 from plot_keras_history import plot_history
@@ -34,7 +33,6 @@ class Trainer(ABC):
         batch_size=64, 
         patch_size=None,
         scale=4,
-        time_window=None,
         device='GPU', 
         gpu_memory_growth=True,
         use_multiprocessing=False,
@@ -52,7 +50,6 @@ class Trainer(ABC):
         self.patch_size = patch_size
         self.loss = loss
         self.scale = scale
-        self.time_window = time_window
         self.device = device
         self.gpu_memory_growth = gpu_memory_growth
         self.use_multiprocessing = use_multiprocessing
@@ -121,12 +118,6 @@ class Trainer(ABC):
                 msg = 'The image size must be divisible by `scale` (remainder must be zero). '
                 msg += 'Crop the images or set `patch_size` accordingly'
                 raise ValueError(msg)  
-
-        if self.time_window is not None and not self.model_is_spatiotemp:
-            self.time_window = None
-        if self.model_is_spatiotemp and self.time_window is None:
-            msg = f'``model={self.model_name}``, the argument ``time_window`` must be a postive integer'
-            raise ValueError(msg)
 
         ### Choosing the loss function
         if loss == 'mae':  
@@ -215,7 +206,7 @@ class SupervisedTrainer(Trainer):
         show_plot=True, 
         save=False,
         save_path=None, 
-        savecheckpoint_path='./checkpoints/',
+        savecheckpoint_path=None,
         verbose=True,
         **architecture_params
         ):
@@ -314,7 +305,7 @@ class SupervisedTrainer(Trainer):
             model.
         """
         super().__init__(model_name, data_train, loss, batch_size, patch_size, 
-                         scale, time_window, device, gpu_memory_growth,
+                         scale, device, gpu_memory_growth,
                          use_multiprocessing, verbose, model_list, save, 
                          save_path, show_plot)
         self.data_val = data_val
@@ -344,7 +335,13 @@ class SupervisedTrainer(Trainer):
         self.savecheckpoint_path = savecheckpoint_path
         self.show_plot = show_plot
         self.architecture_params = architecture_params
-        
+        self.time_window = time_window
+        if self.time_window is not None and not self.model_is_spatiotemp:
+            self.time_window = None
+        if self.model_is_spatiotemp and self.time_window is None:
+            msg = f'``model={self.model_name}``, the argument ``time_window`` must be a postive integer'
+            raise ValueError(msg)
+
     def setup_datagen(self):
         """Setting up the data generators
         """
@@ -534,7 +531,7 @@ class CGANTrainer(Trainer):
         topography=None, 
         landocean=None, 
         checkpoints_frequency=5, 
-        savecheckpoint_path='./checkpoints/',
+        savecheckpoint_path=None,
         save=False,
         save_path=None,
         save_logs=False,
@@ -597,7 +594,7 @@ class CGANTrainer(Trainer):
             information is printed out. When equal 2, then less info is shown.
         """
         super().__init__(model_name, data_train, loss, batch_size, patch_size, 
-                         scale, time_window, device, gpu_memory_growth,
+                         scale, device, gpu_memory_growth,
                          verbose=verbose, model_list=model_list, save=save, 
                          save_path=save_path, show_plot=False)
         self.data_test = data_test
@@ -627,6 +624,13 @@ class CGANTrainer(Trainer):
         self.gengan = []
         self.gen_pxloss = []
         self.disc = []
+
+        self.time_window = time_window
+        if self.time_window is not None and not self.model_is_spatiotemp:
+            self.time_window = None
+        if self.model_is_spatiotemp and self.time_window is None:
+            msg = f'``model={self.model_name}``, the argument ``time_window`` must be a postive integer'
+            raise ValueError(msg)
 
     def setup_model(self):
         """

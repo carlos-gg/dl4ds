@@ -165,7 +165,7 @@ def recnet_postupsampling(
             output_full_sequence=return_sequence, 
             skip_connection_type=skipcon,  
             activation=activation, 
-            normalization='ln',
+            normalization=normalization,
             dropout_rate=dropout_rate,
             dropout_variant=dropout_variant)(b)
     else:
