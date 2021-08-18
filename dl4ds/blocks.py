@@ -3,8 +3,6 @@ from tensorflow.keras.layers import (Add, Conv2D, ConvLSTM2D, SeparableConv2D,
                                      BatchNormalization, LayerNormalization, 
                                      Activation, SpatialDropout2D, Conv2DTranspose, 
                                      SpatialDropout3D, Concatenate)
-from tensorflow_addons.layers import (WeightNormalization, SpectralNormalization,
-                                      InstanceNormalization)
 
 from .attention import ChannelAttention2D
 
@@ -35,15 +33,6 @@ class ConvBlock(tf.keras.layers.Layer):
         elif self.normalization == 'ln':
             self.norm1 = LayerNormalization()
             self.norm2 = LayerNormalization()
-        elif self.normalization == 'wn':
-            self.norm1 = WeightNormalization()
-            self.norm2 = WeightNormalization()
-        elif self.normalization == 'sn':
-            self.norm1 = SpectralNormalization()
-            self.norm2 = SpectralNormalization()
-        elif self.normalization == 'in':
-            self.norm1 = InstanceNormalization()
-            self.norm2 = InstanceNormalization()
 
         if self.attention:
             self.att = ChannelAttention2D(filters)
@@ -187,15 +176,6 @@ class RecurrentConvBlock(tf.keras.layers.Layer):
         elif self.normalization == 'ln':
             self.norm1 = LayerNormalization()
             self.norm2 = LayerNormalization()
-        elif self.normalization == 'wn':
-            self.norm1 = WeightNormalization()
-            self.norm2 = WeightNormalization()
-        elif self.normalization == 'sn':
-            self.norm1 = SpectralNormalization()
-            self.norm2 = SpectralNormalization()
-        elif self.normalization == 'in':
-            self.norm1 = InstanceNormalization()
-            self.norm2 = InstanceNormalization()
 
         self.activation = Activation(activation)
         if self.skip_connection_type == 'residual':
