@@ -151,20 +151,17 @@ class TransitionBlock(tf.keras.layers.Layer):
 
 
 class RecurrentConvBlock(tf.keras.layers.Layer): 
-    """Recurrent convolutional block with a skip connection.
+    """Recurrent convolutional block.
     """
-    def __init__(self, filters, output_full_sequence, skip_connection_type=None, 
-                 ks_cl1=(3,3), ks_cl2=(3,3), ks_cl3=(3,3), activation='relu', 
+    def __init__(self, filters, output_full_sequence, ks_cl1=(3,3), 
+                 ks_cl2=(3,3), ks_cl3=(3,3), activation='relu', 
                  normalization=None, dropout_rate=0, dropout_variant=None, 
                  **conv_kwargs):
         super().__init__()
         self.normalization = normalization
         self.output_full_sequence = output_full_sequence
-        self.skip_connection_type = skip_connection_type
         self.dropout_rate = dropout_rate
         self.dropout_variant = dropout_variant
-        if self.skip_connection_type is not None:
-            self.convlstm0 = ConvLSTM2D(filters, kernel_size=ks_cl1, return_sequences=True, padding='same', **conv_kwargs)
         self.convlstm1 = ConvLSTM2D(filters, kernel_size=ks_cl1, return_sequences=True, padding='same', **conv_kwargs)
         self.convlstm2 = ConvLSTM2D(filters, kernel_size=ks_cl2, return_sequences=True, padding='same', **conv_kwargs)
         if not self.output_full_sequence:
@@ -178,10 +175,7 @@ class RecurrentConvBlock(tf.keras.layers.Layer):
             self.norm2 = LayerNormalization()
 
         self.activation = Activation(activation)
-        if self.skip_connection_type == 'residual':
-            self.skipcon = Add()
-        elif self.skip_connection_type == 'dense':
-            self.skipcon = Concatenate()
+        self.skipconnection = Add()
         # Only spatial dropout is applied inside convolutional blocks
         if self.dropout_variant == 'spatial' and self.dropout_rate > 0:
             self.apply_dropout = True
@@ -191,27 +185,15 @@ class RecurrentConvBlock(tf.keras.layers.Layer):
     def call(self, X):
         """Model's forward pass. 
         """
-        if self.skip_connection_type is not None:
-            Y_c = self.convlstm0(X)
-            Y = self.convlstm1(Y_c)
-        else:
-            Y = self.convlstm1(X)
-        
+        Y = self.convlstm1(X)
+        Y = self.convlstm1(X)
         if self.normalization is not None:
             Y = self.norm1(Y)
-        
         Y = self.activation(Y)
-        
         Y = self.convlstm2(Y)
-        
         if self.normalization is not None:
             Y = self.norm2(Y)
-        
-        if self.skip_connection_type is not None:
-            Y = self.skipcon([Y, Y_c])
-        
         Y = self.activation(Y)
-        
         if not self.output_full_sequence:
             Y = self.convlstm3(Y)
         return Y
