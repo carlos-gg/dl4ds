@@ -158,7 +158,7 @@ class Trainer(ABC):
 
             if self.running_on_first_worker:
                 os.makedirs(self.model_save_path, exist_ok=True)
-                model_to_save.save(self.model_save_path, save_format='tf')        
+                model_to_save.save(self.model_save_path, save_format='tf', save_traces=False)        
                 np.savetxt(self.save_path + 'running_time.txt', [self.timing.running_time], fmt='%s')
                 np.savetxt(self.save_path + 'test_loss.txt', [self.test_loss], fmt='%0.6f')
 
