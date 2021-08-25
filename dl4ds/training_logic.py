@@ -8,7 +8,7 @@ from tensorflow.keras.optimizers import Adam
 from tensorflow.keras.optimizers.schedules import PiecewiseConstantDecay
 from tensorflow.keras.callbacks import EarlyStopping
 from tensorflow.keras.utils import Progbar
-from matplotlib.pyplot import show
+from matplotlib.pyplot import show, close
 import horovod.tensorflow.keras as hvd
 
 from . import POSTUPSAMPLING_METHODS, MODELS, SPATIAL_MODELS, SPATIOTEMP_MODELS
@@ -167,6 +167,8 @@ class Trainer(ABC):
                 plot_history(self.fithist.history, path=learning_curve_fname)
                 if self.show_plot:
                     show()
+                else:
+                    close()
 
 
 class SupervisedTrainer(Trainer):
@@ -193,7 +195,6 @@ class SupervisedTrainer(Trainer):
         interpolation='bicubic', 
         patch_size=50, 
         time_window=None,
-        return_sequence=False,
         epochs=60, 
         steps_per_epoch=None, 
         validation_steps=None, 
@@ -321,7 +322,6 @@ class SupervisedTrainer(Trainer):
             raise TypeError('`predictors_val` must be a list of ndarrays')
         self.topography = topography 
         self.landocean = landocean
-        self.return_sequence = return_sequence
         self.interpolation = interpolation 
         self.epochs = epochs
         self.steps_per_epoch = steps_per_epoch
@@ -353,8 +353,7 @@ class SupervisedTrainer(Trainer):
             patch_size=self.patch_size, 
             model=self.model_name, 
             interpolation=self.interpolation,
-            time_window=self.time_window,
-            return_sequence=self.return_sequence)
+            time_window=self.time_window)
         self.ds_train = DataGenerator(self.data_train, predictors=self.predictors_train, **datagen_params)
         self.ds_val = DataGenerator(self.data_val, predictors=self.predictors_val, **datagen_params)
         self.ds_test = DataGenerator(self.data_test, predictors=self.predictors_test, **datagen_params)
@@ -405,7 +404,6 @@ class SupervisedTrainer(Trainer):
                     n_channels=n_channels, 
                     lr_size=(lr_height, lr_width),
                     time_window=self.time_window, 
-                    return_sequence=self.return_sequence,
                     **self.architecture_params)
         elif self.upsampling == 'pin':
             if not self.model_is_spatiotemp:
@@ -418,7 +416,6 @@ class SupervisedTrainer(Trainer):
                     backbone_block=self.backbone,
                     n_channels=n_channels, 
                     time_window=self.time_window, 
-                    return_sequence=self.return_sequence,
                     **self.architecture_params)
 
         if self.verbose == 1 and self.running_on_first_worker:
@@ -469,7 +466,7 @@ class SupervisedTrainer(Trainer):
         if self.savecheckpoint_path is not None:
             os.makedirs(self.savecheckpoint_path, exist_ok=True)
             model_checkpoint_callback = tf.keras.callbacks.ModelCheckpoint(
-                os.path.join(self.savecheckpoint_path, './checkpoint_epoch-{epoch:02d}.h5'),
+                os.path.join(self.savecheckpoint_path, './checkpoint_best_model'), 
                 save_weights_only=False,
                 monitor='val_loss',
                 mode='min',
@@ -518,7 +515,6 @@ class CGANTrainer(Trainer):
         scale=5, 
         patch_size=50, 
         time_window=None,
-        return_sequence=False,
         loss='mae',
         epochs=60, 
         batch_size=16,
@@ -607,7 +603,6 @@ class CGANTrainer(Trainer):
         self.predictors_test = predictors_test
         if self.predictors_test is not None and not isinstance(self.predictors_test, list):
             raise TypeError('`predictors_test` must be a list of ndarrays')
-        self.return_sequence = return_sequence
         self.epochs = epochs
         self.learning_rates = learning_rates
         self.steps_per_epoch = steps_per_epoch
@@ -678,7 +673,6 @@ class CGANTrainer(Trainer):
                     n_channels=n_channels, 
                     lr_size=(lr_height, lr_width),
                     time_window=self.time_window, 
-                    return_sequence=self.return_sequence,
                     **self.generator_params)
         elif self.upsampling == 'pin':
             if not self.model_is_spatiotemp:
@@ -691,7 +685,6 @@ class CGANTrainer(Trainer):
                     backbone_block=self.backbone,
                     n_channels=n_channels, 
                     time_window=self.time_window, 
-                    return_sequence=self.return_sequence,
                     **self.generator_params)
 
         # Discriminator
@@ -699,7 +692,6 @@ class CGANTrainer(Trainer):
         self.discriminator = residual_discriminator(n_channels=n_channels_disc, 
                                                     scale=self.scale, 
                                                     model=self.model_name,
-                                                    return_sequence=self.return_sequence,
                                                     **self.discriminator_params)
         
         if self.verbose == 1 and self.running_on_first_worker:
@@ -762,8 +754,7 @@ class CGANTrainer(Trainer):
                     patch_size=self.patch_size, 
                     time_window=self.time_window,
                     model=self.model_name, 
-                    interpolation=self.interpolation,
-                    return_sequence=self.return_sequence)
+                    interpolation=self.interpolation)
 
                 hr_array = res[0]
                 lr_array = res[1]
@@ -786,8 +777,7 @@ class CGANTrainer(Trainer):
                     summary_writer=summary_writer, 
                     first_batch=True if epoch==0 and i==0 else False,
                     static_array=static_array,
-                    time_window=self.time_window,
-                    return_sequence=self.return_sequence)
+                    time_window=self.time_window)
                 
                 gen_total_loss, gen_gan_loss, gen_px_loss, disc_loss = losses
                 lossvals = [('gen_total_loss', gen_total_loss), 
@@ -841,7 +831,6 @@ class CGANTrainer(Trainer):
                 time_window=self.time_window,
                 model=self.model_name, 
                 interpolation=self.interpolation,
-                return_sequence=self.return_sequence,
                 shuffle=False)
 
             hr_arrtest = tf.cast(res[0], tf.float32)

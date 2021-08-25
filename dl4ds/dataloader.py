@@ -18,8 +18,7 @@ def create_pair_temp_hr_lr(
     predictors=None, 
     model='resnet_spc',
     debug=False, 
-    interpolation='bicubic',
-    return_sequence=False):
+    interpolation='bicubic'):
     """
     Create a pair of HR and LR square sub-patches with a temporal window. In 
     this case, the LR corresponds to a coarsen version of the HR reference. If
@@ -101,10 +100,7 @@ def create_pair_temp_hr_lr(
         else:
             static_array = landocean
     
-    if return_sequence:
-        hr_array = np.asarray(hr_array[:,:,:,0], 'float32')  # keeping the target variable and full sequence
-    else:
-        hr_array = np.asarray(hr_array[-1,:,:,0], 'float32')  # keeping the target variable and last time slice
+    hr_array = np.asarray(hr_array[:,:,:,0], 'float32')  # keeping the target variable
     hr_array = np.expand_dims(hr_array, -1)
     lr_array = np.asarray(lr_array, 'float32')
     if static_array is not None:
@@ -307,8 +303,8 @@ def create_pair_hr_lr(
 
 
 def create_batch_hr_lr(x_train, batch_size, predictors, scale, topography, 
-                       landocean, patch_size, time_window, return_sequence, 
-                       model, interpolation, shuffle=True):
+                       landocean, patch_size, time_window, model, interpolation, 
+                       shuffle=True):
     """Create a batch of HR/LR samples. Used in the adversarial conditional 
     training.
     """
@@ -364,7 +360,6 @@ def create_batch_hr_lr(x_train, batch_size, predictors, scale, topography,
                 patch_size=patch_size, 
                 model=model, 
                 interpolation=interpolation,
-                return_sequence=return_sequence,
                 **params)
 
             if topography is not None or landocean is not None:
@@ -401,7 +396,6 @@ class DataGenerator(tf.keras.utils.Sequence):
         batch_size=32, 
         patch_size=None,
         time_window=None,
-        return_sequence=False,
         topography=None, 
         landocean=None, 
         predictors=None,
@@ -427,7 +421,6 @@ class DataGenerator(tf.keras.utils.Sequence):
         self.scale = scale
         self.patch_size = patch_size
         self.time_window = time_window
-        self.return_sequence = return_sequence
         self.topography = topography
         self.landocean = landocean
         self.predictors = predictors
@@ -515,7 +508,6 @@ class DataGenerator(tf.keras.utils.Sequence):
                     landocean=self.landocean, 
                     model=self.model,
                     interpolation=self.interpolation,
-                    return_sequence=self.return_sequence,
                     **params)
                 if self.topography is not None or self.landocean is not None:
                     hr_array, lr_array, static_array = res
