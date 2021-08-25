@@ -1,7 +1,8 @@
 import tensorflow as tf
-from tensorflow.keras.layers import (Add, Conv2D, ConvLSTM2D, SeparableConv2D, 
-                                     BatchNormalization, LayerNormalization, 
-                                     Activation, SpatialDropout2D, Conv2DTranspose, 
+from tensorflow.keras.layers import (Add, Conv2D, ConvLSTM2D, 
+                                     SeparableConv2D, BatchNormalization, 
+                                     LayerNormalization, Activation, 
+                                     SpatialDropout2D, Conv2DTranspose, 
                                      SpatialDropout3D, Concatenate)
 
 from .attention import ChannelAttention2D
@@ -153,19 +154,19 @@ class TransitionBlock(tf.keras.layers.Layer):
 class RecurrentConvBlock(tf.keras.layers.Layer): 
     """Recurrent convolutional block.
     """
-    def __init__(self, filters, output_full_sequence, ks_cl1=(3,3), 
-                 ks_cl2=(3,3), ks_cl3=(3,3), activation='relu', 
+    def __init__(self, filters, ks_cl1=(5,5), ks_cl2=(3,3), activation='relu', 
                  normalization=None, dropout_rate=0, dropout_variant=None, 
                  **conv_kwargs):
         super().__init__()
         self.normalization = normalization
-        self.output_full_sequence = output_full_sequence
         self.dropout_rate = dropout_rate
         self.dropout_variant = dropout_variant
-        self.convlstm1 = ConvLSTM2D(filters, kernel_size=ks_cl1, return_sequences=True, padding='same', **conv_kwargs)
-        self.convlstm2 = ConvLSTM2D(filters, kernel_size=ks_cl2, return_sequences=True, padding='same', **conv_kwargs)
-        if not self.output_full_sequence:
-            self.convlstm3 = ConvLSTM2D(filters, kernel_size=ks_cl3, return_sequences=False, padding='same', **conv_kwargs)
+        self.convlstm1 = ConvLSTM2D(
+            filters, kernel_size=ks_cl1, return_sequences=True, padding='same', 
+            **conv_kwargs)
+        self.convlstm2 = ConvLSTM2D(
+            filters, kernel_size=ks_cl2, return_sequences=True, padding='same', 
+            **conv_kwargs)
  
         if self.normalization == 'bn':
             self.norm1 = BatchNormalization()
@@ -194,8 +195,6 @@ class RecurrentConvBlock(tf.keras.layers.Layer):
         if self.normalization is not None:
             Y = self.norm2(Y)
         Y = self.activation(Y)
-        if not self.output_full_sequence:
-            Y = self.convlstm3(Y)
         return Y
 
 
