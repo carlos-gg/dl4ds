@@ -15,36 +15,26 @@ def residual_discriminator(
     n_res_blocks, 
     normalization=None, 
     activation='relu',
-    attention=False,
-    return_sequence=False):
+    attention=False):
     """
     """
     upsampling = model.split('_')[-1]
+    backbone_block = model.split('_')[0]
 
-    if return_sequence:
+    if backbone_block.startswith('rec'):
+        backbone_block = backbone_block[3:]
+        is_recurrent = True
+    else:
+        is_recurrent = False
+
+    if is_recurrent:
         x_in = Input(shape=(None, None, None, n_channels))    
     else:
         x_in = Input(shape=(None, None, n_channels))    
-
-    backbone_block = model.split('_')[0]
-    if backbone_block.startswith('rec'):
-        backbone_block = backbone_block[3:]
     
-    if return_sequence:
-        if backbone_block == 'convnet':
-            skipcon = None
-            n_filters_recblock1 = n_filters
-        elif backbone_block == 'resnet':
-            skipcon = 'residual'
-            n_filters_recblock1 = n_filters
-        elif backbone_block == 'densenet':
-            skipcon = 'dense'
-            n_filters_recblock1 = n_filters // 2
-
+    if is_recurrent:
         x_1 = b = RecurrentConvBlock(
-            n_filters_recblock1, 
-            output_full_sequence=True, 
-            skip_connection_type=skipcon,  
+            n_filters, 
             activation=activation, 
             normalization='ln',
             dropout_rate=0)(x_in)
@@ -57,7 +47,7 @@ def residual_discriminator(
     x_1 = Add()([x_1, b])
     
     # Branch with the HR reference or HR generated array
-    if return_sequence:
+    if is_recurrent:
         x_ref = Input(shape=(None, None, None, 1))
     else:
         x_ref = Input(shape=(None, None, 1))    
@@ -82,7 +72,7 @@ def residual_discriminator(
     x = ResidualBlock(x.shape[-1], normalization=normalization, attention=attention)(x)
     
     # global average pooling operation for spatial data
-    if return_sequence:
+    if is_recurrent:
         x = GlobalAveragePooling3D()(x)
     else:
         x = GlobalAveragePooling2D()(x)
