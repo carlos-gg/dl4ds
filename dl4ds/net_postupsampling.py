@@ -102,7 +102,6 @@ def recnet_postupsampling(
     n_blocks, 
     lr_size,
     time_window, 
-    return_sequence=False,
     n_channels_out=1, 
     activation='relu',
     dropout_rate=0.2,
@@ -132,17 +131,9 @@ def recnet_postupsampling(
     w_lr = lr_size[1]
 
     x_in = Input(shape=(None, None, None, x_n_channels))
-    if backbone_block == 'convnet':
-        skipcon = None
-    elif backbone_block == 'resnet':
-        skipcon = 'residual'
-    elif backbone_block == 'densenet':
-        skipcon = 'dense'
     
     x = b = RecurrentConvBlock(
         n_filters, 
-        output_full_sequence=return_sequence, 
-        skip_connection_type=skipcon,  
         activation=activation, 
         normalization=normalization)(x_in)
 
@@ -150,43 +141,20 @@ def recnet_postupsampling(
         s_in = Input(shape=(None, None, static_n_channels))
         s_in_lr = tf.image.resize(images=s_in, size=(h_lr, w_lr), method='bilinear')
 
-        if return_sequence:
-            s_in_lr = tf.expand_dims(s_in_lr, 1)
-            s_in_lr = tf.repeat(s_in_lr, time_window, axis=1)
+        s_in_lr = tf.expand_dims(s_in_lr, 1)
+        s_in_lr = tf.repeat(s_in_lr, time_window, axis=1)
         
         x = Conv2D(n_filters - static_n_channels, (1, 1), padding='same')(x)
         x = Concatenate()([x, s_in_lr])
         b = Conv2D(n_filters - static_n_channels, (1, 1), padding='same')(b)
         b = Concatenate()([b, s_in_lr])
 
-    if return_sequence:
-        b = RecurrentConvBlock(
-            n_filters, 
-            output_full_sequence=return_sequence, 
-            skip_connection_type=skipcon,  
-            activation=activation, 
-            normalization=normalization,
-            dropout_rate=dropout_rate,
-            dropout_variant=dropout_variant)(b)
-    else:
-        for i in range(n_blocks):
-            if backbone_block == 'convnet':
-                b = ConvBlock(
-                    n_filters, activation=activation, dropout_rate=dropout_rate, 
-                    dropout_variant=dropout_variant, normalization=normalization, 
-                    attention=attention)(b)
-            elif backbone_block == 'resnet':
-                b = ResidualBlock(
-                    n_filters, activation=activation, dropout_rate=dropout_rate, 
-                    dropout_variant=dropout_variant, normalization=normalization, 
-                    attention=attention)(b)
-            elif backbone_block == 'densenet':
-                b = DenseBlock(
-                    n_filters, activation=activation, dropout_rate=dropout_rate, 
-                    dropout_variant=dropout_variant, normalization=normalization, 
-                    attention=attention)(b)
-                b = TransitionBlock(n_filters // 2)(b)  # another option: half of the DenseBlock channels
-        b = Conv2D(n_filters, (3, 3), padding='same')(b)     
+    b = RecurrentConvBlock(
+        n_filters, 
+        activation=activation, 
+        normalization=normalization,
+        dropout_rate=dropout_rate,
+        dropout_variant=dropout_variant)(b)
     
     if dropout_rate > 0:
         if dropout_variant is None:
@@ -204,30 +172,20 @@ def recnet_postupsampling(
         x = Concatenate()([x, b])
         n_filters_spc = x.get_shape()[-1]
     
-    if return_sequence:
-        if upsampling == 'spc':
-            upsampling_layer = SubpixelConvolution(scale, n_filters_spc)
-        elif upsampling == 'rc':
-            upsampling_layer = UpSampling2D(scale, interpolation='bilinear')
-        elif upsampling == 'dc':
-            upsampling_layer = Deconvolution(scale, n_filters)
-        x = TimeDistributed(upsampling_layer, name='upsampling_' + upsampling)(x)
-    else:
-        if upsampling == 'spc':
-            x = SubpixelConvolution(scale, n_filters_spc)(x)
-        elif upsampling == 'rc':
-            x = UpSampling2D(scale, interpolation='bilinear')(x)
-        elif upsampling == 'dc':
-            x = Deconvolution(scale, n_filters)(x)  
+    if upsampling == 'spc':
+        upsampling_layer = SubpixelConvolution(scale, n_filters_spc)
+    elif upsampling == 'rc':
+        upsampling_layer = UpSampling2D(scale, interpolation='bilinear')
+    elif upsampling == 'dc':
+        upsampling_layer = Deconvolution(scale, n_filters)
+    x = TimeDistributed(upsampling_layer, name='upsampling_' + upsampling)(x)
             
     # concatenating the HR version of the static array
     if static_arr:
-        # x = Concatenate()([x, s_in])
         s = ConvBlock(n_filters, activation=activation, dropout_rate=0, 
                         normalization=None, attention=False)(s_in)
-        if return_sequence:
-            s = tf.expand_dims(s, 1)
-            s = tf.repeat(s, time_window, axis=1)
+        s = tf.expand_dims(s, 1)
+        s = tf.repeat(s, time_window, axis=1)
         x = Concatenate()([x, s])
         
     x = Conv2D(n_channels_out, (3, 3), padding='same', activation=output_activation)(x)
