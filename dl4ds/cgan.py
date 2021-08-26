@@ -121,8 +121,7 @@ def discriminator_loss(disc_real_output, disc_generated_output):
 
 def train_step(lr_array, hr_array, generator, discriminator, generator_optimizer, 
                discriminator_optimizer, epoch, gen_pxloss_function, 
-               summary_writer, first_batch, static_array=None, time_window=None,
-               return_sequence=False):
+               summary_writer, first_batch, static_array=None):
     """
     Training:
     * For each example input generate an output.
@@ -138,11 +137,7 @@ def train_step(lr_array, hr_array, generator, discriminator, generator_optimizer
         static_array = tf.cast(static_array, tf.float32)
         input_generator = [lr_array, static_array]
     else:
-        input_generator = lr_array
-    
-    if time_window is not None:
-        if not return_sequence:
-            lr_array = lr_array[:,-1]  # taking the last temporal slice            
+        input_generator = lr_array         
 
     with tf.GradientTape() as gen_tape, tf.GradientTape() as disc_tape:
         # running the generator
