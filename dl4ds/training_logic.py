@@ -18,7 +18,7 @@ from .dataloader import DataGenerator, create_batch_hr_lr
 from .losses import mae, mse, dssim, dssim_mae, dssim_mae_mse, dssim_mse
 from .net_preupsampling import net_pin, recnet_pin
 from .net_postupsampling import net_postupsampling, recnet_postupsampling
-from .cgan import train_step
+from .cgan import train_step 
 from .discriminator import residual_discriminator
 
 
@@ -158,7 +158,7 @@ class Trainer(ABC):
 
             if self.running_on_first_worker:
                 os.makedirs(self.model_save_path, exist_ok=True)
-                model_to_save.save(self.model_save_path, save_format='tf', save_traces=False)        
+                model_to_save.save(self.model_save_path, save_format='tf')        
                 np.savetxt(self.save_path + 'running_time.txt', [self.timing.running_time], fmt='%s')
                 np.savetxt(self.save_path + 'test_loss.txt', [self.test_loss], fmt='%0.6f')
 
@@ -211,7 +211,7 @@ class SupervisedTrainer(Trainer):
         verbose=True,
         **architecture_params
         ):
-        """Procedure for training supervised models
+        """Procedure for training supervised models.
 
         Parameters
         ----------
@@ -466,7 +466,7 @@ class SupervisedTrainer(Trainer):
         if self.savecheckpoint_path is not None:
             os.makedirs(self.savecheckpoint_path, exist_ok=True)
             model_checkpoint_callback = tf.keras.callbacks.ModelCheckpoint(
-                os.path.join(self.savecheckpoint_path, './checkpoint_best_model'), 
+                os.path.join(self.savecheckpoint_path, './best_model'), 
                 save_weights_only=False,
                 monitor='val_loss',
                 mode='min',
@@ -723,8 +723,8 @@ class CGANTrainer(Trainer):
         if self.savecheckpoint_path is not None:
             checkpoint_prefix = os.path.join(self.savecheckpoint_path, 'checkpoint_epoch')
             checkpoint = tf.train.Checkpoint(generator_optimizer=generator_optimizer,
-                                            discriminator_optimizer=discriminator_optimizer,
-                                            generator=self.generator, discriminator=self.discriminator)
+                                             discriminator_optimizer=discriminator_optimizer,
+                                             generator=self.generator, discriminator=self.discriminator)
 
         n_samples = self.data_train.shape[0]
         if self.steps_per_epoch is None:
@@ -776,8 +776,7 @@ class CGANTrainer(Trainer):
                     gen_pxloss_function=self.lossf,
                     summary_writer=summary_writer, 
                     first_batch=True if epoch==0 and i==0 else False,
-                    static_array=static_array,
-                    time_window=self.time_window)
+                    static_array=static_array)
                 
                 gen_total_loss, gen_gan_loss, gen_px_loss, disc_loss = losses
                 lossvals = [('gen_total_loss', gen_total_loss), 
