@@ -34,6 +34,8 @@ class ConvBlock(tf.keras.layers.Layer):
         elif self.normalization == 'ln':
             self.norm1 = LayerNormalization()
             self.norm2 = LayerNormalization()
+        elif normalization is not None:
+            raise ValueError('Normalization not supported')
 
         if self.attention:
             self.att = ChannelAttention2D(filters)
@@ -174,6 +176,8 @@ class RecurrentConvBlock(tf.keras.layers.Layer):
         elif self.normalization == 'ln':
             self.norm1 = LayerNormalization()
             self.norm2 = LayerNormalization()
+        elif normalization is not None:
+            raise ValueError('Normalization not supported')
 
         self.activation = Activation(activation)
         self.skipconnection = Add()
