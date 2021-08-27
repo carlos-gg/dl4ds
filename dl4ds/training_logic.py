@@ -489,15 +489,17 @@ class SupervisedTrainer(Trainer):
             verbose=self.verbose, 
             callbacks=callbacks,
             use_multiprocessing=self.use_multiprocessing)
-        self.test_loss = self.model.evaluate(
-            self.ds_test, 
-            steps=self.test_steps, 
-            verbose=verbose)
         
-        if self.verbose:
-            print(f'\nScore on the test set: {self.test_loss}')
-        
-        self.timing.runtime()
+        if self.running_on_first_worker:
+            self.test_loss = self.model.evaluate(
+                self.ds_test, 
+                steps=self.test_steps, 
+                verbose=verbose)
+            
+            if self.verbose:
+                print(f'\nScore on the test set: {self.test_loss}')
+            
+            self.timing.runtime()
 
         self.save_results(self.model)
 
