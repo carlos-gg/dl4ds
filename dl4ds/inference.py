@@ -20,7 +20,8 @@ def predict(
     save_path=None,
     save_fname='y_hat.npy',
     return_lr=False,
-    stochastic_output=False):
+    stochastic_output=False,
+    device='CPU'):
     """Inference with ``model``. The ``data`` is super-resolved or downscaled 
     using the trained super-resolution network. 
 
@@ -205,8 +206,9 @@ def predict(
     # Stochasticity via dropout. It usually only applies when training (no values 
     # are dropped during inference). With training=True, the Dropout layer will 
     # behave in training mode and dropout will be applied at inference time
-    x_test_pred = model(inputs, training=stochastic_output)
-    x_test_pred = x_test_pred.numpy()
+    with tf.device('/' + device + ':0'):
+        x_test_pred = model(inputs, training=stochastic_output)
+        x_test_pred = x_test_pred.numpy()
 
     if mean_std is not None:
         mean, std = mean_std
