@@ -430,7 +430,7 @@ class DataGenerator(tf.keras.utils.Sequence):
         self.repeat = repeat
         self.n = array.shape[0]
         if self.time_window is not None:
-            self.indices = np.random.permutation(np.arange(self.time_window, self.n))
+            self.indices = np.random.permutation(np.arange(0, self.n - self.time_window))
         else:
             self.indices = np.random.permutation(np.arange(self.n))
         
@@ -496,12 +496,12 @@ class DataGenerator(tf.keras.utils.Sequence):
                 # creating a single ndarrays concatenating list of ndarray variables along the last dimension 
                 if self.predictors is not None:
                     array_predictors = np.concatenate(self.predictors, axis=-1)
-                    params = dict(predictors=array_predictors[i-self.time_window:i])
+                    params = dict(predictors=array_predictors[i:i+self.time_window])
                 else:
                     params = {}
 
                 res = create_pair_temp_hr_lr(
-                    array=self.array[i-self.time_window:i],
+                    array=self.array[i:i+self.time_window],
                     scale=self.scale, 
                     patch_size=self.patch_size, 
                     topography=self.topography, 
