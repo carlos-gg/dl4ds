@@ -486,7 +486,7 @@ class SupervisedTrainer(Trainer):
             steps_per_epoch=self.steps_per_epoch,
             validation_data=self.ds_val, 
             validation_steps=self.validation_steps, 
-            verbose=self.verbose, 
+            verbose=self.verbose if self.running_on_first_worker else False, 
             callbacks=callbacks,
             use_multiprocessing=self.use_multiprocessing)
         
