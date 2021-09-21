@@ -47,6 +47,7 @@ class ConvBlock(tf.keras.layers.Layer):
         if self.attention:
             self.att = ChannelAttention2D(filters)
         self.activation = Activation(activation)
+        
         self.apply_dropout = False
         # Only spatial dropout is applied inside convolutional blocks
         if self.dropout_variant == 'spatial' and self.dropout_rate > 0:
@@ -188,6 +189,8 @@ class RecurrentConvBlock(tf.keras.layers.Layer):
 
         self.activation = Activation(activation)
         self.skipconnection = Add()
+
+        self.apply_dropout = False
         # Only spatial dropout is applied inside convolutional blocks
         if self.dropout_variant == 'spatial' and self.dropout_rate > 0:
             self.apply_dropout = True
