@@ -10,6 +10,13 @@ from .attention import ChannelAttention2D
 
 class ConvBlock(tf.keras.layers.Layer): 
     """Convolutional block.
+
+    References
+    ----------
+    [1] Effective and Efficient Dropout for Deep Convolutional Neural Networks: 
+    https://arxiv.org/abs/1904.03392
+    [2] Rethinking the Usage of Batch Normalization and Dropout: 
+    https://arxiv.org/abs/1905.05928
     """
     def __init__(self, filters, strides=1, ks_cl1=(3,3), ks_cl2=(3,3), 
                  activation='relu', normalization=None, attention=False, 
@@ -190,11 +197,13 @@ class RecurrentConvBlock(tf.keras.layers.Layer):
     def call(self, X):
         """Model's forward pass. 
         """
-        Y = self.convlstm1(X)
-        Y = self.convlstm1(X)
+        Y = self.dropout1(X) if self.apply_dropout else X
+        Y = self.convlstm1(Y)
         if self.normalization is not None:
             Y = self.norm1(Y)
         Y = self.activation(Y)
+        if self.apply_dropout:
+            Y = self.dropout2(Y)
         Y = self.convlstm2(Y)
         if self.normalization is not None:
             Y = self.norm2(Y)
