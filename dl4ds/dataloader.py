@@ -530,3 +530,34 @@ class DataGenerator(tf.keras.utils.Sequence):
         """
         """
         np.random.shuffle(self.indices)
+
+
+def _get_season_(dataset):
+    """ Get the season for a single time step xr.Dataset.
+    """
+    if dataset.time.dt.month.values in [12, 1, 2]:
+        season = 'winter'
+    elif dataset.time.dt.month.values in [3, 4, 5]:
+        season = 'spring'
+    elif dataset.time.dt.month.values in [6, 7, 8]: 
+        season = 'summer'
+    elif dataset.time.dt.month.values in [9, 10, 11]:
+        season = 'autumn'
+    return season
+
+
+def _get_season_array_(season, sizey, sizex):
+    """ Produce a multichannel array encoding the season. 
+    """
+    if season not in ['winter', 'spring', 'summer', 'autumn']:
+        raise ValueError('``season`` not recognized')
+    season_array = np.zeros((sizey, sizex, 4))
+    if season == 'winter':
+        season_array[:,:,0] += 1
+    elif season == 'spring':
+        season_array[:,:,1] += 1
+    elif season == 'summer':
+        season_array[:,:,2] += 1
+    elif season == 'autumn':
+        season_array[:,:,3] += 1    
+    return season_array
