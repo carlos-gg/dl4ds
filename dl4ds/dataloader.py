@@ -1,5 +1,6 @@
 import tensorflow as tf
 import numpy as np
+import scipy as sc
 
 import sys
 sys.path.append('/gpfs/home/bsc32/bsc32409/src/ecubevis/')
@@ -532,16 +533,22 @@ class DataGenerator(tf.keras.utils.Sequence):
         np.random.shuffle(self.indices)
 
 
-def _get_season_(dataset):
-    """ Get the season for a single time step xr.Dataset.
+def _get_season_(dataarray):
+    """ Get the season for a single time step xr.DataArray.
     """
-    if dataset.time.dt.month.values in [12, 1, 2]:
+    if dataarray.ndim == 3:
+        month_int = dataarray.time.dt.month.values
+    elif dataarray.ndim == 4:
+        month_int = sc.stats.mode(dataarray.time.dt.month.values)
+        month_int = int(month_int.count)
+
+    if month_int in [12, 1, 2]:
         season = 'winter'
-    elif dataset.time.dt.month.values in [3, 4, 5]:
+    elif month_int in [3, 4, 5]:
         season = 'spring'
-    elif dataset.time.dt.month.values in [6, 7, 8]: 
+    elif month_int in [6, 7, 8]: 
         season = 'summer'
-    elif dataset.time.dt.month.values in [9, 10, 11]:
+    elif month_int in [9, 10, 11]:
         season = 'autumn'
     return season
 
