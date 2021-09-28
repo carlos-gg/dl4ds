@@ -141,12 +141,12 @@ class Timing():
 def crop_array(array, size, yx=None, position=False, exclude_borders=False, 
                get_copy=False):
     """
-    Return a square cropped version of a 2D, 3D or 4D ndarray.
+    Return a square cropped version of a 2D, 3D or 4D or 5D ndarray.
     
     Parameters
     ----------
     array : numpy ndarray
-        Input image (2D ndarray) or cube (3D or 4D ndarray).
+        Input image (2D ndarray) or cube (3D, 4D or 5D ndarray).
     size : int
         Size of the cropped image.
     yx : tuple of int or None, optional
@@ -166,18 +166,22 @@ def crop_array(array, size, yx=None, position=False, exclude_borders=False,
     y, x : int
         [position=True] Y,X coordinates.
     """    
-    if array.ndim not in [2, 3, 4]:
+    if array.ndim not in [2, 3, 4, 5]:
         raise TypeError('Input array is not a 2D, 3D, or 4D ndarray')
     if not isinstance(size, int):
         raise TypeError('`Size` must be integer')
     if array.ndim in [2, 3]: 
-        # assuming 3D ndarray as multichannel grid [lat,lon,vars] or [y,x,channels]
+        # assuming 3D ndarray as multichannel grid [lat, lon, vars] or [y, x, channels]
         array_size_y = array.shape[0]
         array_size_x = array.shape[1] 
     elif array.ndim == 4:
-        # assuming 4D ndarray [aux dim, lat, lon, vars] or [time,y,x,channels]
+        # assuming 4D ndarray [aux dim, lat, lon, vars] or [time, y, x, channels]
         array_size_y = array.shape[1]
         array_size_x = array.shape[2]
+    elif array.ndim == 5:
+        # assuming 4D ndarray [aux dim, time, y, x, channels]
+        array_size_y = array.shape[2]
+        array_size_x = array.shape[3]
     if size > array_size_y or size > array_size_x: 
         msg = "`Size` larger than the input image size"
         raise ValueError(msg)
@@ -206,6 +210,8 @@ def crop_array(array, size, yx=None, position=False, exclude_borders=False,
             cropped_array = array[y0: y1, x0: x1, :].copy()
         elif array.ndim == 4:
             cropped_array = array[:, y0: y1, x0: x1, :].copy()
+        elif array.ndim == 5:
+            cropped_array = array[:, :, y0: y1, x0: x1, :].copy()
     else:
         if array.ndim == 2:
             cropped_array = array[y0: y1, x0: x1]
@@ -213,6 +219,8 @@ def crop_array(array, size, yx=None, position=False, exclude_borders=False,
             cropped_array = array[y0: y1, x0: x1, :]
         elif array.ndim == 4:
             cropped_array = array[:, y0: y1, x0: x1, :]
+        elif array.ndim == 5:
+            cropped_array = array[:, :, y0: y1, x0: x1, :]
 
     if position:
         return cropped_array, y, x
