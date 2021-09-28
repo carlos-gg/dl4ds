@@ -148,16 +148,23 @@ class DenseBlock(ConvBlock):
 
 
 class TransitionBlock(tf.keras.layers.Layer):
-    def __init__(self, filters, activation='relu', **kwargs):
+    def __init__(self, filters, activation='relu', normalization=None, **kwargs):
         super().__init__(**kwargs)
-        self.batch_norm = BatchNormalization()
+        if normalization is not None and normalization == 'bn':
+            self.batch_norm = BatchNormalization()
+        else:
+            self.batch_norm = None
         self.activation = Activation(activation)
         self.conv = Conv2D(filters, kernel_size=1)
 
     def call(self, X):
-        Y = self.batch_norm(X)
-        Y = self.activation(Y)
-        Y = self.conv(Y)
+        if self.batch_norm is not None:
+            Y = self.batch_norm(X)
+            Y = self.activation(Y)
+            Y = self.conv(Y)
+        else:
+            Y = self.conv(X)
+            Y = self.activation(Y)
         return Y
 
 
