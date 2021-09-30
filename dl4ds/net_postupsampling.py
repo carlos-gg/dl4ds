@@ -16,6 +16,7 @@ def net_postupsampling(
     upsampling,
     scale, 
     n_channels, 
+    n_aux_channels,
     n_filters, 
     n_blocks, 
     n_channels_out=1, 
@@ -46,6 +47,10 @@ def net_postupsampling(
     backbone_block = checkarg_backbone(backbone_block)
     upsampling = checkarg_upsampling(upsampling)
     dropout_variant = checkarg_dropout_variant(dropout_variant)
+
+    static_arr = True if n_aux_channels > 0 else False
+    if static_arr:
+        s_in = Input(shape=(None, None, n_aux_channels))
 
     x_in = Input(shape=(None, None, n_channels))
     x = b = Conv2D(n_filters, (3, 3), padding='same')(x_in)
@@ -81,16 +86,41 @@ def net_postupsampling(
         x = Concatenate()([x, b])
     
     model_name = backbone_block + '_' + upsampling
+    if static_arr:
+        ups_activation = activation
+    else:
+        ups_activation = output_activation
+
     if upsampling == 'spc':
         x = SubpixelConvolution(scale, n_filters)(x)
-        x = Conv2D(n_channels_out, (3, 3), padding='same', activation=output_activation)(x)
+        x = Conv2D(n_channels_out, (3, 3), padding='same', activation=ups_activation)(x)
     elif upsampling == 'rc':
         x = UpSampling2D(scale, interpolation='bilinear')(x)
-        x = Conv2D(n_channels_out, (3, 3), padding='same', activation=output_activation)(x)
+        x = Conv2D(n_channels_out, (3, 3), padding='same', activation=ups_activation)(x)
     elif upsampling == 'dc':
-        x = Deconvolution(scale, n_channels_out, output_activation)(x)
+        x = Deconvolution(scale, n_channels_out, ups_activation)(x)
     
-    return Model(inputs=x_in, outputs=x, name=model_name)  
+    if static_arr:
+        # x = Concatenate()([x, s_in])
+        s = ConvBlock(
+            n_filters, 
+            activation=activation, 
+            dropout_rate=0, 
+            normalization=normalization, 
+            attention=False)(s_in)  
+        x = Concatenate()([x, s])   
+
+        x = ConvBlock(
+            n_channels_out, 
+            activation=output_activation, 
+            dropout_rate=0, 
+            normalization=normalization, 
+            attention=False)(x)  # attention=True
+
+    if static_arr:
+        return Model(inputs=[x_in, s_in], outputs=x, name=model_name)  
+    else:
+        return Model(inputs=x_in, outputs=x, name=model_name)  
 
 
 def recnet_postupsampling(
