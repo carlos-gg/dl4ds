@@ -1,13 +1,14 @@
 import tensorflow as tf
 import numpy as np
 import scipy as sc
+import xarray as xr
 
 import sys
 sys.path.append('/gpfs/home/bsc32/bsc32409/src/ecubevis/')
 import ecubevis as ecv
 
 from . import POSTUPSAMPLING_METHODS
-from .utils import crop_array, resize_array, checkarg_model
+from .utils import crop_array, resize_array, checkarg_model, checkarray_ndim
 
 
 def create_pair_temp_hr_lr(
@@ -144,6 +145,7 @@ def create_pair_hr_lr(
     topography=None, 
     landocean=None, 
     predictors=None, 
+    season=None,
     model='resnet_spc',
     debug=False, 
     interpolation='bicubic'):
@@ -159,7 +161,7 @@ def create_pair_hr_lr(
     scale : int
         Scaling factor.
     patch_size : int or None
-        Size of the square patches to be extracted.
+        Size of the square patches to be extracted, in pixels for the HR grid.
     topography : None or 2D ndarray, optional
         Elevation data.
     landocean : None or 2D ndarray, optional
@@ -176,6 +178,8 @@ def create_pair_hr_lr(
         If True, plots and debugging information are shown.
 
     """
+    if isinstance(array, xr.DataArray):
+        array = array.values
     hr_array = np.squeeze(array)
     hr_y, hr_x = hr_array.shape
     upsampling_method = model.split('_')[-1]
@@ -195,12 +199,15 @@ def create_pair_hr_lr(
             lr_array = lr_array_resized
         hr_array = np.expand_dims(hr_array, -1)
         lr_array = np.expand_dims(lr_array, -1)
+    
     elif upsampling_method in POSTUPSAMPLING_METHODS:
         if patch_size is not None:
-            lr_x, lr_y = int(patch_size / scale), int(patch_size / scale) 
+            patch_size_lr = int(patch_size / scale)
         else:
             lr_x, lr_y = int(hr_x / scale), int(hr_y / scale)
-
+    
+    # --------------------------------------------------------------------------
+    # Cropping the arrays
     if upsampling_method == 'pin':
         if predictors is not None:
             predictors = resize_array(predictors, (lr_x, lr_y), interpolation)
@@ -218,7 +225,7 @@ def create_pair_hr_lr(
         if predictors is not None:
             if patch_size is not None:
                 # cropping first the predictors 
-                lr_array_predictors, crop_y, crop_x = crop_array(predictors, lr_x,
+                lr_array_predictors, crop_y, crop_x = crop_array(predictors, patch_size_lr,
                                                                  yx=None, position=True)
                 crop_y = int(crop_y * scale)
                 crop_x = int(crop_x * scale)
@@ -233,74 +240,100 @@ def create_pair_hr_lr(
             lr_array = np.concatenate([lr_array, lr_array_predictors], axis=2)
         else:
             if patch_size is not None:
-                # cropping the hr array
+                # cropping the hr array 
                 hr_array, crop_y, crop_x = crop_array(hr_array, patch_size, yx=None, position=True)
-            # downsampling the hr array to get lr_array
-            lr_array = resize_array(hr_array, (lr_x, lr_y), interpolation)    
+                # downsampling the hr array to get lr_array
+                lr_array = resize_array(hr_array, (patch_size_lr, patch_size_lr), interpolation)
+            else:
+                # downsampling the hr array to get lr_array
+                lr_array = resize_array(hr_array, (lr_x, lr_y), interpolation)    
             hr_array = np.expand_dims(hr_array, -1)
             lr_array = np.expand_dims(lr_array, -1)
 
+    # --------------------------------------------------------------------------
+    # Including the static variables and season
     if topography is not None:
         if patch_size is not None:
             topo_hr = crop_array(np.squeeze(topography), patch_size, yx=(crop_y, crop_x))
+            static_array_hr = checkarray_ndim(topo_hr, 3, -1)
+            if upsampling_method in POSTUPSAMPLING_METHODS:  
+                topo_concat = resize_array(topo_hr, (patch_size_lr, patch_size_lr), interpolation) 
+            else:
+                topo_concat = topo_hr
         else:
-            topo_hr = topography
-        if upsampling_method in POSTUPSAMPLING_METHODS:  # downsizing the topography
-            topo_lr = resize_array(topo_hr, (lr_x, lr_y), interpolation)
-            lr_array = np.concatenate([lr_array, np.expand_dims(topo_lr, -1)], axis=2)
-        elif upsampling_method == 'pin':  # topography in HR 
-            lr_array = np.concatenate([lr_array, np.expand_dims(topo_hr, -1)], axis=2)
+            static_array_hr = checkarray_ndim(topography, 3, -1)
+            if upsampling_method in POSTUPSAMPLING_METHODS: 
+                topo_concat = resize_array(topography, (lr_x, lr_y), interpolation)
+            else:
+                topo_concat = topography
+        topo_concat = checkarray_ndim(topo_concat, 3, -1)
+        lr_array = np.concatenate([lr_array, topo_concat], axis=-1)        
 
     if landocean is not None:
         if patch_size is not None:
             landocean_hr = crop_array(np.squeeze(landocean), patch_size, yx=(crop_y, crop_x))
+            if upsampling_method in POSTUPSAMPLING_METHODS:  
+                lando_concat = resize_array(landocean_hr, (patch_size_lr, patch_size_lr), 'nearest')  
+            else:
+                lando_concat = landocean_hr
         else:
             landocean_hr = landocean
-        if upsampling_method in POSTUPSAMPLING_METHODS:  # downsizing the land-ocean mask
-            # integer array can only be interpolated with nearest method
-            landocean_lr = resize_array(landocean_hr, (lr_x, lr_y), interpolation='nearest')
-            lr_array = np.concatenate([lr_array, np.expand_dims(landocean_lr, -1)], axis=2)
-        elif upsampling_method == 'pin':  # lando in HR 
-            lr_array = np.concatenate([lr_array, np.expand_dims(landocean_hr, -1)], axis=2)
-    
+            if upsampling_method in POSTUPSAMPLING_METHODS: 
+                lando_concat = resize_array(landocean, (lr_x, lr_y), 'nearest')      
+            else:
+                lando_concat = landocean
+        lando_concat = checkarray_ndim(lando_concat, 3, -1)
+        lr_array = np.concatenate([lr_array, lando_concat], axis=-1) 
+        static_array_hr = np.concatenate([static_array_hr, checkarray_ndim(landocean_hr, 3, -1)], axis=-1)
+
+    if season is not None:
+        if patch_size is not None:
+            season_array_hr = _get_season_array_(season, patch_size, patch_size) 
+            static_array_hr = np.concatenate([static_array_hr, season_array_hr], axis=-1)
+            if upsampling_method in POSTUPSAMPLING_METHODS:
+                season_array_lr = _get_season_array_(season, patch_size_lr, patch_size_lr) 
+            else:
+                season_array_lr = season_array_hr
+            lr_array = np.concatenate([lr_array, season_array_lr], axis=-1)
+        else:
+            season_array_hr = _get_season_array_(season, hr_y, hr_x) 
+            static_array_hr = np.concatenate([static_array_hr, season_array_hr], axis=-1)
+            if upsampling_method in POSTUPSAMPLING_METHODS:
+                season_array_lr = _get_season_array_(season, lr_y, lr_x) 
+            else:
+                season_array_lr = season_array_hr
+            lr_array = np.concatenate([lr_array, season_array_lr], axis=-1)
+
     hr_array = np.asarray(hr_array, 'float32')
     lr_array = np.asarray(lr_array, 'float32')
+    static_array_hr = np.asanyarray(static_array_hr, 'float32')
 
-    if debug:
-        print(f'HR array: {hr_array.shape}, LR array {lr_array.shape}')
+    if debug: 
+        if static_array_hr is not None:
+            print(f'HR array: {hr_array.shape}, LR array {lr_array.shape}, Static array HR {static_array_hr.shape}')
+        else:
+            print(f'HR array: {hr_array.shape}, LR array {lr_array.shape}')
         if patch_size is not None:
             print(f'Crop X,Y: {crop_x}, {crop_y}')
-            ecv.plot_ndarray((array[:,:,0]), dpi=60, interactive=False)
         
-        if topography is not None or landocean is not None or predictors is not None:
-            lr_array_plot = np.squeeze(lr_array)[:,:,0]
-        else:
-            lr_array_plot = np.squeeze(lr_array)
-        ecv.plot_ndarray((np.squeeze(hr_array), lr_array_plot), dpi=80, interactive=False, 
-                         subplot_titles=('HR array', 'LR array'))
+        ecv.plot_ndarray(np.squeeze(hr_array), dpi=100, interactive=False, 
+                         subplot_titles='HR array')
         
-        if upsampling_method in POSTUPSAMPLING_METHODS:
-            if topography is not None:
-                ecv.plot_ndarray((topo_hr, topo_lr), 
-                                interactive=False, dpi=80, 
-                                subplot_titles=('HR Topography', 'LR Topography'))
-            if landocean is not None:
-                ecv.plot_ndarray((landocean_hr, landocean_lr), 
-                                interactive=False, dpi=80, 
-                                subplot_titles=('HR Land Ocean mask', 'LR  Land Ocean mask'))
-        elif upsampling_method == 'pin':
-            if topography is not None:
-                ecv.plot_ndarray(topography, interactive=False, dpi=80, 
-                                 subplot_titles=('HR Topography'))
-            if landocean is not None:
-                ecv.plot_ndarray(landocean, interactive=False, dpi=80, 
-                                 subplot_titles=('HR Land Ocean mask'))
+        ecv.plot_ndarray(np.moveaxis(np.squeeze(lr_array), -1, 0), dpi=100, interactive=False, 
+                         plot_title='LR array')
+        
+        if topography is not None or landocean is not None or season is not None:
+            ecv.plot_ndarray(np.moveaxis(static_array_hr, -1, 0), interactive=False, dpi=100, 
+                             plot_title='Static array HR')
 
         if predictors is not None:
-            ecv.plot_ndarray(np.rollaxis(lr_array_predictors, 2, 0), dpi=80, interactive=False, 
+            ecv.plot_ndarray(np.rollaxis(lr_array_predictors, 2, 0), dpi=100, interactive=False, 
                              subplot_titles=('LR cropped predictors'), multichannel4d=True)
 
-    return hr_array, lr_array
+    if topography is not None or landocean is not None or season is not None:
+        return hr_array, lr_array, static_array_hr
+    else:
+        return hr_array, lr_array,
 
 
 def create_batch_hr_lr(x_train, batch_size, predictors, scale, topography, 
@@ -464,6 +497,7 @@ class DataGenerator(tf.keras.utils.Sequence):
             index * self.batch_size : (index + 1) * self.batch_size]
         batch_hr_images = []
         batch_lr_images = []
+        batch_static_hr_images = []
         batch_static_input = []
 
         if self.time_window is None:
@@ -475,21 +509,36 @@ class DataGenerator(tf.keras.utils.Sequence):
                 else:
                     params = {}
 
+                if isinstance(self.array, xr.DataArray):
+                    season = _get_season_(self.array[i])
+                else:
+                    season = None
+
                 res = create_pair_hr_lr(
                     array=self.array[i],
                     scale=self.scale, 
                     patch_size=self.patch_size, 
                     topography=self.topography, 
+                    season=season,
                     landocean=self.landocean, 
                     model=self.model,
                     interpolation=self.interpolation,
                     **params)
-                hr_array, lr_array = res
+                
+                if self.topography is not None or self.landocean is not None or season is not None:
+                    hr_array, lr_array, static_array_hr = res
+                    batch_static_hr_images.append(static_array_hr)
+                else:
+                    hr_array, lr_array = res
                 batch_lr_images.append(lr_array)
                 batch_hr_images.append(hr_array)
             batch_lr_images = np.asarray(batch_lr_images)
             batch_hr_images = np.asarray(batch_hr_images) 
-            return [batch_lr_images], [batch_hr_images]
+            if self.topography is not None or self.landocean is not None or season is not None:
+                batch_static_hr_images = np.asarray(batch_static_hr_images)
+                return [batch_lr_images, batch_static_hr_images], [batch_hr_images]
+            else:
+                return [batch_lr_images], [batch_hr_images]
         
         # batch of samples with a temporal dimension
         else:
@@ -536,9 +585,9 @@ class DataGenerator(tf.keras.utils.Sequence):
 def _get_season_(dataarray):
     """ Get the season for a single time step xr.DataArray.
     """
-    if dataarray.ndim == 3:
+    if dataarray.ndim == 3:  # [lat, lon, var]
         month_int = dataarray.time.dt.month.values
-    elif dataarray.ndim == 4:
+    elif dataarray.ndim == 4:  # [time, lat, lon, var]
         month_int = sc.stats.mode(dataarray.time.dt.month.values)
         month_int = int(month_int.count)
 
