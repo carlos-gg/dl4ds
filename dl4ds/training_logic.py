@@ -1,6 +1,7 @@
 import os
 import datetime
 import numpy as np
+import xarray as xr
 import tensorflow as tf
 from abc import ABC, abstractmethod
 from plot_keras_history import plot_history
@@ -364,10 +365,16 @@ class SupervisedTrainer(Trainer):
         ### number of channels
         if self.model_name in SPATIAL_MODELS:
             n_channels = self.data_train.shape[-1]
+            n_aux_channels = 0
             if self.topography is not None:
                 n_channels += 1
+                n_aux_channels = 1
             if self.landocean is not None:
                 n_channels += 1
+                n_aux_channels += 1
+            if isinstance(self.data_train, xr.DataArray):
+                n_channels += 4
+                n_aux_channels += 4
             if self.predictors_train is not None:
                 n_channels += len(self.predictors_train)
         elif self.model_name in SPATIOTEMP_MODELS:
@@ -395,6 +402,7 @@ class SupervisedTrainer(Trainer):
                     upsampling=self.upsampling, 
                     scale=self.scale, 
                     n_channels=n_channels, 
+                    n_aux_channels=n_aux_channels,
                     **self.architecture_params)
             else:
                 self.model = recnet_postupsampling(
