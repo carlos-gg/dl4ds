@@ -306,10 +306,22 @@ class SupervisedTrainer(Trainer):
             Dictionary with additional parameters passed to the neural network 
             model.
         """
-        super().__init__(model_name, data_train, loss, batch_size, patch_size, 
-                         scale, device, gpu_memory_growth,
-                         use_multiprocessing, verbose, model_list, save, 
-                         save_path, show_plot)
+        super().__init__(
+            model_name=model_name, 
+            data_train=data_train,
+            loss=loss,
+            batch_size=batch_size, 
+            patch_size=patch_size,
+            scale=scale,
+            device=device, 
+            gpu_memory_growth=gpu_memory_growth,
+            use_multiprocessing=use_multiprocessing,
+            verbose=verbose, 
+            model_list=model_list,
+            save=save,
+            save_path=save_path,
+            show_plot=show_plot
+            )
         self.data_val = data_val
         self.data_test = data_test
         self.predictors_train = predictors_train
@@ -378,15 +390,16 @@ class SupervisedTrainer(Trainer):
             if self.predictors_train is not None:
                 n_channels += len(self.predictors_train)
         elif self.model_name in SPATIOTEMP_MODELS:
-            n_var_channels = self.data_train.shape[-1]
-            n_st_channels = 0
+            n_channels = self.data_train.shape[-1]
+            n_aux_channels = 0
             if self.predictors_train is not None:
-                n_var_channels += len(self.predictors_train)
+                n_channels += len(self.predictors_train)
             if self.topography is not None:
-                n_st_channels += 1
+                n_aux_channels += 1
             if self.landocean is not None:
-                n_st_channels += 1
-            n_channels = (n_var_channels, n_st_channels)
+                n_aux_channels += 1
+            if isinstance(self.data_train, xr.DataArray):
+                n_aux_channels += 4
 
             if self.patch_size is None:
                 lr_height = int(self.data_train.shape[1] / self.scale)
@@ -410,6 +423,7 @@ class SupervisedTrainer(Trainer):
                     upsampling=self.upsampling, 
                     scale=self.scale, 
                     n_channels=n_channels, 
+                    n_aux_channels=n_aux_channels,
                     lr_size=(lr_height, lr_width),
                     time_window=self.time_window, 
                     **self.architecture_params)
@@ -418,11 +432,13 @@ class SupervisedTrainer(Trainer):
                 self.model = net_pin(
                     backbone_block=self.backbone,
                     n_channels=n_channels, 
+                    n_aux_channels=n_aux_channels,
                     **self.architecture_params)        
             else:
                 self.model = recnet_pin(
                     backbone_block=self.backbone,
                     n_channels=n_channels, 
+                    n_aux_channels=n_aux_channels,
                     time_window=self.time_window, 
                     **self.architecture_params)
 
@@ -599,10 +615,21 @@ class CGANTrainer(Trainer):
             Verbosity mode. False or 0 = silent. True or 1, max amount of 
             information is printed out. When equal 2, then less info is shown.
         """
-        super().__init__(model_name, data_train, loss, batch_size, patch_size, 
-                         scale, device, gpu_memory_growth,
-                         verbose=verbose, model_list=model_list, save=save, 
-                         save_path=save_path, show_plot=False)
+        super().__init__(
+            model_name=model_name, 
+            data_train=data_train, 
+            loss=loss, 
+            batch_size=batch_size, 
+            patch_size=patch_size, 
+            scale=scale, 
+            device=device, 
+            gpu_memory_growth=gpu_memory_growth,
+            verbose=verbose, 
+            model_list=model_list, 
+            save=save, 
+            save_path=save_path, 
+            show_plot=False
+            )
         self.data_test = data_test
         self.scale = scale
         self.patch_size = patch_size
@@ -640,26 +667,24 @@ class CGANTrainer(Trainer):
     def setup_model(self):
         """
         """
-        ### number of channels
-        if self.model_name in SPATIAL_MODELS:
-            n_channels = self.data_train.shape[-1]
-            if self.topography is not None:
+        n_channels = self.data_train.shape[-1]
+        n_aux_channels = 0
+        if self.topography is not None:
+            if not self.model_is_spatiotemp:
                 n_channels += 1
-            if self.landocean is not None:
+            n_aux_channels += 1
+        if self.landocean is not None:
+            if not self.model_is_spatiotemp:
                 n_channels += 1
-            if self.predictors_train is not None:
-                n_channels += len(self.predictors_train)
-        elif self.model_name in SPATIOTEMP_MODELS:
-            n_var_channels = self.data_train.shape[-1]
-            n_st_channels = 0
-            if self.predictors_train is not None:
-                n_var_channels += len(self.predictors_train)
-            if self.topography is not None:
-                n_st_channels += 1
-            if self.landocean is not None:
-                n_st_channels += 1
-            n_channels = (n_var_channels, n_st_channels)
-
+            n_aux_channels += 1
+        if isinstance(self.data_train, xr.DataArray):
+            if not self.model_is_spatiotemp:
+                n_channels += 4
+            n_aux_channels += 4
+        if self.predictors_train is not None:
+            n_channels += len(self.predictors_train)
+        
+        if self.model_is_spatiotemp:
             if self.patch_size is None:
                 lr_height = int(self.data_train.shape[1] / self.scale)
                 lr_width = int(self.data_train.shape[2] / self.scale)
@@ -674,6 +699,7 @@ class CGANTrainer(Trainer):
                     upsampling=self.upsampling,
                     scale=self.scale, 
                     n_channels=n_channels,
+                    n_aux_channels=n_aux_channels,
                     **self.generator_params)
             else:
                 self.generator = recnet_postupsampling(
@@ -681,6 +707,7 @@ class CGANTrainer(Trainer):
                     upsampling=self.upsampling, 
                     scale=self.scale, 
                     n_channels=n_channels, 
+                    n_aux_channels=n_aux_channels,
                     lr_size=(lr_height, lr_width),
                     time_window=self.time_window, 
                     **self.generator_params)
@@ -689,11 +716,13 @@ class CGANTrainer(Trainer):
                 self.generator = net_pin(
                     backbone_block=self.backbone,
                     n_channels=n_channels, 
+                    n_aux_channels=n_aux_channels,
                     **self.generator_params)            
             else:
                 self.generator = recnet_pin(
                     backbone_block=self.backbone,
                     n_channels=n_channels, 
+                    n_aux_channels=n_aux_channels,
                     time_window=self.time_window, 
                     **self.generator_params)
 
@@ -769,11 +798,8 @@ class CGANTrainer(Trainer):
                 hr_array = res[0]
                 lr_array = res[1]
                 static_array = None
-                if self.model_name in SPATIOTEMP_MODELS:
-                    # Only for these models the static grids are not concatenated as 
-                    # but passed are separate inputs channels
-                    if self.topography is not None or self.landocean is not None:
-                        static_array = res[2]
+                if self.topography is not None or self.landocean is not None or isinstance(self.data_train, xr.DataArray):
+                    static_array = res[2]
 
                 losses = train_step(
                     lr_array, 
@@ -845,11 +871,8 @@ class CGANTrainer(Trainer):
             hr_arrtest = tf.cast(res[0], tf.float32)
             lr_arrtest = tf.cast(res[1], tf.float32)
             static_array_test = None
-            if self.model_name in SPATIOTEMP_MODELS:
-                # Only for these models the static grids are not concatenated as 
-                # but passed are separate inputs channels
-                if self.topography is not None or self.landocean is not None:
-                    static_array_test = tf.cast(res[2], tf.float32)
+            if self.topography is not None or self.landocean is not None or isinstance(self.data_train, xr.DataArray):
+                static_array_test = tf.cast(res[2], tf.float32)
                 input_test = [lr_arrtest, static_array_test]
             else:
                 input_test = lr_arrtest
