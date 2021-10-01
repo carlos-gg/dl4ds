@@ -19,8 +19,7 @@ from .training_logic import *
 from .inference import *
 from .utils import *
 from .dataloader import *
-from .net_preupsampling import *
-from .net_postupsampling import *
+from .models import *
 from .discriminator import * 
 from .cgan import *
 
