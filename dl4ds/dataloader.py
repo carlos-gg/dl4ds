@@ -11,131 +11,105 @@ from . import POSTUPSAMPLING_METHODS
 from .utils import crop_array, resize_array, checkarg_model, checkarray_ndim
 
 
-def create_pair_temp_hr_lr(
-    array, 
-    scale, 
-    patch_size, 
-    topography=None, 
-    landocean=None, 
-    predictors=None, 
-    model='resnet_spc',
-    debug=False, 
-    interpolation='bicubic'):
+def create_batch_hr_lr(x_train, batch_size, predictors, scale, topography, 
+                       landocean, patch_size, time_window, model, interpolation, 
+                       shuffle=True):
+    """Create a batch of HR/LR samples. Used in the adversarial conditional 
+    training.
     """
-    Create a pair of HR and LR square sub-patches with a temporal window. In 
-    this case, the LR corresponds to a coarsen version of the HR reference. If
-    a land-ocean mask or topography are provided, these are concatenated and 
-    returned as an additional output.
-
-    Parameters
-    ----------
-    array : np.ndarray
-        HR gridded data.
-    scale : int
-        Scaling factor.
-    patch_size : int or None
-        Size of the square patches to be extracted.
-    topography : None or 2D ndarray, optional
-        Elevation data.
-    landocean : None or 2D ndarray, optional
-        Binary land-ocean mask.
-    predictors : np.ndarray, optional
-        Predictor variables in HR. To be concatenated to the LR version of 
-        `array`.
-    model : str, optional
-        String with the name of the model architecture.
-    interpolation : str, optional
-        Interpolation used when upsampling/downsampling the training samples.
-        By default 'bicubic'. 
-    debug : bool, optional
-        If True, plots and debugging information are shown.
-    
-    """
-    static_array = None
-    hr_y = array.shape[1] 
-    hr_x = array.shape[2]
-    hr_array = array  # 4D array [time,y,x,1ch]
-    upsampling_method = model.split('_')[-1]
-
-    if upsampling_method == 'pin': 
-        lr_x, lr_y = int(hr_x / scale), int(hr_y / scale) 
-        # HR array is downsampled and upsampled via interpolation
-        lr_array_resized = resize_array(hr_array, (lr_x, lr_y), interpolation, squeezed=False)
-        lr_array_resized = resize_array(lr_array_resized, (hr_x, hr_y), interpolation, squeezed=False)
-        lr_array = lr_array_resized
-        if patch_size is not None:
-            # cropping both hr_array and lr_array (same sizes)
-            hr_array, crop_y, crop_x = crop_array(hr_array, patch_size, yx=None, position=True)
-            lr_array = crop_array(lr_array, patch_size, yx=(crop_y, crop_x))
-            if predictors is not None:
-                predictors = crop_array(predictors, patch_size, yx=(crop_y, crop_x), position=False)
-    
-    elif upsampling_method in POSTUPSAMPLING_METHODS:
-        if patch_size is not None:
-            lr_x, lr_y = int(patch_size / scale), int(patch_size / scale) 
-            hr_array, crop_y, crop_x = crop_array(hr_array, patch_size, yx=None, position=True)
-            lr_array = resize_array(hr_array, (lr_x, lr_y), interpolation, squeezed=False)
-            if predictors is not None:
-                predictors = crop_array(predictors, patch_size, yx=(crop_y, crop_x), position=False)
+    if time_window is None:
+        if shuffle:
+            indices = np.random.choice(x_train.shape[0], batch_size, replace=False)
         else:
-            lr_x, lr_y = int(hr_x / scale), int(hr_y / scale)
-            lr_array = resize_array(hr_array, (lr_x, lr_y), interpolation, squeezed=False)
-        
-        # downsampling the predictors and concatenating
-        if predictors is not None:
-            predictors = resize_array(predictors, (lr_x, lr_y), interpolation, squeezed=False)
+            indices = np.arange(x_train.shape[0])
+        batch_hr_images = []
+        batch_lr_images = []
+        batch_auxvars = []
+        for i in indices:
+            if predictors is not None:
+                params = dict(predictors=predictors[i])
+            else:
+                params = dict()
+            
+            if isinstance(x_train, xr.DataArray):
+                season = _get_season_(x_train[i])
+            else:
+                season = None
 
-    if predictors is not None:    
-        lr_array = np.concatenate([lr_array, predictors], axis=-1)
+            res = create_pair_hr_lr(
+                x_train[i],
+                scale=scale, 
+                topography=topography, 
+                landocean=landocean, 
+                season=season,
+                patch_size=patch_size, 
+                model=model, 
+                interpolation=interpolation,
+                **params)
+            hr_array = res[0]
+            lr_array = res[1]
+            batch_lr_images.append(lr_array)
+            batch_hr_images.append(hr_array)
+            if topography is not None or landocean is not None or season is not None:
+                aux_vars = res[2]
+                batch_auxvars.append(aux_vars)
 
-    if topography is not None:
-        if patch_size is not None:
-            topography = crop_array(topography, patch_size, yx=(crop_y, crop_x))
-        static_array = np.expand_dims(topography, -1)
-
-    if landocean is not None:
-        if patch_size is not None:
-            landocean = crop_array(landocean, patch_size, yx=(crop_y, crop_x))  
-        landocean = np.expand_dims(landocean, -1)
-        if static_array is not None:
-            static_array = np.concatenate([static_array, landocean], axis=-1)
+        batch_lr_images = np.asarray(batch_lr_images)
+        batch_hr_images = np.asarray(batch_hr_images) 
+        if topography is not None or landocean is not None or season is not None:
+            batch_auxvars = np.asarray(batch_auxvars)
+            return batch_hr_images, batch_lr_images, batch_auxvars
         else:
-            static_array = landocean
+            return batch_hr_images, batch_lr_images
     
-    hr_array = np.asarray(hr_array[:,:,:,0], 'float32')  # keeping the target variable
-    hr_array = np.expand_dims(hr_array, -1)
-    lr_array = np.asarray(lr_array, 'float32')
-    if static_array is not None:
-        static_array = np.asarray(static_array, 'float32')
-
-    if debug:
-        print(f'HR array: {hr_array.shape}, LR array: {lr_array.shape}, Static array: {static_array.shape}')
-        if patch_size is not None:
-            print(f'Crop X,Y: {crop_x}, {crop_y}')
-    
-        ecv.plot_ndarray(np.squeeze(hr_array), dpi=80, interactive=False, plot_title=('HR array'))
-        for i in range(lr_array.shape[-1]):
-            ecv.plot_ndarray(np.squeeze(lr_array[:,:,:,i]), dpi=80, interactive=False, 
-                             plot_title=(f'LR array, variable {i+1}'))
-        
-        if upsampling_method in POSTUPSAMPLING_METHODS:
-            if topography is not None:
-                ecv.plot_ndarray(topography, interactive=False, dpi=80, subplot_titles=('HR Topography'))
-            if landocean is not None:
-                ecv.plot_ndarray(landocean, interactive=False, dpi=80, subplot_titles=('HR Land Ocean mask'))
-        elif upsampling_method == 'pin':
-            if static_array is not None:
-                if topography is not None and landocean is not None:
-                    subpti = ('HR Topography', 'HR Land-Ocean mask')
-                else:
-                    subpti = None
-                ecv.plot_ndarray(tuple(np.moveaxis(static_array, -1, 0)), interactive=False, 
-                                 dpi=80, subplot_titles=subpti)
-
-    if static_array is not None:
-        return hr_array, lr_array, static_array
     else:
-        return hr_array, lr_array
+        if shuffle:
+            rangevec = np.arange(time_window, x_train.shape[0])
+            indices = np.random.choice(rangevec, batch_size, replace=False)
+        else:
+            indices = np.arange(time_window, x_train.shape[0])
+        batch_hr_images = []
+        batch_lr_images = []
+        batch_static_images = []
+        for i in indices:
+            if predictors is not None:
+                params = dict(predictors=predictors[i-time_window: i])
+            else:
+                params = dict()
+
+            if isinstance(x_train, xr.DataArray):
+                season = _get_season_(x_train[i-time_window: i])
+            else:
+                season = None
+
+            res = create_pair_temp_hr_lr(
+                x_train[i-time_window: i],
+                scale=scale, 
+                topography=topography, 
+                landocean=landocean, 
+                season=season,
+                patch_size=patch_size, 
+                model=model, 
+                interpolation=interpolation,
+                **params)
+
+            if topography is not None or landocean is not None:
+                hr_array, lr_array, static_array = res 
+                batch_lr_images.append(lr_array)
+                batch_hr_images.append(hr_array)
+                batch_static_images.append(static_array)
+            else:
+                hr_array, lr_array = res 
+                batch_lr_images.append(lr_array)
+                batch_hr_images.append(hr_array)
+
+        batch_lr_images = np.asarray(batch_lr_images)
+        batch_hr_images = np.asarray(batch_hr_images) 
+        if topography is not None or landocean is not None:
+            batch_static_images = np.asarray(batch_static_images)
+            return batch_hr_images, batch_lr_images, batch_static_images
+        else:
+            return batch_hr_images, batch_lr_images
 
 
 def create_pair_hr_lr(
@@ -207,7 +181,7 @@ def create_pair_hr_lr(
             lr_x, lr_y = int(hr_x / scale), int(hr_y / scale)
     
     # --------------------------------------------------------------------------
-    # Cropping the arrays
+    # Cropping/resizing the arrays
     if upsampling_method == 'pin':
         if predictors is not None:
             predictors = resize_array(predictors, (lr_x, lr_y), interpolation)
@@ -310,7 +284,7 @@ def create_pair_hr_lr(
 
     if debug: 
         if static_array_hr is not None:
-            print(f'HR array: {hr_array.shape}, LR array {lr_array.shape}, Static array HR {static_array_hr.shape}')
+            print(f'HR array: {hr_array.shape}, LR array {lr_array.shape}, Auxiliary array HR {static_array_hr.shape}')
         else:
             print(f'HR array: {hr_array.shape}, LR array {lr_array.shape}')
         if patch_size is not None:
@@ -324,7 +298,7 @@ def create_pair_hr_lr(
         
         if topography is not None or landocean is not None or season is not None:
             ecv.plot_ndarray(np.moveaxis(static_array_hr, -1, 0), interactive=False, dpi=100, 
-                             plot_title='Static array HR')
+                             plot_title='Auxiliary array HR')
 
         if predictors is not None:
             ecv.plot_ndarray(np.rollaxis(lr_array_predictors, 2, 0), dpi=100, interactive=False, 
@@ -333,86 +307,138 @@ def create_pair_hr_lr(
     if topography is not None or landocean is not None or season is not None:
         return hr_array, lr_array, static_array_hr
     else:
-        return hr_array, lr_array,
+        return hr_array, lr_array
 
 
-def create_batch_hr_lr(x_train, batch_size, predictors, scale, topography, 
-                       landocean, patch_size, time_window, model, interpolation, 
-                       shuffle=True):
-    """Create a batch of HR/LR samples. Used in the adversarial conditional 
-    training.
+def create_pair_temp_hr_lr(
+    array, 
+    scale, 
+    patch_size, 
+    topography=None, 
+    landocean=None, 
+    predictors=None, 
+    season=None,
+    model='resnet_spc',
+    debug=False, 
+    interpolation='bicubic'):
     """
-    if time_window is None:
-        if shuffle:
-            indices = np.random.choice(x_train.shape[0], batch_size, replace=False)
-        else:
-            indices = np.arange(x_train.shape[0])
-        batch_hr_images = []
-        batch_lr_images = []
-        for i in indices:
-            if predictors is not None:
-                params = dict(predictors=predictors[i])
-            else:
-                params = dict()
+    Create a pair of HR and LR square sub-patches with a temporal window. In 
+    this case, the LR corresponds to a coarsen version of the HR reference. If
+    a land-ocean mask or topography are provided, these are concatenated and 
+    returned as an additional output.
 
-            hr_array, lr_array = create_pair_hr_lr(
-                x_train[i],
-                scale=scale, 
-                topography=topography, 
-                landocean=landocean, 
-                patch_size=patch_size, 
-                model=model, 
-                interpolation=interpolation,
-                **params)
-            batch_lr_images.append(lr_array)
-            batch_hr_images.append(hr_array)
-
-        batch_lr_images = np.asarray(batch_lr_images)
-        batch_hr_images = np.asarray(batch_hr_images) 
-        return batch_hr_images, batch_lr_images
+    Parameters
+    ----------
+    array : np.ndarray
+        HR gridded data.
+    scale : int
+        Scaling factor.
+    patch_size : int or None
+        Size of the square patches to be extracted.
+    topography : None or 2D ndarray, optional
+        Elevation data.
+    landocean : None or 2D ndarray, optional
+        Binary land-ocean mask.
+    predictors : np.ndarray, optional
+        Predictor variables in HR. To be concatenated to the LR version of 
+        `array`.
+    model : str, optional
+        String with the name of the model architecture.
+    interpolation : str, optional
+        Interpolation used when upsampling/downsampling the training samples.
+        By default 'bicubic'. 
+    debug : bool, optional
+        If True, plots and debugging information are shown.
     
-    else:
-        if shuffle:
-            rangevec = np.arange(time_window, x_train.shape[0])
-            indices = np.random.choice(rangevec, batch_size, replace=False)
-        else:
-            indices = np.arange(time_window, x_train.shape[0])
-        batch_hr_images = []
-        batch_lr_images = []
-        batch_static_images = []
-        for i in indices:
+    """
+    if isinstance(array, xr.DataArray):
+        array = array.values
+    hr_y = array.shape[1] 
+    hr_x = array.shape[2]
+    hr_array = array  # 4D array [time,y,x,1ch]
+    upsampling_method = model.split('_')[-1]
+
+    # --------------------------------------------------------------------------
+    # Cropping/resizing the arrays
+    if upsampling_method == 'pin': 
+        lr_x, lr_y = int(hr_x / scale), int(hr_y / scale) 
+        # HR array is downsampled and upsampled via interpolation
+        lr_array_resized = resize_array(hr_array, (lr_x, lr_y), interpolation, squeezed=False)
+        lr_array_resized = resize_array(lr_array_resized, (hr_x, hr_y), interpolation, squeezed=False)
+        lr_array = lr_array_resized
+        if patch_size is not None:
+            # cropping both hr_array and lr_array (same sizes)
+            hr_array, crop_y, crop_x = crop_array(hr_array, patch_size, yx=None, position=True)
+            lr_array = crop_array(lr_array, patch_size, yx=(crop_y, crop_x))
             if predictors is not None:
-                params = dict(predictors=predictors[i-time_window: i])
-            else:
-                params = dict()
-
-            res = create_pair_temp_hr_lr(
-                x_train[i-time_window: i],
-                scale=scale, 
-                topography=topography, 
-                landocean=landocean, 
-                patch_size=patch_size, 
-                model=model, 
-                interpolation=interpolation,
-                **params)
-
-            if topography is not None or landocean is not None:
-                hr_array, lr_array, static_array = res 
-                batch_lr_images.append(lr_array)
-                batch_hr_images.append(hr_array)
-                batch_static_images.append(static_array)
-            else:
-                hr_array, lr_array = res 
-                batch_lr_images.append(lr_array)
-                batch_hr_images.append(hr_array)
-
-        batch_lr_images = np.asarray(batch_lr_images)
-        batch_hr_images = np.asarray(batch_hr_images) 
-        if topography is not None or landocean is not None:
-            batch_static_images = np.asarray(batch_static_images)
-            return batch_hr_images, batch_lr_images, batch_static_images
+                predictors = crop_array(predictors, patch_size, yx=(crop_y, crop_x), position=False)
+    
+    elif upsampling_method in POSTUPSAMPLING_METHODS:
+        if patch_size is not None:
+            lr_x, lr_y = int(patch_size / scale), int(patch_size / scale) 
+            hr_array, crop_y, crop_x = crop_array(hr_array, patch_size, yx=None, position=True)
+            lr_array = resize_array(hr_array, (lr_x, lr_y), interpolation, squeezed=False)
+            if predictors is not None:
+                predictors = crop_array(predictors, patch_size, yx=(crop_y, crop_x), position=False)
         else:
-            return batch_hr_images, batch_lr_images
+            lr_x, lr_y = int(hr_x / scale), int(hr_y / scale)
+            lr_array = resize_array(hr_array, (lr_x, lr_y), interpolation, squeezed=False)
+        
+        # downsampling the predictors and concatenating
+        if predictors is not None:
+            predictors = resize_array(predictors, (lr_x, lr_y), interpolation, squeezed=False)
+
+    if predictors is not None:    
+        lr_array = np.concatenate([lr_array, predictors], axis=-1)
+
+    # --------------------------------------------------------------------------
+    # Including the static variables and season
+    if topography is not None:
+        if patch_size is not None:
+            topography = crop_array(topography, patch_size, yx=(crop_y, crop_x))
+        static_array_hr = np.expand_dims(topography, -1)
+
+    if landocean is not None:
+        if patch_size is not None:
+            landocean = crop_array(landocean, patch_size, yx=(crop_y, crop_x))  
+        landocean = np.expand_dims(landocean, -1)
+        if static_array_hr is not None:
+            static_array_hr = np.concatenate([static_array_hr, landocean], axis=-1)
+        else:
+            static_array_hr = landocean
+
+    if season is not None:
+        if patch_size is not None:
+            season_array_hr = _get_season_array_(season, patch_size, patch_size) 
+            static_array_hr = np.concatenate([static_array_hr, season_array_hr], axis=-1)
+        else:
+            season_array_hr = _get_season_array_(season, hr_y, hr_x) 
+            static_array_hr = np.concatenate([static_array_hr, season_array_hr], axis=-1)
+
+    hr_array = np.asarray(hr_array[:,:,:,0], 'float32')  # keeping the target variable
+    hr_array = np.expand_dims(hr_array, -1)
+    lr_array = np.asarray(lr_array, 'float32')
+    if static_array_hr is not None:
+        static_array_hr = np.asarray(static_array_hr, 'float32')
+
+    if debug:
+        print(f'HR array: {hr_array.shape}, LR array: {lr_array.shape}, Auxiliary array: {season_array_hr.shape}')
+        if patch_size is not None:
+            print(f'Crop X,Y: {crop_x}, {crop_y}')
+    
+        ecv.plot_ndarray(np.squeeze(hr_array), dpi=100, interactive=False, plot_title=('HR array'))
+        for i in range(lr_array.shape[-1]):
+            ecv.plot_ndarray(np.squeeze(lr_array[:,:,:,i]), dpi=100, interactive=False, 
+                             plot_title=(f'LR array, variable {i+1}'))
+        
+        if static_array_hr is not None:
+            ecv.plot_ndarray(tuple(np.moveaxis(static_array_hr, -1, 0)), interactive=False, 
+                             dpi=100,plot_title='Auxiliary array HR')
+
+    if static_array_hr is not None:
+        return hr_array, lr_array, static_array_hr
+    else:
+        return hr_array, lr_array
 
 
 class DataGenerator(tf.keras.utils.Sequence):
@@ -498,7 +524,6 @@ class DataGenerator(tf.keras.utils.Sequence):
         batch_hr_images = []
         batch_lr_images = []
         batch_static_hr_images = []
-        batch_static_input = []
 
         if self.time_window is None:
             for i in self.batch_rand_idx:   
@@ -550,29 +575,34 @@ class DataGenerator(tf.keras.utils.Sequence):
                 else:
                     params = {}
 
+                if isinstance(self.array, xr.DataArray):
+                    season = _get_season_(self.array[i])
+                else:
+                    season = None
+
                 res = create_pair_temp_hr_lr(
                     array=self.array[i:i+self.time_window],
                     scale=self.scale, 
                     patch_size=self.patch_size, 
                     topography=self.topography, 
                     landocean=self.landocean, 
+                    season=season,
                     model=self.model,
                     interpolation=self.interpolation,
                     **params)
-                if self.topography is not None or self.landocean is not None:
-                    hr_array, lr_array, static_array = res
-                    batch_lr_images.append(lr_array)
-                    batch_hr_images.append(hr_array)
-                    batch_static_input.append(static_array)
+
+                if self.topography is not None or self.landocean is not None or season is not None:
+                    hr_array, lr_array, static_array_hr = res
+                    batch_static_hr_images.append(static_array_hr)
                 else:
                     hr_array, lr_array = res
-                    batch_lr_images.append(lr_array)
-                    batch_hr_images.append(hr_array)
+                batch_lr_images.append(lr_array)
+                batch_hr_images.append(hr_array)
             batch_lr_images = np.asarray(batch_lr_images)
             batch_hr_images = np.asarray(batch_hr_images) 
-            if self.topography is not None or self.landocean is not None:
-                batch_static_input = np.asarray(batch_static_input)
-                return [batch_lr_images, batch_static_input], [batch_hr_images]
+            if self.topography is not None or self.landocean is not None or season is not None:
+                batch_static_hr_images = np.asarray(batch_static_hr_images)
+                return [batch_lr_images, batch_static_hr_images], [batch_hr_images]
             else:
                 return [batch_lr_images], [batch_hr_images]
 
