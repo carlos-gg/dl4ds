@@ -11,6 +11,7 @@ from .utils import checkarg_backbone, checkarg_dropout_variant
 def net_pin(
     backbone_block,
     n_channels, 
+    n_aux_channels,
     n_filters, 
     n_blocks, 
     n_channels_out=1, 
@@ -29,6 +30,10 @@ def net_pin(
     """
     backbone_block = checkarg_backbone(backbone_block)
     dropout_variant = checkarg_dropout_variant(dropout_variant)
+
+    auxvar_arr = True if n_aux_channels > 0 else False
+    if auxvar_arr:
+        s_in = Input(shape=(None, None, n_aux_channels))
 
     x_in = Input(shape=(None, None, n_channels))
     x = b = Conv2D(n_filters, (3, 3), padding='same')(x_in)
@@ -63,14 +68,36 @@ def net_pin(
     elif backbone_block == 'densenet':
         x = Concatenate()([x, b])
     
-    x = Conv2D(n_channels_out, (3, 3), padding='same', activation=output_activation)(x)
+    if auxvar_arr:
+        # x = Concatenate()([x, s_in])
+        s = ConvBlock(
+            n_filters, 
+            activation=activation, 
+            dropout_rate=0, 
+            normalization=normalization, 
+            attention=False)(s_in)  
+        x = Concatenate()([x, s])   
+
+        x = ConvBlock(
+            n_channels_out, 
+            activation=output_activation, 
+            dropout_rate=0, 
+            normalization=normalization, 
+            attention=False)(x)  # attention=True
+    else:
+        x = Conv2D(n_channels_out, (3, 3), padding='same', activation=output_activation)(x)
+    
     model_name = backbone_block + '_pin'
-    return Model(inputs=x_in, outputs=x, name=model_name)
+    if auxvar_arr:
+        return Model(inputs=[x_in, s_in], outputs=x, name=model_name)  
+    else:
+        return Model(inputs=x_in, outputs=x, name=model_name)
 
 
 def recnet_pin(
     backbone_block,
     n_channels, 
+    n_aux_channels,
     n_filters, 
     n_blocks, 
     n_channels_out=1, 
@@ -88,27 +115,23 @@ def recnet_pin(
     """
     backbone_block = checkarg_backbone(backbone_block)
     dropout_variant = checkarg_dropout_variant(dropout_variant)
-    static_arr = True if isinstance(n_channels, tuple) else False
-    if static_arr:
-        x_n_channels = n_channels[0]
-        static_n_channels = n_channels[1]
-    else:
-        x_n_channels = n_channels
+    
+    auxvar_arr = True if n_aux_channels > 0 else False
 
-    x_in = Input(shape=(None, None, None, x_n_channels))
+    x_in = Input(shape=(None, None, None, n_channels))
    
     x = b = RecurrentConvBlock(
         n_filters, 
         activation=activation, 
         normalization=normalization)(x_in)
 
-    if static_arr:
-        s_in = Input(shape=(None, None, static_n_channels))
+    if auxvar_arr:
+        s_in = Input(shape=(None, None, n_aux_channels))
         s_in_concat = tf.expand_dims(s_in, 1)
         s_in_concat = tf.repeat(s_in_concat, time_window, axis=1)
-        x = Conv2D(n_filters - static_n_channels, (1, 1), padding='same')(x)
+        x = Conv2D(n_filters - n_aux_channels, (1, 1), padding='same')(x)
         x = Concatenate()([x, s_in_concat])
-        b = Conv2D(n_filters - static_n_channels, (1, 1), padding='same')(b)
+        b = Conv2D(n_filters - n_aux_channels, (1, 1), padding='same')(b)
         b = Concatenate()([b, s_in_concat])
 
     for i in range(n_blocks):
@@ -145,7 +168,7 @@ def recnet_pin(
     x = Conv2D(n_channels_out, (3, 3), padding='same', activation=output_activation)(x)
 
     model_name = 'rec' + backbone_block + '_pin' 
-    if static_arr:
+    if auxvar_arr:
         return Model(inputs=[x_in, s_in], outputs=x, name=model_name)
     else:
         return Model(inputs=x_in, outputs=x, name=model_name)
