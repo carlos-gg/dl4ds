@@ -48,8 +48,8 @@ def net_postupsampling(
     upsampling = checkarg_upsampling(upsampling)
     dropout_variant = checkarg_dropout_variant(dropout_variant)
 
-    static_arr = True if n_aux_channels > 0 else False
-    if static_arr:
+    auxvar_arr = True if n_aux_channels > 0 else False
+    if auxvar_arr:
         s_in = Input(shape=(None, None, n_aux_channels))
 
     x_in = Input(shape=(None, None, n_channels))
@@ -86,7 +86,7 @@ def net_postupsampling(
         x = Concatenate()([x, b])
     
     model_name = backbone_block + '_' + upsampling
-    if static_arr:
+    if auxvar_arr:
         ups_activation = activation
     else:
         ups_activation = output_activation
@@ -100,7 +100,7 @@ def net_postupsampling(
     elif upsampling == 'dc':
         x = Deconvolution(scale, n_channels_out, ups_activation)(x)
     
-    if static_arr:
+    if auxvar_arr:
         # x = Concatenate()([x, s_in])
         s = ConvBlock(
             n_filters, 
@@ -117,7 +117,7 @@ def net_postupsampling(
             normalization=normalization, 
             attention=False)(x)  # attention=True
 
-    if static_arr:
+    if auxvar_arr:
         return Model(inputs=[x_in, s_in], outputs=x, name=model_name)  
     else:
         return Model(inputs=x_in, outputs=x, name=model_name)  
@@ -128,8 +128,8 @@ def recnet_postupsampling(
     upsampling,
     scale, 
     n_channels, 
+    n_aux_channels,
     n_filters, 
-    n_blocks, 
     lr_size,
     time_window, 
     n_channels_out=1, 
@@ -150,34 +150,16 @@ def recnet_postupsampling(
     upsampling = checkarg_upsampling(upsampling)
     dropout_variant = checkarg_dropout_variant(dropout_variant)
         
-    static_arr = True if isinstance(n_channels, tuple) else False
-    if static_arr:
-        x_n_channels = n_channels[0]
-        static_n_channels = n_channels[1]
-    else:
-        x_n_channels = n_channels
+    auxvar_arr = True if n_aux_channels > 0 else False
 
     h_lr = lr_size[0]
     w_lr = lr_size[1]
-
-    x_in = Input(shape=(None, None, None, x_n_channels))
+    x_in = Input(shape=(None, h_lr, w_lr, n_channels))
     
     x = b = RecurrentConvBlock(
         n_filters, 
         activation=activation, 
         normalization=normalization)(x_in)
-
-    if static_arr:
-        s_in = Input(shape=(None, None, static_n_channels))
-        s_in_lr = tf.image.resize(images=s_in, size=(h_lr, w_lr), method='bilinear')
-
-        s_in_lr = tf.expand_dims(s_in_lr, 1)
-        s_in_lr = tf.repeat(s_in_lr, time_window, axis=1)
-        
-        x = Conv2D(n_filters - static_n_channels, (1, 1), padding='same')(x)
-        x = Concatenate()([x, s_in_lr])
-        b = Conv2D(n_filters - static_n_channels, (1, 1), padding='same')(b)
-        b = Concatenate()([b, s_in_lr])
 
     b = RecurrentConvBlock(
         n_filters, 
@@ -194,26 +176,27 @@ def recnet_postupsampling(
     
     if backbone_block == 'convnet':
         x = b
-        n_filters_spc = n_filters
+        n_filters_ = n_filters
     elif backbone_block == 'resnet':
         x = Add()([x, b])
-        n_filters_spc = n_filters
+        n_filters_ = n_filters
     elif backbone_block == 'densenet':
         x = Concatenate()([x, b])
-        n_filters_spc = x.get_shape()[-1]
+        n_filters_ = x.get_shape()[-1]
     
     if upsampling == 'spc':
-        upsampling_layer = SubpixelConvolution(scale, n_filters_spc)
+        upsampling_layer = SubpixelConvolution(scale, n_filters_)
     elif upsampling == 'rc':
         upsampling_layer = UpSampling2D(scale, interpolation='bilinear')
     elif upsampling == 'dc':
-        upsampling_layer = Deconvolution(scale, n_filters)
+        upsampling_layer = Deconvolution(scale, n_filters_)
     x = TimeDistributed(upsampling_layer, name='upsampling_' + upsampling)(x)
             
-    # concatenating the HR version of the static array
-    if static_arr:
+    # concatenating the HR version of the auxiliary array
+    if auxvar_arr:
+        s_in = Input(shape=(None, None, n_aux_channels))
         s = ConvBlock(n_filters, activation=activation, dropout_rate=0, 
-                        normalization=None, attention=False)(s_in)
+                      normalization=None, attention=attention)(s_in)
         s = tf.expand_dims(s, 1)
         s = tf.repeat(s, time_window, axis=1)
         x = Concatenate()([x, s])
@@ -221,7 +204,7 @@ def recnet_postupsampling(
     x = Conv2D(n_channels_out, (3, 3), padding='same', activation=output_activation)(x)
 
     model_name = 'rec' + backbone_block + '_' + upsampling
-    if static_arr:
+    if auxvar_arr:
         return Model(inputs=[x_in, s_in], outputs=x, name=model_name)
     else:
         return Model(inputs=x_in, outputs=x, name=model_name)
