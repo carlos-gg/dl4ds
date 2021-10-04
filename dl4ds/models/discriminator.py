@@ -4,7 +4,7 @@ from tensorflow.keras.layers import (Input, Dropout, Dense, Conv2D, Add,
                                      GlobalAveragePooling3D, Cropping2D)
 
 from .blocks import ResidualBlock, RecurrentConvBlock
-from . import POSTUPSAMPLING_METHODS
+from .. import POSTUPSAMPLING_METHODS
 
 
 def residual_discriminator(

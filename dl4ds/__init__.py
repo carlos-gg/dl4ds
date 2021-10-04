@@ -20,6 +20,5 @@ from .inference import *
 from .utils import *
 from .dataloader import *
 from .models import *
-from .discriminator import * 
 from .cgan import *
 
