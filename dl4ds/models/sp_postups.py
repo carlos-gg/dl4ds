@@ -3,7 +3,7 @@ from tensorflow.keras.layers import (Add, Conv2D, Input, UpSampling2D, Dropout,
                                      GaussianDropout, Concatenate)
 from tensorflow.keras.models import Model
 
-from ..blocks import (ResidualBlock, ConvBlock, Deconvolution,
+from .blocks import (ResidualBlock, ConvBlock, Deconvolution,
                      DenseBlock, TransitionBlock, SubpixelConvolution)
 from ..utils import (checkarg_backbone, checkarg_upsampling, 
                     checkarg_dropout_variant)

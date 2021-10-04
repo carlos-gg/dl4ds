@@ -6,9 +6,8 @@ import os
 import tensorflow as tf
 import horovod.tensorflow as hvd
 
-from .models import (net_pin, recnet_pin, net_postupsampling, 
-                     recnet_postupsampling)
-from .discriminator import residual_discriminator
+from .models import (net_postupsampling, recnet_postupsampling, net_pin, 
+                     recnet_pin, residual_discriminator)
 from .utils import checkarg_model
 from . import POSTUPSAMPLING_METHODS, SPATIAL_MODELS, SPATIOTEMP_MODELS
 

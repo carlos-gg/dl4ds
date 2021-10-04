@@ -18,9 +18,8 @@ from .utils import (Timing, list_devices, set_gpu_memory_growth,
 from .dataloader import DataGenerator, create_batch_hr_lr
 from .losses import mae, mse, dssim, dssim_mae, dssim_mae_mse, dssim_mse
 from .models import (net_pin, recnet_pin, net_postupsampling, 
-                     recnet_postupsampling)
-from .cgan import train_step 
-from .discriminator import residual_discriminator
+                     recnet_postupsampling, residual_discriminator)
+from .cgan import train_step
 
 
 class Trainer(ABC):

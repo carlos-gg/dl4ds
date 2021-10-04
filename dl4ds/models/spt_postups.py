@@ -4,7 +4,7 @@ from tensorflow.keras.layers import (Add, Conv2D, Input, UpSampling2D, Dropout,
                                      TimeDistributed)
 from tensorflow.keras.models import Model
 
-from ..blocks import (RecurrentConvBlock, ConvBlock, SubpixelConvolution, 
+from .blocks import (RecurrentConvBlock, ConvBlock, SubpixelConvolution, 
                      Deconvolution)
 from ..utils import (checkarg_backbone, checkarg_upsampling, 
                     checkarg_dropout_variant)
