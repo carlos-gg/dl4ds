@@ -759,7 +759,7 @@ class CGANTrainer(Trainer):
 
         # Checkpoint
         if self.savecheckpoint_path is not None:
-            checkpoint_prefix = os.path.join(self.savecheckpoint_path, 'checkpoint_epoch')
+            checkpoint_prefix = os.path.join(self.savecheckpoint_path + 'chkpts/', 'checkpoint_epoch')
             checkpoint = tf.train.Checkpoint(generator_optimizer=generator_optimizer,
                                              discriminator_optimizer=discriminator_optimizer,
                                              generator=self.generator, discriminator=self.discriminator)
