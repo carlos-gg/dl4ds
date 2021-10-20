@@ -1,6 +1,7 @@
 import tensorflow as tf
 from tensorflow.keras.layers import (Add, Conv2D, Input, UpSampling2D, Dropout, 
-                                     GaussianDropout, Concatenate)
+                                     GaussianDropout, Concatenate, 
+                                     LocallyConnected2D)
 from tensorflow.keras.models import Model
 
 from .blocks import (ResidualBlock, ConvBlock, Deconvolution,
@@ -17,13 +18,15 @@ def net_postupsampling(
     n_aux_channels,
     n_filters, 
     n_blocks, 
+    lr_size,
     n_channels_out=1, 
     normalization=None,
     dropout_rate=0.2,
     dropout_variant='spatial',
     attention=False,
     activation='relu',
-    output_activation=None):
+    output_activation=None,
+    localcon_layer=True):
     """
     Deep neural network with different backbone architectures (according to the
     ``backbone_block``) and post-upsampling methods (according to 
@@ -39,12 +42,18 @@ def net_postupsampling(
     dropout_rate : float, optional
         Float between 0 and 1. Fraction of the input units to drop. If 0 then no
         dropout is applied. 
-    dropout_vaiant : str or None, optional
+    dropout_variant : str or None, optional
         Type of dropout: gaussian, block, spatial. 
     """
     backbone_block = checkarg_backbone(backbone_block)
     upsampling = checkarg_upsampling(upsampling)
     dropout_variant = checkarg_dropout_variant(dropout_variant)
+
+    h_lr = lr_size[0]
+    w_lr = lr_size[1]
+    if upsampling is not None:
+        h_hr = int(h_lr * scale)
+        w_hr = int(w_lr * scale)                                    
 
     auxvar_arr = True if n_aux_channels > 0 else False
     if auxvar_arr:
@@ -52,6 +61,9 @@ def net_postupsampling(
 
     x_in = Input(shape=(None, None, n_channels))
     x = b = Conv2D(n_filters, (3, 3), padding='same')(x_in)
+
+    #---------------------------------------------------------------------------
+    # N conv blocks
     for i in range(n_blocks):
         if backbone_block == 'convnet':
             b = ConvBlock(
@@ -83,6 +95,8 @@ def net_postupsampling(
     elif backbone_block == 'densenet':
         x = Concatenate()([x, b])
     
+    #---------------------------------------------------------------------------
+    # Upsampling
     model_name = backbone_block + '_' + upsampling
     if auxvar_arr:
         ups_activation = activation
@@ -98,24 +112,45 @@ def net_postupsampling(
     elif upsampling == 'dc':
         x = Deconvolution(scale, n_channels_out, ups_activation)(x)
     
+    #---------------------------------------------------------------------------
+    # Localized convolutional layer with learnable weights
+    if localcon_layer:
+        lws_in = Input(shape=(h_hr, w_hr, 2))
+        lws = LocallyConnected2D(
+            filters=2, 
+            kernel_size=(1, 1), 
+            bias_initializer='zeros',
+            use_bias=False)(lws_in)
+        x = Concatenate()([x, lws])
+
+    #---------------------------------------------------------------------------
+    # HR aux channels are processed
     if auxvar_arr:
-        # x = Concatenate()([x, s_in])
-        s = ConvBlock(
+        s = ConvBlock(  # or LocallyConnected2D instead?
             n_filters, 
             activation=activation, 
             dropout_rate=0, 
             normalization=normalization, 
             attention=False)(s_in)  
         x = Concatenate()([x, s])   
+    
+    #---------------------------------------------------------------------------
+    # Last conv layer
+    x = ConvBlock(
+        n_filters, 
+        activation=output_activation, 
+        dropout_rate=dropout_rate, 
+        normalization=normalization, 
+        attention=True)(x)
 
-        x = ConvBlock(
-            n_channels_out, 
-            activation=output_activation, 
-            dropout_rate=0, 
-            normalization=normalization, 
-            attention=False)(x)  # attention=True
+    x = ConvBlock(
+        n_channels_out, 
+        activation=output_activation, 
+        dropout_rate=0, 
+        normalization=normalization, 
+        attention=False)(x) 
 
     if auxvar_arr:
-        return Model(inputs=[x_in, s_in], outputs=x, name=model_name)  
+        return Model(inputs=[x_in, s_in, lws_in], outputs=x, name=model_name)  
     else:
-        return Model(inputs=x_in, outputs=x, name=model_name)  
+        return Model(inputs=[x_in, lws_in], outputs=x, name=model_name)  
