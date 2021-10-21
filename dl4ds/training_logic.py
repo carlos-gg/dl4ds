@@ -191,6 +191,7 @@ class SupervisedTrainer(Trainer):
         model_list=None,
         topography=None, 
         landocean=None,
+        use_season=True,
         scale=5, 
         interpolation='bicubic', 
         patch_size=50, 
@@ -305,6 +306,17 @@ class SupervisedTrainer(Trainer):
             Dictionary with additional parameters passed to the neural network 
             model.
         """
+        self.use_season = use_season
+        if self.use_season:
+            if not isinstance(data_train, xr.DataArray):
+                msg = '`data_train` must be a xr.DataArray when use_season=True'
+                raise TypeError(msg)
+        else:
+            # removing the time metadata (season is not used as input)
+            data_train = data_train.values
+            data_test = data_test.values
+            data_val = data_val.values
+
         super().__init__(
             model_name=model_name, 
             data_train=data_train,
@@ -400,11 +412,11 @@ class SupervisedTrainer(Trainer):
             if isinstance(self.data_train, xr.DataArray):
                 n_aux_channels += 4
 
-            if self.patch_size is None:
-                lr_height = int(self.data_train.shape[1] / self.scale)
-                lr_width = int(self.data_train.shape[2] / self.scale)
-            else:
-                lr_height = lr_width = int(self.patch_size / self.scale)
+        if self.patch_size is None:
+            lr_height = int(self.data_train.shape[1] / self.scale)
+            lr_width = int(self.data_train.shape[2] / self.scale)
+        else:
+            lr_height = lr_width = int(self.patch_size / self.scale)
 
         ### instantiating and fitting the model
         if self.upsampling in POSTUPSAMPLING_METHODS:
@@ -413,6 +425,7 @@ class SupervisedTrainer(Trainer):
                     backbone_block=self.backbone,
                     upsampling=self.upsampling, 
                     scale=self.scale, 
+                    lr_size=(lr_height, lr_width),
                     n_channels=n_channels, 
                     n_aux_channels=n_aux_channels,
                     **self.architecture_params)
