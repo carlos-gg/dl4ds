@@ -114,8 +114,8 @@ def net_postupsampling(
     
     #---------------------------------------------------------------------------
     # Localized convolutional layer with learnable weights
+    lws_in = Input(shape=(h_hr, w_hr, 2))
     if localcon_layer:
-        lws_in = Input(shape=(h_hr, w_hr, 2))
         lws = LocallyConnected2D(
             filters=2, 
             kernel_size=(1, 1), 
