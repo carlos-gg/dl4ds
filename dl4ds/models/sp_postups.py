@@ -126,22 +126,22 @@ def net_postupsampling(
     #---------------------------------------------------------------------------
     # HR aux channels are processed
     if auxvar_arr:
-        s = ConvBlock(  # or LocallyConnected2D instead?
+        s = ConvBlock(  
             n_filters, 
             activation=activation, 
             dropout_rate=0, 
             normalization=normalization, 
-            attention=False)(s_in)  
+            attention=False)(s_in) 
         x = Concatenate()([x, s])   
     
     #---------------------------------------------------------------------------
-    # Last conv layer
+    # Last conv layers
     x = ConvBlock(
         n_filters, 
         activation=output_activation, 
         dropout_rate=dropout_rate, 
         normalization=normalization, 
-        attention=True)(x)
+        attention=True)(x)  
 
     x = ConvBlock(
         n_channels_out, 
