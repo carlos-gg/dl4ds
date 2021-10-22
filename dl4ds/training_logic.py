@@ -415,8 +415,11 @@ class SupervisedTrainer(Trainer):
         if self.patch_size is None:
             lr_height = int(self.data_train.shape[1] / self.scale)
             lr_width = int(self.data_train.shape[2] / self.scale)
+            hr_height = int(self.data_train.shape[1])
+            hr_width = int(self.data_train.shape[2])
         else:
             lr_height = lr_width = int(self.patch_size / self.scale)
+            hr_height = hr_width = int(self.patch_size)
 
         ### instantiating and fitting the model
         if self.upsampling in POSTUPSAMPLING_METHODS:
@@ -444,6 +447,7 @@ class SupervisedTrainer(Trainer):
                 self.model = net_pin(
                     backbone_block=self.backbone,
                     n_channels=n_channels, 
+                    hr_size=(hr_height, hr_width),
                     n_aux_channels=n_aux_channels,
                     **self.architecture_params)        
             else:
