@@ -25,6 +25,8 @@ def create_batch_hr_lr(x_train, batch_size, predictors, scale, topography,
         batch_hr_images = []
         batch_lr_images = []
         batch_auxvars = []
+        batch_lws = []
+
         for i in indices:
             if predictors is not None:
                 params = dict(predictors=predictors[i])
@@ -53,14 +55,20 @@ def create_batch_hr_lr(x_train, batch_size, predictors, scale, topography,
             if topography is not None or landocean is not None or season is not None:
                 aux_vars = res[2]
                 batch_auxvars.append(aux_vars)
+                lws = res[3]
+                batch_lws.append(lws)
+            else:
+                lws = res[2]
+                batch_lws.append(lws)
 
         batch_lr_images = np.asarray(batch_lr_images)
         batch_hr_images = np.asarray(batch_hr_images) 
+        batch_lws = np.asarray(batch_lws)
         if topography is not None or landocean is not None or season is not None:
             batch_auxvars = np.asarray(batch_auxvars)
-            return batch_hr_images, batch_lr_images, batch_auxvars
+            return batch_hr_images, batch_lr_images, batch_auxvars, batch_lws
         else:
-            return batch_hr_images, batch_lr_images
+            return batch_hr_images, batch_lr_images, batch_lws
     
     else:
         if shuffle:
