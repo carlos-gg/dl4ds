@@ -11,6 +11,8 @@ from tensorflow.keras.callbacks import EarlyStopping
 from tensorflow.keras.utils import Progbar
 from matplotlib.pyplot import show, close
 import horovod.tensorflow.keras as hvd
+import logging
+tf.get_logger().setLevel(logging.ERROR)
 
 from . import POSTUPSAMPLING_METHODS, MODELS, SPATIAL_MODELS, SPATIOTEMP_MODELS
 from .utils import (Timing, list_devices, set_gpu_memory_growth, 
@@ -447,8 +449,8 @@ class SupervisedTrainer(Trainer):
                 self.model = net_pin(
                     backbone_block=self.backbone,
                     n_channels=n_channels, 
-                    hr_size=(hr_height, hr_width),
                     n_aux_channels=n_aux_channels,
+                    hr_size=(hr_height, hr_width),
                     **self.architecture_params)        
             else:
                 self.model = recnet_pin(
@@ -700,12 +702,14 @@ class CGANTrainer(Trainer):
         if self.predictors_train is not None:
             n_channels += len(self.predictors_train)
         
-        if self.model_is_spatiotemp:
-            if self.patch_size is None:
-                lr_height = int(self.data_train.shape[1] / self.scale)
-                lr_width = int(self.data_train.shape[2] / self.scale)
-            else:
-                lr_height = lr_width = int(self.patch_size / self.scale)  
+        if self.patch_size is None:
+            lr_height = int(self.data_train.shape[1] / self.scale)
+            lr_width = int(self.data_train.shape[2] / self.scale)
+            hr_height = int(self.data_train.shape[1])
+            hr_width = int(self.data_train.shape[2])
+        else:
+            lr_height = lr_width = int(self.patch_size / self.scale)
+            hr_height = hr_width = int(self.patch_size)
 
         # Generator
         if self.upsampling in POSTUPSAMPLING_METHODS:
@@ -716,6 +720,7 @@ class CGANTrainer(Trainer):
                     scale=self.scale, 
                     n_channels=n_channels,
                     n_aux_channels=n_aux_channels,
+                    lr_size=(lr_height, lr_width),
                     **self.generator_params)
             else:
                 self.generator = recnet_postupsampling(
@@ -733,6 +738,7 @@ class CGANTrainer(Trainer):
                     backbone_block=self.backbone,
                     n_channels=n_channels, 
                     n_aux_channels=n_aux_channels,
+                    hr_size=(hr_height, hr_width),
                     **self.generator_params)            
             else:
                 self.generator = recnet_pin(
@@ -816,6 +822,9 @@ class CGANTrainer(Trainer):
                 static_array = None
                 if self.topography is not None or self.landocean is not None or isinstance(self.data_train, xr.DataArray):
                     static_array = res[2]
+                    lws = res[3]
+                else:
+                    lws = res[2]
 
                 losses = train_step(
                     lr_array, 
@@ -828,7 +837,8 @@ class CGANTrainer(Trainer):
                     gen_pxloss_function=self.lossf,
                     summary_writer=summary_writer, 
                     first_batch=True if epoch==0 and i==0 else False,
-                    static_array=static_array)
+                    static_array=static_array,
+                    lws_array=lws)
                 
                 gen_total_loss, gen_gan_loss, gen_px_loss, disc_loss = losses
                 lossvals = [('gen_total_loss', gen_total_loss), 
@@ -886,12 +896,14 @@ class CGANTrainer(Trainer):
 
             hr_arrtest = tf.cast(res[0], tf.float32)
             lr_arrtest = tf.cast(res[1], tf.float32)
-            static_array_test = None
+            static_arrtest = None
             if self.topography is not None or self.landocean is not None or isinstance(self.data_train, xr.DataArray):
-                static_array_test = tf.cast(res[2], tf.float32)
-                input_test = [lr_arrtest, static_array_test]
+                static_arrtest = tf.cast(res[2], tf.float32)
+                lws_arrtest = tf.cast(res[3], tf.float32)
+                input_test = [lr_arrtest, static_arrtest, lws_arrtest]
             else:
-                input_test = lr_arrtest
+                lws_arrtest = tf.cast(res[2], tf.float32)
+                input_test = [lr_arrtest, lws_arrtest]
             
             y_test_pred = self.generator.predict(input_test)
             self.test_loss = self.lossf(hr_arrtest, y_test_pred)
