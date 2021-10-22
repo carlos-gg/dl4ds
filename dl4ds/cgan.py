@@ -140,9 +140,10 @@ def train_step(lr_array, hr_array, generator, discriminator, generator_optimizer
 
     if lws_array is not None:
         lws_array = tf.cast(lws_array, tf.float32)
-        input_generator = [lr_array, static_array, lws_array]
-    else:
-        input_generator = [lr_array, lws_array]   
+        if isinstance(input_generator, list):
+            input_generator.append(lws_array)
+        else:
+            input_generator = list(input_generator, lws_array)
 
     with tf.GradientTape() as gen_tape, tf.GradientTape() as disc_tape:
         # running the generator
