@@ -5,7 +5,8 @@ from tensorflow.keras.layers import (Add, Conv2D, Input, UpSampling2D, Dropout,
 from tensorflow.keras.models import Model
 
 from .blocks import (ResidualBlock, ConvBlock, Deconvolution,
-                     DenseBlock, TransitionBlock, SubpixelConvolution)
+                     DenseBlock, TransitionBlock, SubpixelConvolution,
+                     LocalizedConvBlock)
 from ..utils import (checkarg_backbone, checkarg_upsampling, 
                     checkarg_dropout_variant)
 
@@ -113,16 +114,12 @@ def net_postupsampling(
         x = Deconvolution(scale, n_channels_out, ups_activation)(x)
     
     #---------------------------------------------------------------------------
-    # Localized convolutional layer with learnable weights
+    # Localized convolutional layer
     lws_in = Input(shape=(h_hr, w_hr, 2))
     if localcon_layer:
-        lws = LocallyConnected2D(
-            filters=2, 
-            kernel_size=(1, 1), 
-            bias_initializer='zeros',
-            use_bias=False)(lws_in)
+        lws = LocalizedConvBlock()(lws_in)
         x = Concatenate()([x, lws])
-
+    
     #---------------------------------------------------------------------------
     # HR aux channels are processed
     if auxvar_arr:

@@ -3,7 +3,8 @@ from tensorflow.keras.layers import (Add, Conv2D, Input, Concatenate, Dropout,
                                      GaussianDropout, LocallyConnected2D)
 from tensorflow.keras.models import Model
 
-from .blocks import ResidualBlock, ConvBlock, DenseBlock, TransitionBlock
+from .blocks import (ResidualBlock, ConvBlock, DenseBlock, TransitionBlock,
+                     LocalizedConvBlock)
 from ..utils import checkarg_backbone, checkarg_dropout_variant
  
 
@@ -76,14 +77,10 @@ def net_pin(
         x = Concatenate()([x, b])
     
     #---------------------------------------------------------------------------
-    # Localized convolutional layer with learnable weights
+    # Localized convolutional layer
     lws_in = Input(shape=(h_hr, w_hr, 2))
     if localcon_layer:
-        lws = LocallyConnected2D(
-            filters=2, 
-            kernel_size=(1, 1), 
-            bias_initializer='zeros',
-            use_bias=False)(lws_in)
+        lws = LocalizedConvBlock()(lws_in)
         x = Concatenate()([x, lws])
 
     #---------------------------------------------------------------------------
