@@ -1,9 +1,9 @@
 import tensorflow as tf
-from tensorflow.keras.layers import (Add, Conv2D, ConvLSTM2D, 
+from tensorflow.keras.layers import (Add, Conv2D, ConvLSTM2D, Concatenate,
                                      SeparableConv2D, BatchNormalization, 
                                      LayerNormalization, Activation, 
                                      SpatialDropout2D, Conv2DTranspose, 
-                                     SpatialDropout3D, Concatenate)
+                                     SpatialDropout3D, LocallyConnected2D)
 
 from .attention import ChannelAttention2D
 
@@ -165,6 +165,26 @@ class TransitionBlock(tf.keras.layers.Layer):
         else:
             Y = self.conv(X)
             Y = self.activation(Y)
+        return Y
+
+
+class LocalizedConvBlock(tf.keras.layers.Layer):
+    """ Localized convolutional layer. To implement learnable inputs, we use 
+    auxillary input that receives a matrix of 1s and implements locally 
+    connected layer without biases with a 1x1 kernel.
+    """
+    def __init__(self, filters=2, activation=None, **kwargs):
+        super().__init__(**kwargs)
+        self.localconv = LocallyConnected2D(
+            filters=filters,
+            kernel_size=(1, 1),
+            implementation=3,
+            bias_initializer='zeros',
+            use_bias=False,
+            activation=activation)
+
+    def call(self, X):
+        Y = self.localconv(X)
         return Y
 
 
