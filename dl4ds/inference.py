@@ -24,7 +24,7 @@ def predict(
     return_lr=False,
     stochastic_output=False,
     device='CPU'):
-    """Inference with ``model``. The ``data`` is super-resolved or downscaled 
+    """Inference with ``model`` on ``data``, which is super-resolved/downscaled 
     using the trained super-resolution network. 
 
     Parameters
@@ -314,12 +314,15 @@ def _predict_(
                 print(f'Aux vars shape: {aux_vars_hr.shape}')
 
     ### Casting as TF tensors, creating inputs ---------------------------------
-    x_test_lr = tf.cast(x_test_lr, tf.float32)        
+    x_test_lr = tf.cast(x_test_lr, tf.float32)   
+    lws = checkarray_ndim(np.ones((hr_y, hr_x, 2)), 4, 0)
+    lws = np.repeat(lws, n_samples, axis=0)
+    local_lws_array = tf.cast(lws, tf.float32)     
     if topography is not None or landocean is not None or season is not None: 
         aux_vars_hr = tf.cast(aux_vars_hr, tf.float32) 
-        inputs = [x_test_lr, aux_vars_hr]
+        inputs = [x_test_lr, aux_vars_hr, local_lws_array]
     else:
-        inputs = x_test_lr
+        inputs = [x_test_lr, local_lws_array]
     
     ### Inference --------------------------------------------------------------
     # Stochasticity via dropout. It usually only applies when training (no values 
