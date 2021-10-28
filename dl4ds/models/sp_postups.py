@@ -1,11 +1,10 @@
 import tensorflow as tf
 from tensorflow.keras.layers import (Add, Conv2D, Input, UpSampling2D, Dropout, 
-                                     GaussianDropout, Concatenate, 
-                                     LocallyConnected2D)
+                                     GaussianDropout, Concatenate)
 from tensorflow.keras.models import Model
 
-from .blocks import (ResidualBlock, ConvBlock, Deconvolution,
-                     DenseBlock, TransitionBlock, SubpixelConvolution,
+from .blocks import (ResidualBlock, ConvBlock, DeconvolutionBlock,
+                     DenseBlock, TransitionBlock, SubpixelConvolutionBlock,
                      LocalizedConvBlock)
 from ..utils import (checkarg_backbone, checkarg_upsampling, 
                     checkarg_dropout_variant)
@@ -58,9 +57,15 @@ def net_postupsampling(
 
     auxvar_arr = True if n_aux_channels > 0 else False
     if auxvar_arr:
-        s_in = Input(shape=(None, None, n_aux_channels))
+        if not localcon_layer:
+            s_in = Input(shape=(None, None, n_aux_channels))
+        else:
+            s_in = Input(shape=(h_hr, w_hr, n_aux_channels))
 
-    x_in = Input(shape=(None, None, n_channels))
+    if not localcon_layer:
+        x_in = Input(shape=(None, None, n_channels))
+    else:
+        x_in = Input(shape=(h_lr, w_lr, n_channels))
     x = b = Conv2D(n_filters, (3, 3), padding='same')(x_in)
 
     #---------------------------------------------------------------------------
@@ -105,13 +110,13 @@ def net_postupsampling(
         ups_activation = output_activation
 
     if upsampling == 'spc':
-        x = SubpixelConvolution(scale, n_filters)(x)
+        x = SubpixelConvolutionBlock(scale, n_filters)(x)
         x = Conv2D(n_channels_out, (3, 3), padding='same', activation=ups_activation)(x)
     elif upsampling == 'rc':
         x = UpSampling2D(scale, interpolation='bilinear')(x)
         x = Conv2D(n_channels_out, (3, 3), padding='same', activation=ups_activation)(x)
     elif upsampling == 'dc':
-        x = Deconvolution(scale, n_channels_out, ups_activation)(x)
+        x = DeconvolutionBlock(scale, n_channels_out, ups_activation)(x)
     
     #---------------------------------------------------------------------------
     # Localized convolutional layer

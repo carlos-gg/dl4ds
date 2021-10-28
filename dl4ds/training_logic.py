@@ -912,5 +912,3 @@ class CGANTrainer(Trainer):
         self.timing.runtime()
 
         self.save_results(self.generator, folder_prefix='cgan_')
-        
-

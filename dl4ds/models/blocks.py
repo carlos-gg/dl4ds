@@ -241,7 +241,7 @@ class RecurrentConvBlock(tf.keras.layers.Layer):
         return Y
 
 
-class SubpixelConvolution(tf.keras.layers.Layer):
+class SubpixelConvolutionBlock(tf.keras.layers.Layer):
     """
     """
     def __init__(self, scale, n_filters, **kwargs):
@@ -294,7 +294,7 @@ class SubpixelConvolution(tf.keras.layers.Layer):
         return x
 
 
-class Deconvolution(tf.keras.layers.Layer):
+class DeconvolutionBlock(tf.keras.layers.Layer):
     """
     FSRCNN: https://arxiv.org/abs/1608.00367
     """

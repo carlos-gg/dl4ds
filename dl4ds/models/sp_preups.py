@@ -1,6 +1,6 @@
 import tensorflow as tf
 from tensorflow.keras.layers import (Add, Conv2D, Input, Concatenate, Dropout, 
-                                     GaussianDropout, LocallyConnected2D)
+                                     GaussianDropout)
 from tensorflow.keras.models import Model
 
 from .blocks import (ResidualBlock, ConvBlock, DenseBlock, TransitionBlock,
@@ -38,9 +38,15 @@ def net_pin(
 
     auxvar_arr = True if n_aux_channels > 0 else False
     if auxvar_arr:
-        s_in = Input(shape=(None, None, n_aux_channels))
+        if not localcon_layer:
+            s_in = Input(shape=(None, None, n_aux_channels))
+        else:
+            s_in = Input(shape=(h_hr, w_hr, n_aux_channels))
 
-    x_in = Input(shape=(None, None, n_channels))
+    if not localcon_layer:  
+        x_in = Input(shape=(None, None, n_channels))
+    else:
+        x_in = Input(shape=(h_hr, w_hr, n_channels))
     x = b = Conv2D(n_filters, (3, 3), padding='same')(x_in)
 
     #---------------------------------------------------------------------------

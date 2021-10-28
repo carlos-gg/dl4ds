@@ -4,8 +4,8 @@ from tensorflow.keras.layers import (Add, Conv2D, Input, UpSampling2D, Dropout,
                                      TimeDistributed)
 from tensorflow.keras.models import Model
 
-from .blocks import (RecurrentConvBlock, ConvBlock, SubpixelConvolution, 
-                     Deconvolution)
+from .blocks import (RecurrentConvBlock, ConvBlock, SubpixelConvolutionBlock, 
+                     DeconvolutionBlock)
 from ..utils import (checkarg_backbone, checkarg_upsampling, 
                     checkarg_dropout_variant)
 
@@ -72,11 +72,11 @@ def recnet_postupsampling(
         n_filters_ = x.get_shape()[-1]
     
     if upsampling == 'spc':
-        upsampling_layer = SubpixelConvolution(scale, n_filters_)
+        upsampling_layer = SubpixelConvolutionBlock(scale, n_filters_)
     elif upsampling == 'rc':
         upsampling_layer = UpSampling2D(scale, interpolation='bilinear')
     elif upsampling == 'dc':
-        upsampling_layer = Deconvolution(scale, n_filters_)
+        upsampling_layer = DeconvolutionBlock(scale, n_filters_)
     x = TimeDistributed(upsampling_layer, name='upsampling_' + upsampling)(x)
             
     # concatenating the HR version of the auxiliary array
