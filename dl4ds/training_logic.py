@@ -4,7 +4,6 @@ import numpy as np
 import xarray as xr
 import tensorflow as tf
 from abc import ABC, abstractmethod
-from plot_keras_history import plot_history
 from tensorflow.keras.optimizers import Adam
 from tensorflow.keras.optimizers.schedules import PiecewiseConstantDecay
 from tensorflow.keras.callbacks import EarlyStopping
@@ -16,7 +15,7 @@ tf.get_logger().setLevel(logging.ERROR)
 
 from . import POSTUPSAMPLING_METHODS, MODELS, SPATIAL_MODELS, SPATIOTEMP_MODELS
 from .utils import (Timing, list_devices, set_gpu_memory_growth, 
-                    set_visible_gpus, checkarg_model)
+                    set_visible_gpus, checkarg_model, plot_history)
 from .dataloader import DataGenerator, create_batch_hr_lr
 from .losses import mae, mse, dssim, dssim_mae, dssim_mae_mse, dssim_mse
 from .models import (net_pin, recnet_pin, net_postupsampling, 
