@@ -454,8 +454,9 @@ class SupervisedTrainer(Trainer):
             else:
                 self.model = recnet_pin(
                     backbone_block=self.backbone,
-                    n_channels=n_channels, 
+                    n_channels=n_channels,
                     n_aux_channels=n_aux_channels,
+                    hr_size=(hr_height, hr_width),
                     time_window=self.time_window, 
                     **self.architecture_params)
 
@@ -620,8 +621,8 @@ class CGANTrainer(Trainer):
             The training loop saves a checkpoint every ``checkpoints_frequency`` 
             epochs. If None, then no checkpoints are saved during training. 
         savecheckpoint_path : None or str
-            Path for saving the training checkpoints. If None, then no checkpoints
-            are saved during training. 
+            Path for saving the training checkpoints. If None, then no 
+            checkpoints are saved during training. 
         device : str
             Choice of 'GPU' or 'CPU' for the training of the Tensorflow models. 
         gpu_memory_growth : bool, optional
@@ -744,6 +745,7 @@ class CGANTrainer(Trainer):
                     backbone_block=self.backbone,
                     n_channels=n_channels, 
                     n_aux_channels=n_aux_channels,
+                    hr_size=(hr_height, hr_width),
                     time_window=self.time_window, 
                     **self.generator_params)
 
