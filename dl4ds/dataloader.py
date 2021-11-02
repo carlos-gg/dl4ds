@@ -17,15 +17,16 @@ def create_batch_hr_lr(x_train, batch_size, predictors, scale, topography,
     """Create a batch of HR/LR samples. Used in the adversarial conditional 
     training.
     """
+    batch_hr_images = []
+    batch_lr_images = []
+    batch_auxvars = []
+    batch_lws = []
+
     if time_window is None:
         if shuffle:
             indices = np.random.choice(x_train.shape[0], batch_size, replace=False)
         else:
             indices = np.arange(x_train.shape[0])
-        batch_hr_images = []
-        batch_lr_images = []
-        batch_auxvars = []
-        batch_lws = []
 
         for i in indices:
             if predictors is not None:
@@ -48,27 +49,16 @@ def create_batch_hr_lr(x_train, batch_size, predictors, scale, topography,
                 model=model, 
                 interpolation=interpolation,
                 **params)
+
             hr_array = res[0]
             lr_array = res[1]
             batch_lr_images.append(lr_array)
             batch_hr_images.append(hr_array)
             if topography is not None or landocean is not None or season is not None:
-                aux_vars = res[2]
-                batch_auxvars.append(aux_vars)
-                lws = res[3]
-                batch_lws.append(lws)
+                batch_auxvars.append(res[2])
+                batch_lws.append(res[3])
             else:
-                lws = res[2]
-                batch_lws.append(lws)
-
-        batch_lr_images = np.asarray(batch_lr_images)
-        batch_hr_images = np.asarray(batch_hr_images) 
-        batch_lws = np.asarray(batch_lws)
-        if topography is not None or landocean is not None or season is not None:
-            batch_auxvars = np.asarray(batch_auxvars)
-            return batch_hr_images, batch_lr_images, batch_auxvars, batch_lws
-        else:
-            return batch_hr_images, batch_lr_images, batch_lws
+                batch_lws.append(res[2])
     
     else:
         if shuffle:
@@ -76,9 +66,7 @@ def create_batch_hr_lr(x_train, batch_size, predictors, scale, topography,
             indices = np.random.choice(rangevec, batch_size, replace=False)
         else:
             indices = np.arange(time_window, x_train.shape[0])
-        batch_hr_images = []
-        batch_lr_images = []
-        batch_static_images = []
+
         for i in indices:
             if predictors is not None:
                 params = dict(predictors=predictors[i-time_window: i])
@@ -101,24 +89,24 @@ def create_batch_hr_lr(x_train, batch_size, predictors, scale, topography,
                 interpolation=interpolation,
                 **params)
 
-            if topography is not None or landocean is not None:
-                hr_array, lr_array, static_array = res 
-                batch_lr_images.append(lr_array)
-                batch_hr_images.append(hr_array)
-                batch_static_images.append(static_array)
+            hr_array = res[0]
+            lr_array = res[1]
+            batch_lr_images.append(lr_array)
+            batch_hr_images.append(hr_array)
+            if topography is not None or landocean is not None or season is not None:
+                batch_auxvars.append(res[2])
+                batch_lws.append(res[3])
             else:
-                hr_array, lr_array = res 
-                batch_lr_images.append(lr_array)
-                batch_hr_images.append(hr_array)
+                batch_lws.append(res[2])
 
-        batch_lr_images = np.asarray(batch_lr_images)
-        batch_hr_images = np.asarray(batch_hr_images) 
-        if topography is not None or landocean is not None:
-            batch_static_images = np.asarray(batch_static_images)
-            return batch_hr_images, batch_lr_images, batch_static_images
-        else:
-            return batch_hr_images, batch_lr_images
-
+    batch_lr_images = np.asarray(batch_lr_images)
+    batch_hr_images = np.asarray(batch_hr_images) 
+    batch_lws = np.asarray(batch_lws)
+    if topography is not None or landocean is not None or season is not None:
+        batch_auxvars = np.asarray(batch_auxvars)
+        return batch_hr_images, batch_lr_images, batch_auxvars, batch_lws
+    else:
+        return batch_hr_images, batch_lr_images, batch_lws
 
 def create_pair_hr_lr(
     array, 
@@ -286,13 +274,13 @@ def create_pair_hr_lr(
                 season_array_lr = season_array_hr
             lr_array = np.concatenate([lr_array, season_array_lr], axis=-1)
 
-    # Including the lws array --------------------------------------------------
-    local_lws_array = np.ones((hr_y, hr_x, 2))
-
     hr_array = np.asarray(hr_array, 'float32')
     lr_array = np.asarray(lr_array, 'float32')
+    if topography is not None or landocean is not None or season is not None:
+        static_array_hr = np.asanyarray(static_array_hr, 'float32')
+    # Including the lws array --------------------------------------------------
+    local_lws_array = np.ones((hr_y, hr_x, 2))
     local_lws_array = np.asarray(local_lws_array, 'float32')
-    static_array_hr = np.asanyarray(static_array_hr, 'float32')
 
     if debug: 
         if static_array_hr is not None:
@@ -432,6 +420,9 @@ def create_pair_temp_hr_lr(
     lr_array = np.asarray(lr_array, 'float32')
     if static_array_hr is not None:
         static_array_hr = np.asarray(static_array_hr, 'float32')
+    # Including the lws array --------------------------------------------------
+    local_lws_array = np.ones((hr_y, hr_x, 2))
+    local_lws_array = np.asarray(local_lws_array, 'float32')
 
     if debug:
         print(f'HR array: {hr_array.shape}, LR array: {lr_array.shape}, Auxiliary array: {season_array_hr.shape}')
@@ -448,9 +439,9 @@ def create_pair_temp_hr_lr(
                              dpi=100,plot_title='Auxiliary array HR')
 
     if static_array_hr is not None:
-        return hr_array, lr_array, static_array_hr
+        return hr_array, lr_array, static_array_hr, local_lws_array
     else:
-        return hr_array, lr_array
+        return hr_array, lr_array, local_lws_array
 
 
 class DataGenerator(tf.keras.utils.Sequence):
@@ -607,19 +598,21 @@ class DataGenerator(tf.keras.utils.Sequence):
                     **params)
 
                 if self.topography is not None or self.landocean is not None or season is not None:
-                    hr_array, lr_array, static_array_hr = res
+                    hr_array, lr_array, static_array_hr, lws = res
                     batch_static_hr_images.append(static_array_hr)
                 else:
-                    hr_array, lr_array = res
+                    hr_array, lr_array, lws = res
                 batch_lr_images.append(lr_array)
                 batch_hr_images.append(hr_array)
+                batch_lws.append(lws)
             batch_lr_images = np.asarray(batch_lr_images)
             batch_hr_images = np.asarray(batch_hr_images) 
+            batch_lws = np.asarray(batch_lws)
             if self.topography is not None or self.landocean is not None or season is not None:
                 batch_static_hr_images = np.asarray(batch_static_hr_images)
-                return [batch_lr_images, batch_static_hr_images], [batch_hr_images]
+                return [batch_lr_images, batch_static_hr_images, batch_lws], [batch_hr_images]
             else:
-                return [batch_lr_images], [batch_hr_images]
+                return [batch_lr_images, batch_lws], [batch_hr_images]
 
     def on_epoch_end(self):
         """
