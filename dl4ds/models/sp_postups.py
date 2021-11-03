@@ -140,7 +140,7 @@ def net_postupsampling(
     # Last conv layers
     x = ConvBlock(
         n_filters, 
-        activation=output_activation, 
+        activation=None, 
         dropout_rate=dropout_rate, 
         normalization=normalization, 
         attention=True)(x)  

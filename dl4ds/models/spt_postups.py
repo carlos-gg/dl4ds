@@ -5,7 +5,7 @@ from tensorflow.keras.layers import (Add, Conv2D, Input, UpSampling2D, Dropout,
 from tensorflow.keras.models import Model
 
 from .blocks import (RecurrentConvBlock, ConvBlock, SubpixelConvolutionBlock, 
-                     DeconvolutionBlock)
+                     DeconvolutionBlock, LocalizedConvBlock)
 from ..utils import (checkarg_backbone, checkarg_upsampling, 
                     checkarg_dropout_variant)
 
@@ -17,6 +17,7 @@ def recnet_postupsampling(
     n_channels, 
     n_aux_channels,
     n_filters, 
+    n_blocks,   # not used, here for compatibility with the signature of other models
     lr_size,
     time_window, 
     n_channels_out=1, 
@@ -25,7 +26,8 @@ def recnet_postupsampling(
     dropout_variant='spatial',
     normalization=None,
     attention=False,
-    output_activation=None):
+    output_activation=None,
+    localcon_layer=True):
     """
     Recurrent deep neural network with different backbone architectures 
     (according to the ``backbone_block``) and post-upsampling methods (according 
@@ -78,8 +80,9 @@ def recnet_postupsampling(
     elif upsampling == 'dc':
         upsampling_layer = DeconvolutionBlock(scale, n_filters_)
     x = TimeDistributed(upsampling_layer, name='upsampling_' + upsampling)(x)
-            
-    # concatenating the HR version of the auxiliary array
+
+    #---------------------------------------------------------------------------
+    # HR aux channels are processed
     if auxvar_arr:
         s_in = Input(shape=(None, None, n_aux_channels))
         s = ConvBlock(n_filters, activation=activation, dropout_rate=0, 
@@ -87,12 +90,35 @@ def recnet_postupsampling(
         s = tf.expand_dims(s, 1)
         s = tf.repeat(s, time_window, axis=1)
         x = Concatenate()([x, s])
-        
-    x = Conv2D(n_channels_out, (3, 3), padding='same', activation=output_activation)(x)
+    
+    #---------------------------------------------------------------------------
+    # Localized convolutional layer
+    lws_in = Input(shape=(int(h_lr * scale), int(w_lr * scale), 2))
+    if localcon_layer:
+        lws = LocalizedConvBlock()(lws_in)
+        lws = tf.expand_dims(lws, 1)
+        lws = tf.repeat(lws, time_window, axis=1)
+        x = Concatenate()([x, lws])
+
+    #---------------------------------------------------------------------------
+    # Last conv layers
+    x = ConvBlock(
+        n_filters, 
+        activation=None, 
+        dropout_rate=dropout_rate, 
+        normalization=normalization, 
+        attention=True)(x)  
+
+    x = ConvBlock(
+        n_channels_out, 
+        activation=output_activation, 
+        dropout_rate=0, 
+        normalization=normalization, 
+        attention=False)(x) 
 
     model_name = 'rec' + backbone_block + '_' + upsampling
     if auxvar_arr:
-        return Model(inputs=[x_in, s_in], outputs=x, name=model_name)
+        return Model(inputs=[x_in, s_in, lws_in], outputs=x, name=model_name)
     else:
-        return Model(inputs=x_in, outputs=x, name=model_name)
+        return Model(inputs=[x_in, lws_in], outputs=x, name=model_name)
 

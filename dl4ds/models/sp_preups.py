@@ -104,7 +104,7 @@ def net_pin(
     # Last conv layers
     x = ConvBlock(
         n_filters, 
-        activation=output_activation, 
+        activation=None, 
         dropout_rate=dropout_rate, 
         normalization=normalization, 
         attention=True)(x)  
@@ -114,7 +114,7 @@ def net_pin(
         activation=output_activation, 
         dropout_rate=0, 
         normalization=normalization, 
-        attention=False)(x) 
+        attention=False)(x)     
     
     model_name = backbone_block + '_pin'
     if auxvar_arr:

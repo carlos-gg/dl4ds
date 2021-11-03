@@ -4,7 +4,7 @@ from tensorflow.keras.layers import (Add, Conv2D, Input, Concatenate, Dropout,
 from tensorflow.keras.models import Model
 
 from .blocks import (RecurrentConvBlock, ResidualBlock, ConvBlock, 
-                     DenseBlock, TransitionBlock)
+                     DenseBlock, TransitionBlock, LocalizedConvBlock)
 from ..utils import checkarg_backbone, checkarg_dropout_variant
 
 
@@ -14,6 +14,7 @@ def recnet_pin(
     n_aux_channels,
     n_filters, 
     n_blocks, 
+    hr_size,
     n_channels_out=1, 
     time_window=None, 
     activation='relu',
@@ -21,7 +22,8 @@ def recnet_pin(
     dropout_rate=0.2,
     dropout_variant='spatial',
     attention=False,
-    output_activation=None):
+    output_activation=None,
+    localcon_layer=True):
     """
     Recurrent deep neural network with different backbone architectures 
     (according to the ``backbone_block``) and pre-upsampling via interpolation. 
@@ -29,8 +31,10 @@ def recnet_pin(
     """
     backbone_block = checkarg_backbone(backbone_block)
     dropout_variant = checkarg_dropout_variant(dropout_variant)
-    
+
     auxvar_arr = True if n_aux_channels > 0 else False
+    h_hr = hr_size[0]
+    w_hr = hr_size[1]
 
     x_in = Input(shape=(None, None, None, n_channels))
    
@@ -38,15 +42,6 @@ def recnet_pin(
         n_filters, 
         activation=activation, 
         normalization=normalization)(x_in)
-
-    if auxvar_arr:
-        s_in = Input(shape=(None, None, n_aux_channels))
-        s_in_concat = tf.expand_dims(s_in, 1)
-        s_in_concat = tf.repeat(s_in_concat, time_window, axis=1)
-        x = Conv2D(n_filters - n_aux_channels, (1, 1), padding='same')(x)
-        x = Concatenate()([x, s_in_concat])
-        b = Conv2D(n_filters - n_aux_channels, (1, 1), padding='same')(b)
-        b = Concatenate()([b, s_in_concat])
 
     for i in range(n_blocks):
         if backbone_block == 'convnet':
@@ -78,11 +73,44 @@ def recnet_pin(
         x = Add()([x, b])
     elif backbone_block == 'densenet':
         x = Concatenate()([x, b])
-    
-    x = Conv2D(n_channels_out, (3, 3), padding='same', activation=output_activation)(x)
 
+    #---------------------------------------------------------------------------
+    # HR aux channels are processed
+    if auxvar_arr:
+        s_in = Input(shape=(None, None, n_aux_channels))
+        s = ConvBlock(n_filters, activation=activation, dropout_rate=0, 
+                      normalization=None, attention=attention)(s_in)
+        s = tf.expand_dims(s, 1)
+        s = tf.repeat(s, time_window, axis=1)
+        x = Concatenate()([x, s])
+
+    #---------------------------------------------------------------------------
+    # Localized convolutional layer
+    lws_in = Input(shape=(h_hr, w_hr, 2))
+    if localcon_layer:
+        lws = LocalizedConvBlock()(lws_in)
+        lws = tf.expand_dims(lws, 1)
+        lws = tf.repeat(lws, time_window, axis=1)
+        x = Concatenate()([x, lws])
+
+    #---------------------------------------------------------------------------
+    # Last conv layers
+    x = ConvBlock(
+        n_filters, 
+        activation=None, 
+        dropout_rate=dropout_rate, 
+        normalization=normalization, 
+        attention=True)(x)  
+
+    x = ConvBlock(
+        n_channels_out, 
+        activation=output_activation, 
+        dropout_rate=0, 
+        normalization=normalization, 
+        attention=False)(x) 
+    
     model_name = 'rec' + backbone_block + '_pin' 
     if auxvar_arr:
-        return Model(inputs=[x_in, s_in], outputs=x, name=model_name)
+        return Model(inputs=[x_in, s_in, lws_in], outputs=x, name=model_name)
     else:
-        return Model(inputs=x_in, outputs=x, name=model_name)
+        return Model(inputs=[x_in, lws_in], outputs=x, name=model_name)
