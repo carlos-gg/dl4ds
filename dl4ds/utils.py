@@ -294,7 +294,6 @@ https://github.com/LucaCappelletti94/plot_keras_history """
 def plot_history(
     histories: Union[History, List[History], Dict[str, List[float]], pd.DataFrame, List[pd.DataFrame], str, List[str]],
     style: str = "-",
-    interpolate: bool = False,
     side: float = 5,
     graphs_per_row: int = 4,
     customization_callback: Callable = None,
@@ -316,8 +315,6 @@ def plot_history(
         or one or more paths to the stored CSVs or JSON of the history.
     style:str="-",
         the style to use when plotting the graphs.
-    interpolate:bool=False,
-        whetever to reduce the graphs noise.
     side:int=5,
         the side of every sub-graph.
     graphs_per_row:int=4,
@@ -338,26 +335,15 @@ def plot_history(
     Raises
     --------------------------
     ValueError,
-        Currently the monitor metric best point cannot be displayed if interpolation is active.
-    ValueError,
         If monitor_mode is not either "min" or "max".
     ValueError,
         If max_epochs is not either "min", "max" or a numeric integer.
     """
     # Some parameters validation
-    if interpolate and monitor is not None:
-        raise ValueError((
-            "Currently the monitor metric best point "
-            "cannot be displayed if interpolation is active."
-        ))
     if monitor_mode not in ("min", "max"):
-        raise ValueError("Given monitor mode '{}' is not supported.".format(
-            monitor_mode
-        ))
+        raise ValueError("Given monitor mode '{}' is not supported.".format(monitor_mode))
     if max_epochs not in ("min", "max") and not isinstance(max_epochs, int):
-        raise ValueError("Given parameter max_epochs '{}' is not supported.".format(
-            max_epochs
-        ))
+        raise ValueError("Given parameter max_epochs '{}' is not supported.".format(max_epochs))
     # If the histories are not provided as a list, we normalized it
     # to a list.
     if not isinstance(histories, list):
@@ -375,10 +361,7 @@ def plot_history(
 
     # Filter out the epochs as required.
     if max_epochs in ("max", "min"):
-        epochs = [
-            len(history)
-            for history in histories
-        ]
+        epochs = [len(history) for history in histories]
         if max_epochs == "max":
             max_epochs = max(epochs)
 
@@ -386,7 +369,6 @@ def plot_history(
             max_epochs = min(epochs)
 
     histories = [history[:max_epochs] for history in histories]
-
     average_history = pd.concat(histories)
     average_history = average_history.groupby(average_history.index).mean()
 
@@ -396,7 +378,6 @@ def plot_history(
                 [history[columns] for history in histories],
                 average_history,
                 style,
-                interpolate,
                 side,
                 graphs_per_row,
                 customization_callback,
@@ -407,25 +388,15 @@ def plot_history(
             for columns in _get_column_tuples(histories[0])
         ]))
     else:
-        return _plot_history(
-            histories,
-            average_history,
-            style,
-            interpolate,
-            side,
-            graphs_per_row,
-            customization_callback,
-            path,
-            log_scale_metrics,
-            title=title,
-        )
+        return _plot_history(histories, average_history, style, side,
+                             graphs_per_row, customization_callback, path,
+                             log_scale_metrics, title=title)
 
 
 def _plot_history(
     histories: pd.DataFrame,
     average_history: pd.DataFrame = None,
     style: str = "-",
-    interpolate: bool = False,
     side: float = 5,
     graphs_per_row: int = 4,
     customization_callback: Callable = None,
@@ -446,8 +417,6 @@ def _plot_history(
         Average histories, if multiple histories were given.
     style: str = "-",
         The style to use when plotting the graphs.
-    interpolate: bool=False,
-        Whetever to reduce the graphs noise.
     side: int=5,
         The side of every sub-graph.
     graphs_per_row: int = 4,
@@ -470,9 +439,9 @@ def _plot_history(
     x_label = "Epochs" if histories[0].index.name is None else histories[0].index.name
     metrics = [c[0]for c in _get_column_tuples(histories[0])]
     number_of_metrics = len(metrics)
-    w, h = _get_figsize(number_of_metrics, graphs_per_row)
-    fig, axes = plt.subplots(h, w, figsize=(side*w, side*h), dpi=200,
-                             constrained_layout=True)
+    w = min(number_of_metrics, graphs_per_row)
+    h = math.ceil(number_of_metrics/graphs_per_row)
+    fig, axes = plt.subplots(h, w, figsize=(side*w, side*h), dpi=200, constrained_layout=True)
     flat_axes = np.array(axes).flatten()
 
     for i, history in enumerate([average_history] + histories):
@@ -495,52 +464,19 @@ def _plot_history(
                         else:
                             kind = f"{kind} last value"
 
-                    line = axis.plot(
-                        col.index.values,
-                        _filter_signal(
-                            col.values
-                        ) if interpolate else col.values,
-                        style,
-                        label='{kind}: {val:0.4f}'.format(
-                            kind=kind,
-                            val=best_point_y
-                        ),
-                        zorder=10000
-                    )[0]
+                    line = axis.plot(col.index.values, col.values,
+                                     style, label='{kind}: {val:0.4f}'.format(
+                                     kind=kind, val=best_point_y), zorder=10000)[0]
                     if best_point_x is not None:
                         best_point_y = col.values[best_point_x]
-                        axis.scatter(
-                            [best_point_x],
-                            [best_point_y],
-                            s=30,
-                            alpha=0.9,
-                            color=line.get_color(),
-                            zorder=10000
-                        )
-                        axis.hlines(
-                            best_point_y,
-                            0,
-                            best_point_x,
-                            linestyles="dashed",
-                            color=line.get_color(),
-                            alpha=0.5,
-                        )
-                        axis.vlines(
-                            best_point_x,
-                            0,
-                            best_point_y,
-                            linestyles="dashed",
-                            color=line.get_color(),
-                            alpha=0.5,
-                        )
+                        axis.scatter([best_point_x], [best_point_y], s=30,
+                                     alpha=0.9, color=line.get_color(), zorder=10000)
+                        axis.hlines(best_point_y, 0, best_point_x, linestyles="dashed",
+                                    color=line.get_color(), alpha=0.5)
+                        axis.vlines(best_point_x, 0, best_point_y, linestyles="dashed",
+                                    color=line.get_color(), alpha=0.5)
                 else:
-                    axis.plot(
-                        col.index.values,
-                        _filter_signal(
-                            col.values) if interpolate else col.values,
-                        style,
-                        alpha=0.3
-                    )
+                    axis.plot(col.index.values, col.values, style, alpha=0.3)
 
     for metric, axis in zip(metrics, flat_axes):
         alias = metric.capitalize()
@@ -605,55 +541,6 @@ def _to_dataframe(history: Union[History, pd.DataFrame, Dict, str]) -> pd.DataFr
             return pd.read_json(history)
     raise TypeError("Given history object of type {history_type} is not currently supported!".format(
         history_type=type(history)))
-
-
-def _filter_signal(
-    y: List[float],
-    window: int = 17,
-    polyorder: int = 3
-) -> List[float]:
-    """Return filtered signal using savgol filter.
-    Parameters
-    ----------------------------------
-    y: List[float],
-        The vector to filter.
-    window: int = 17,
-        The size of the window.
-        This value MUST be an odd number.
-    polyorder: int = 3,
-        Order of the polynomial.
-    Returns
-    ----------------------------------
-    Filtered vector.
-    """
-    # The window cannot be smaller than 7 and cannot be greater
-    # than the length of the given vector.
-    window = max(7, min(window, len(y)))
-    # If the window is not odd we force it to be so.
-    if window % 2 == 0:
-        window -= 1
-    # If the window is still bigger than the size of the given vector
-    # we return the vector unfiltered.
-    if len(y) < window:
-        return y
-    # Otherwise we apply the savgol filter.
-    return savgol_filter(y, window, polyorder)
-
-
-def _get_figsize(number_of_metrics: int, graphs_per_row: int) -> Tuple[int, int]:
-    """Return tuple with the size of the given figures.
-    Parameters
-    -----------------------------------
-    number_of_metrics: int,
-        Number of the metrics to fit into figure.
-    graphs_per_row: int,
-        Number of graphs to put in each row.
-    Returns
-    -----------------------------------
-    Width and height of the subplots.
-    """
-    return (min(number_of_metrics, graphs_per_row), 
-            math.ceil(number_of_metrics/graphs_per_row))
 
 
 def _get_column_tuples(history: pd.DataFrame) -> List[List[str]]:
