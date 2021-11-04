@@ -529,9 +529,11 @@ class DataGenerator(tf.keras.utils.Sequence):
         batch_static_hr_images = []
         batch_lws = []
 
+        # batch of spatial samples
         if self.time_window is None:
             for i in self.batch_rand_idx:   
-                # creating a single ndarrays concatenating list of ndarray variables along the last dimension 
+                # concatenating list of ndarray variables along the last 
+                # dimension to create a single ndarray 
                 if self.predictors is not None:
                     array_predictors = np.concatenate(self.predictors, axis=-1)
                     params = dict(predictors=array_predictors[i])
@@ -574,7 +576,8 @@ class DataGenerator(tf.keras.utils.Sequence):
         # batch of samples with a temporal dimension
         else:
             for i in self.batch_rand_idx: 
-                # creating a single ndarrays concatenating list of ndarray variables along the last dimension 
+                # concatenating list of ndarray variables along the last 
+                # dimension to create a single ndarray 
                 if self.predictors is not None:
                     array_predictors = np.concatenate(self.predictors, axis=-1)
                     params = dict(predictors=array_predictors[i:i+self.time_window])

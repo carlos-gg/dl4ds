@@ -9,7 +9,8 @@ from .attention import ChannelAttention2D
 
 
 class ConvBlock(tf.keras.layers.Layer): 
-    """Convolutional block.
+    """
+    Convolutional block.
 
     References
     ----------
@@ -20,8 +21,8 @@ class ConvBlock(tf.keras.layers.Layer):
     """
     def __init__(self, filters, strides=1, ks_cl1=(3,3), ks_cl2=(3,3), 
                  activation='relu', normalization=None, attention=False, 
-                 dropout_rate=0, dropout_variant=None, depthwise_separable=False,
-                 **conv_kwargs):
+                 dropout_rate=0, dropout_variant=None, 
+                 depthwise_separable=False, **conv_kwargs):
         super().__init__()
         self.normalization = normalization
         self.attention = attention
@@ -29,11 +30,29 @@ class ConvBlock(tf.keras.layers.Layer):
         self.dropout_rate = dropout_rate
         self.depthwise_separable = depthwise_separable
         if self.depthwise_separable:
-            self.conv1 = SeparableConv2D(filters, kernel_size=ks_cl1, padding='same', strides=strides, **conv_kwargs)
-            self.conv2 = SeparableConv2D(filters, kernel_size=ks_cl2, padding='same', **conv_kwargs)
+            self.conv1 = SeparableConv2D(
+                filters, 
+                kernel_size=ks_cl1, 
+                padding='same', 
+                strides=strides, 
+                **conv_kwargs)
+            self.conv2 = SeparableConv2D(
+                filters, 
+                kernel_size=ks_cl2, 
+                padding='same', 
+                **conv_kwargs)
         else:
-            self.conv1 = Conv2D(filters, kernel_size=ks_cl1, padding='same', strides=strides, **conv_kwargs)
-            self.conv2 = Conv2D(filters, kernel_size=ks_cl2, padding='same', **conv_kwargs)
+            self.conv1 = Conv2D(
+                filters, 
+                kernel_size=ks_cl1, 
+                padding='same', 
+                strides=strides, 
+                **conv_kwargs)
+            self.conv2 = Conv2D(
+                filters, 
+                kernel_size=ks_cl2, 
+                padding='same', 
+                **conv_kwargs)
 
         if self.normalization == 'bn':
             self.norm1 = BatchNormalization()
@@ -76,14 +95,17 @@ class ConvBlock(tf.keras.layers.Layer):
 
 class ResidualBlock(ConvBlock): 
     """
-    Residual block. Two examples:
+    Residual block. 
+    
+    Two examples:
     * Standard residual block [1]: Conv2D -> BN -> ReLU -> Conv2D -> BN -> Add _> ReLU
     * EDSR-style block: Conv2D -> ReLU -> Conv2D -> Add -> ReLU
 
     References
     ----------
     [1] Kaiming He, Xiangyu Zhang, Shaoqing Ren, Jian Sun
-        Deep Residual Learning for Image Recognition. https://arxiv.org/abs/1512.03385
+        Deep Residual Learning for Image Recognition: 
+        https://arxiv.org/abs/1512.03385
     """
     def __init__(self, filters, strides=1, ks_cl1=(3,3), ks_cl2=(3,3), 
                  activation='relu', normalization=None, attention=False, 
@@ -112,12 +134,13 @@ class ResidualBlock(ConvBlock):
 
 class DenseBlock(ConvBlock): 
     """
-    Dense block [2].
+    Dense block.
 
     References
     ----------
     [1] Gao Huang, Zhuang Liu, Laurens van der Maaten, Kilian Q. Weinberger
-        Densely Connected Convolutional Networks: https://arxiv.org/abs/1608.06993
+        Densely Connected Convolutional Networks: 
+        https://arxiv.org/abs/1608.06993
     """
     def __init__(self, filters, strides=1, ks_cl1=(1,1), ks_cl2=(3,3), 
                  activation='relu', normalization=None, attention=False, 
@@ -125,8 +148,17 @@ class DenseBlock(ConvBlock):
         super().__init__(filters, strides, ks_cl1, ks_cl2, activation, 
                          normalization, attention, dropout_rate, 
                          dropout_variant, **conv_kwargs)
-        self.conv1 = Conv2D(4 * filters, padding='same', kernel_size=ks_cl1, strides=strides, **conv_kwargs)
-        self.conv2 = Conv2D(filters, kernel_size=ks_cl2, padding='same', **conv_kwargs)
+        self.conv1 = Conv2D(
+            4 * filters, 
+            padding='same', 
+            kernel_size=ks_cl1, 
+            strides=strides, 
+            **conv_kwargs)
+        self.conv2 = Conv2D(
+            filters, 
+            kernel_size=ks_cl2, 
+            padding='same', 
+            **conv_kwargs)
         self.concat = Concatenate()
 
     def call(self, X):
@@ -148,6 +180,16 @@ class DenseBlock(ConvBlock):
 
 
 class TransitionBlock(tf.keras.layers.Layer):
+    """ 
+    Transition layer to control the complexity of the model by using 1x1 
+    convolutions. Used in architectures, such as the Densenet.
+
+    References
+    ----------
+    [1] Gao Huang, Zhuang Liu, Laurens van der Maaten, Kilian Q. Weinberger
+        Densely Connected Convolutional Networks: 
+        https://arxiv.org/abs/1608.06993
+    """
     def __init__(self, filters, activation='relu', normalization=None, **kwargs):
         super().__init__(**kwargs)
         if normalization is not None and normalization == 'bn':
@@ -169,8 +211,9 @@ class TransitionBlock(tf.keras.layers.Layer):
 
 
 class LocalizedConvBlock(tf.keras.layers.Layer):
-    """ Localized convolutional layer. To implement learnable inputs, we use 
-    auxillary input that receives a matrix of 1s and implements locally 
+    """ 
+    Localized convolutional layer. To implement learnable inputs, this block 
+    gets an auxillary input (matrix of 1s) and processes it through a locally 
     connected layer without biases with a 1x1 kernel.
     """
     def __init__(self, filters=2, activation=None, **kwargs):
@@ -189,7 +232,8 @@ class LocalizedConvBlock(tf.keras.layers.Layer):
 
 
 class RecurrentConvBlock(tf.keras.layers.Layer): 
-    """Recurrent convolutional block.
+    """
+    Recurrent convolutional block.
     """
     def __init__(self, filters, ks_cl1=(5,5), ks_cl2=(3,3), activation='relu', 
                  normalization=None, dropout_rate=0, dropout_variant=None, 
@@ -225,7 +269,8 @@ class RecurrentConvBlock(tf.keras.layers.Layer):
             self.dropout2 = SpatialDropout3D(self.dropout_rate)
 
     def call(self, X):
-        """Model's forward pass. 
+        """
+        Forward pass. 
         """
         Y = self.dropout1(X) if self.apply_dropout else X
         Y = self.convlstm1(Y)
@@ -243,11 +288,14 @@ class RecurrentConvBlock(tf.keras.layers.Layer):
 
 class SubpixelConvolutionBlock(tf.keras.layers.Layer):
     """
+    Subpixel convolution (pixel shuffle) block.
+
+    References
+    ----------
+    [1] Real-Time Single Image and Video Super-Resolution Using an Efficient 
+    Sub-Pixel Convolutional Neural Network: https://arxiv.org/abs/1609.05158
     """
     def __init__(self, scale, n_filters, **kwargs):
-        """
-        See: https://arxiv.org/abs/1609.05158
-        """
         super().__init__()
         self.scale = scale
         self.n_filters = n_filters
@@ -272,7 +320,8 @@ class SubpixelConvolutionBlock(tf.keras.layers.Layer):
                 int(input_shape[2] * self.scale), input_shape[3])
 
     def call(self, x):
-        """ """
+        """  Forward pass.
+        """
         if self.scale == 2:
             x = self.upsample_conv(x, 2)
         elif self.scale == 4:
@@ -296,11 +345,14 @@ class SubpixelConvolutionBlock(tf.keras.layers.Layer):
 
 class DeconvolutionBlock(tf.keras.layers.Layer):
     """
-    FSRCNN: https://arxiv.org/abs/1608.00367
+    Deconvolution or transposed convolution block.
+
+    References
+    ----------
+    [1] FSRCNN - Accelerating the Super-Resolution Convolutional Neural Network: 
+    https://arxiv.org/abs/1608.00367
     """
     def __init__(self, scale, n_filters, output_activation=None):
-        """
-        """
         super().__init__()
         self.scale = scale
         self.output_activation = output_activation
