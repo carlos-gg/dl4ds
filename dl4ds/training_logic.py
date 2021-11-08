@@ -14,8 +14,8 @@ import logging
 tf.get_logger().setLevel(logging.ERROR)
 
 from . import POSTUPSAMPLING_METHODS, MODELS, SPATIAL_MODELS, SPATIOTEMP_MODELS
-from .utils import (Timing, list_devices, set_gpu_memory_growth, 
-                    set_visible_gpus, checkarg_model, plot_history)
+from .utils import (Timing, list_devices, set_gpu_memory_growth, plot_history,
+                    set_visible_gpus, checkarg_datatype, checkarg_model)
 from .dataloader import DataGenerator, create_batch_hr_lr
 from .losses import mae, mse, dssim, dssim_mae, dssim_mae_mse, dssim_mse
 from .models import (net_pin, recnet_pin, net_postupsampling, 
@@ -30,6 +30,7 @@ class Trainer(ABC):
         self,
         model_name, 
         data_train,
+        use_season=True,
         loss='mae',
         batch_size=64, 
         patch_size=None,
@@ -46,7 +47,8 @@ class Trainer(ABC):
         """
         """
         self.model_name = model_name
-        self.data_train = data_train
+        self.use_season = use_season
+        self.data_train = checkarg_datatype(data_train, self.use_season)
         self.batch_size = batch_size
         self.patch_size = patch_size
         self.loss = loss
@@ -307,20 +309,10 @@ class SupervisedTrainer(Trainer):
             Dictionary with additional parameters passed to the neural network 
             model.
         """
-        self.use_season = use_season
-        if self.use_season:
-            if not isinstance(data_train, xr.DataArray):
-                msg = '`data_train` must be a xr.DataArray when use_season=True'
-                raise TypeError(msg)
-        else:
-            # removing the time metadata (season is not used as input)
-            data_train = data_train.values
-            data_test = data_test.values
-            data_val = data_val.values
-
         super().__init__(
             model_name=model_name, 
             data_train=data_train,
+            use_season=use_season,
             loss=loss,
             batch_size=batch_size, 
             patch_size=patch_size,
@@ -334,8 +326,8 @@ class SupervisedTrainer(Trainer):
             save_path=save_path,
             show_plot=show_plot
             )
-        self.data_val = data_val
-        self.data_test = data_test
+        self.data_val = checkarg_datatype(data_val, use_season)
+        self.data_test = checkarg_datatype(data_test, use_season)
         self.predictors_train = predictors_train
         if self.predictors_train is not None and not isinstance(self.predictors_train, list):
             raise TypeError('`predictors_train` must be a list of ndarrays')
@@ -558,7 +550,8 @@ class CGANTrainer(Trainer):
         predictors_test=None,
         scale=5, 
         patch_size=50, 
-        time_window=None,
+        time_window=True,
+        use_season=True,
         loss='mae',
         epochs=60, 
         batch_size=16,
@@ -636,6 +629,7 @@ class CGANTrainer(Trainer):
         super().__init__(
             model_name=model_name, 
             data_train=data_train, 
+            use_season=use_season,
             loss=loss, 
             batch_size=batch_size, 
             patch_size=patch_size, 
@@ -648,7 +642,7 @@ class CGANTrainer(Trainer):
             save_path=save_path, 
             show_plot=False
             )
-        self.data_test = data_test
+        self.data_test = self.data_test = checkarg_datatype(data_test, use_season)
         self.scale = scale
         self.patch_size = patch_size
         self.time_window = time_window
