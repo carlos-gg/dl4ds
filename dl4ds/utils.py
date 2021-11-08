@@ -1,5 +1,6 @@
 import numpy as np
 import tensorflow as tf
+import xarray as xr
 import cv2
 from datetime import datetime
 
@@ -67,8 +68,25 @@ def checkarg_dropout_variant(dropout):
         return dropout
     elif isinstance(dropout, str):
         if dropout not in ['spatial', 'gaussian']:
-            msg = '`dropout_variant` must be either None or str (`gaussian` or `spatial`)'
-            raise ValueError(msg)
+            raise ValueError('`dropout_variant` must be either None or str '
+                             '(`gaussian` or `spatial`)')
+
+
+def checkarg_datatype(data_train, use_season):
+    """ """
+    if isinstance(data_train, xr.DataArray):
+        if use_season:
+            if not hasattr(data_train, 'time'):
+                raise TypeError('input data must be a xr.DataArray and have' 
+                                'time metadata when use_season=True')
+        else:
+            # removing the time metadata (season is not used as input)
+            data_train = data_train.values
+    elif isinstance(data_train, np.ndarray):
+        if use_season:
+            msg = 'input data must be a xr.DataArray when use_season=True'
+            raise TypeError(msg)
+    return data_train
 
 
 def set_gpu_memory_growth(verbose=True):
