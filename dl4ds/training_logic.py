@@ -222,17 +222,17 @@ class SupervisedTrainer(Trainer):
         model : str
             String with the name of the model architecture, either 'resnet_spc', 
             'resnet_bi' or 'resnet_rc'.
-        data_train : 4D ndarray
-            Training dataset with dims [nsamples, lat, lon, 1]. This grids must 
+        data_train : 4D ndarray or xr.DataArray
+            Training dataset with dims [nsamples, lat, lon, 1]. These grids must 
             correspond to the observational reference at HR, from which a 
             coarsened version will be created to produce paired samples. 
-        data_val : 4D ndarray
+        data_val : 4D ndarray or xr.DataArray
             Validation dataset with dims [nsamples, lat, lon, 1]. This holdout 
             dataset is used at the end of each epoch to check the losses and 
             diagnose overfitting.
-        data_test : 4D ndarray
+        data_test : 4D ndarray or xr.DataArray
             Testing dataset with dims [nsamples, lat, lon, 1]. Holdout not used
-            during training. 
+            during training, but only to compute metrics with the final model.
         predictors_train : list of ndarray, optional
             Predictor variables for trianing. Given as list of 4D ndarrays with 
             dims [nsamples, lat, lon, 1] or 5D ndarrays with dims 
@@ -580,11 +580,13 @@ class CGANTrainer(Trainer):
         model_name : str
             String with the name of the model architecture, either 'resnet_spc', 
             'resnet_bi' or 'resnet_rc'. Used as a the CGAN generator.
-        data_train : 4D ndarray
-            Training dataset with dims [nsamples, lat, lon, 1].
-        data_test : 4D ndarray
+        data_train : 4D ndarray or xr.DataArray
+            Training dataset with dims [nsamples, lat, lon, 1]. These grids must 
+            correspond to the observational reference at HR, from which a 
+            coarsened version will be created to produce paired samples. 
+        data_test : 4D ndarray or xr.DataArray
             Testing dataset with dims [nsamples, lat, lon, 1]. Holdout not used
-            during training. 
+            during training, but only to compute metrics with the final model.
         predictors_train : list of ndarray, optional
             Predictor variables for trianing. Given as list of 4D ndarrays with 
             dims [nsamples, lat, lon, 1] or 5D ndarrays with dims 
