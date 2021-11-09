@@ -3,7 +3,8 @@ import numpy as np
 import xarray as xr
 import tensorflow as tf
 
-from .utils import resize_array, spatial_to_temporal_samples, checkarray_ndim
+from .utils import (resize_array, spatial_to_temporal_samples, checkarray_ndim, 
+                    Timing)
 from . import SPATIAL_MODELS, SPATIOTEMP_MODELS, POSTUPSAMPLING_METHODS
 from .dataloader import _get_season_, _get_season_array_
 
@@ -13,6 +14,7 @@ def predict(
     data, 
     scale, 
     data_in_hr=True,
+    use_season=True,
     topography=None, 
     landocean=None, 
     predictors=None, 
@@ -64,12 +66,13 @@ def predict(
         works only when certain layers, such as dropout, are present in the 
         trained ``model``.
     """         
+    timing = Timing()
     model_architecture = model.name
     if model_architecture in SPATIOTEMP_MODELS and time_window is None:
         raise ValueError('`time_window` must be provided')
 
     # Season is passed to each sample
-    if isinstance(data, xr.DataArray):
+    if use_season and isinstance(data, xr.DataArray):
         n_samples = data.shape[0]
         if model_architecture in SPATIOTEMP_MODELS:
             n_samples -= time_window - 1
@@ -94,14 +97,17 @@ def predict(
             if return_lr:
                 lr_version.append(temp[1])
         x_test_pred = np.array(res)
+        timing.runtime()
         if return_lr:
             x_test_lr = np.array(lr_version)
             return x_test_pred, x_test_lr
         else:
             return x_test_pred
     
-    # No season information
-    elif isinstance(data, np.ndarray):
+    # No season information is used
+    elif (not use_season and isinstance(data, xr.DataArray)) or isinstance(data, np.ndarray):
+        if isinstance(data, xr.DataArray):
+            data = data.values
         if time_window is not None:
             data = spatial_to_temporal_samples(data, time_window)
             if predictors is not None:
@@ -110,6 +116,7 @@ def predict(
         res = _predict_(model, data, scale, data_in_hr, topography, landocean,
                         predictors, None, interpolation, mean_std, save_path, 
                         save_fname, return_lr, stochastic_output, device)
+        timing.runtime()
         if return_lr:
             x_test_pred, x_test_lr = res
             return x_test_pred, x_test_lr
@@ -143,9 +150,6 @@ def _predict_(
     if predictors is not None:
         n_predictors = len(predictors)
         predictors = np.concatenate(predictors, axis=-1)
-
-    if isinstance(data, xr.DataArray):
-            data = data.values
 
     if model_architecture in SPATIAL_MODELS:
         if data_in_hr:

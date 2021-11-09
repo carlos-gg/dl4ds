@@ -42,7 +42,10 @@ def residual_discriminator(
         x_1 = b = Conv2D(n_filters, (3, 3), padding='same')(x_in)
 
     for i in range(n_res_blocks):
-        b = ResidualBlock(n_filters, normalization=normalization, attention=attention)(b)
+        b = ResidualBlock(
+            n_filters, 
+            normalization=normalization, 
+            attention=attention)(b)
     b = Conv2D(n_filters, (3, 3), padding='same')(b)
     x_1 = Add()([x_1, b])
     
@@ -53,7 +56,10 @@ def residual_discriminator(
         x_ref = Input(shape=(None, None, 1))    
     x_2 = c = Conv2D(n_filters, (3, 3), padding='same')(x_ref)
     for i in range(n_res_blocks):
-        c = ResidualBlock(n_filters, normalization=normalization, attention=attention)(c)
+        c = ResidualBlock(
+            n_filters, 
+            normalization=normalization, 
+            attention=attention)(c)
 
     if upsampling in POSTUPSAMPLING_METHODS:  
         if scale == 5:      
@@ -69,7 +75,10 @@ def residual_discriminator(
 
     x = Concatenate()([x_1, x_2])
     
-    x = ResidualBlock(x.shape[-1], normalization=normalization, attention=attention)(x)
+    x = ResidualBlock(
+        x.shape[-1], 
+        normalization=normalization, 
+        attention=attention)(x)
     
     # global average pooling operation for spatial data
     if is_recurrent:
