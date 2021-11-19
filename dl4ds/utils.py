@@ -12,9 +12,19 @@ import pandas as pd
 from matplotlib.axes import Axes
 from matplotlib.figure import Figure
 from tensorflow.keras.callbacks import History
-from scipy.signal import savgol_filter
 
 from . import MODELS, BACKBONE_BLOCKS, UPSAMPLING_METHODS
+
+
+def normalize_and_fillnan(data, fillnanto=0.0, newmin=0.2, newmax=1.0):
+    """
+    """
+    datamin = np.nanmin(data)
+    datamax = np.nanmax(data)
+    x_std = (data - datamin) / (datamax - datamin)
+    x_scaled = x_std * (newmax - newmin) + newmin
+    x_scaled = np.nan_to_num(x_scaled, nan=fillnanto)
+    return x_scaled, datamin, datamax
 
 
 def spatial_to_temporal_samples(array, time_window):

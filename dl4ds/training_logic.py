@@ -175,7 +175,7 @@ class Trainer(ABC):
 
 
 class SupervisedTrainer(Trainer):
-    """Procedure for training the supervised residual models
+    """
     """
     def __init__(
         self,
@@ -215,7 +215,7 @@ class SupervisedTrainer(Trainer):
         verbose=True,
         **architecture_params
         ):
-        """Procedure for training supervised models.
+        """Training supervised models.
 
         Parameters
         ----------
@@ -573,7 +573,7 @@ class CGANTrainer(Trainer):
         discriminator_params={},
         verbose=True,
         ):
-        """Procedure for training CGAN models.
+        """Training conditional adversarial generative models.
     
         Parameters
         ----------
