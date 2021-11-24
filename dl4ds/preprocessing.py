@@ -161,9 +161,12 @@ class MinMaxScaler(TransformerMixin, BaseEstimator):
 
         first_pass = not hasattr(self, "n_samples_seen_")
         
-        ### other data validation steps TO-DO
-        X = X.copy()
+        ### TO-DO: other data validation steps 
+
+        if self.copy:
+            X = X.copy()
         
+        ### creating a nan mask
         if np.any(np.isnan(X)):
             self.nan_mask = np.isnan(X)
 
@@ -200,7 +203,7 @@ class MinMaxScaler(TransformerMixin, BaseEstimator):
         """
         check_is_fitted(self)
 
-        ### other data validation steps TO-DO
+        ### TO-DO: other data validation steps 
         
         X *= self.scale_
         X += self.min_
@@ -208,7 +211,8 @@ class MinMaxScaler(TransformerMixin, BaseEstimator):
             np.clip(X, self.feature_range[0], self.feature_range[1], out=X)
             
         ### filling nan values
-        X = np.nan_to_num(X, self.fillnanto)
+        if np.any(np.isnan(X)):
+            X = np.nan_to_num(X, copy=self.copy, nan=self.fillnanto)
         return X
 
     def inverse_transform(self, X):
@@ -224,12 +228,13 @@ class MinMaxScaler(TransformerMixin, BaseEstimator):
         """
         check_is_fitted(self)
     
-        """
-        X = check_array(
-            X, copy=self.copy, dtype=FLOAT_DTYPES, force_all_finite="allow-nan"
-        )"""
+        ### TO-DO: other data validation steps 
+
+        X = X.copy()
+
         ### restoring nan mask
-        X[self.nan_mask] = np.nan
+        if hasattr(self, 'nan_mask'):
+            X[self.nan_mask] = np.nan
 
         X -= self.min_
         X /= self.scale_
