@@ -7,16 +7,19 @@ from sklearn.preprocessing._data import _handle_zeros_in_scale
 
 class MinMaxScaler(TransformerMixin, BaseEstimator):
     """Transform features by scaling each feature to a given range.
-    This estimator scales and translates each feature individually such
+    This estimator scales and translates the data distribution such
     that it is in the given range on the training set, e.g. between
-    zero and one.
+    zero and one. If NaN values are present there will be replaced by a given
+    value, e.g. minus one. 
+
     The transformation is given by::
-        X_std = (X - X.min(axis=0)) / (X.max(axis=0) - X.min(axis=0))
+        X_std = (X - X.min(axis=``axis``)) / (X.max(axis=``axis``) - X.min(axis=``axis``))
         X_scaled = X_std * (max - min) + min
     where min, max = feature_range.
+    
     This transformation is often used as an alternative to zero mean,
     unit variance scaling.
-    Read more in the :ref:`User Guide <preprocessing_scaler>`.
+    
     Parameters
     ----------
     feature_range : tuple (min, max), default=(0, 1)
@@ -27,7 +30,12 @@ class MinMaxScaler(TransformerMixin, BaseEstimator):
     clip : bool, default=False
         Set to True to clip transformed values of held-out data to
         provided `feature range`.
-        .. versionadded:: 0.24
+    axis : int, tuple of int or None, optional
+        Axis or axes along which the minimum and maximum will be computed (via 
+        ``np.nanmin`` and ``np.nanmax`` functions). 
+    fillnanto : float or int, optional
+        Value to be used when filling in NaN values. 
+    
     Attributes
     ----------
     min_ : ndarray of shape (n_features,)
@@ -36,34 +44,25 @@ class MinMaxScaler(TransformerMixin, BaseEstimator):
     scale_ : ndarray of shape (n_features,)
         Per feature relative scaling of the data. Equivalent to
         ``(max - min) / (X.max(axis=0) - X.min(axis=0))``
-        .. versionadded:: 0.17
-           *scale_* attribute.
     data_min_ : ndarray of shape (n_features,)
         Per feature minimum seen in the data
-        .. versionadded:: 0.17
-           *data_min_*
     data_max_ : ndarray of shape (n_features,)
         Per feature maximum seen in the data
-        .. versionadded:: 0.17
-           *data_max_*
     data_range_ : ndarray of shape (n_features,)
         Per feature range ``(data_max_ - data_min_)`` seen in the data
-        .. versionadded:: 0.17
-           *data_range_*
     n_features_in_ : int
         Number of features seen during :term:`fit`.
-        .. versionadded:: 0.24
     n_samples_seen_ : int
-        The number of samples processed by the estimator.
-        It will be reset on new calls to fit, but increments across
-        ``partial_fit`` calls.
+        The number of samples processed by the estimator. It will be reset on 
+        new calls to fit, but increments across ``partial_fit`` calls.
     feature_names_in_ : ndarray of shape (`n_features_in_`,)
         Names of features seen during :term:`fit`. Defined only when `X`
         has feature names that are all strings.
-        .. versionadded:: 1.0
+    
     See Also
     --------
     minmax_scale : Equivalent function without the estimator API.
+    
     Notes
     -----
     NaNs are treated as missing values: disregarded in fit, and maintained in
@@ -71,6 +70,7 @@ class MinMaxScaler(TransformerMixin, BaseEstimator):
     For a comparison of the different scalers, transformers, and normalizers,
     see :ref:`examples/preprocessing/plot_all_scaling.py
     <sphx_glr_auto_examples_preprocessing_plot_all_scaling.py>`.
+    
     Examples
     --------
     >>> from sklearn.preprocessing import MinMaxScaler
@@ -89,8 +89,8 @@ class MinMaxScaler(TransformerMixin, BaseEstimator):
     [[1.5 0. ]]
     """
 
-    def __init__(self, feature_range=(0, 1), *, copy=True, fillnanto=-1, 
-                 clip=False, axis=None):
+    def __init__(self, feature_range=(0, 1), *, copy=True, clip=False, 
+                 axis=None, fillnanto=-1):
         self.feature_range = feature_range
         self.copy = copy
         self.clip = clip
