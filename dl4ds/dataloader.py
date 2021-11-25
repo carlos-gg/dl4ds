@@ -118,7 +118,7 @@ def create_pair_hr_lr(
     season=None,
     model='resnet_spc',
     debug=False, 
-    interpolation='bicubic'):
+    interpolation='inter_area'):
     """
     Create a pair of HR and LR square sub-patches. In this case, the LR 
     corresponds to a coarsen version of the HR reference with land-ocean mask,
@@ -318,7 +318,7 @@ def create_pair_temp_hr_lr(
     season=None,
     model='resnet_spc',
     debug=False, 
-    interpolation='bicubic'):
+    interpolation='inter_area'):
     """
     Create a pair of HR and LR square sub-patches with a temporal window. In 
     this case, the LR corresponds to a coarsen version of the HR reference. If
@@ -461,7 +461,7 @@ class DataGenerator(tf.keras.utils.Sequence):
         landocean=None, 
         predictors=None,
         model='resnet_spc', 
-        interpolation='bicubic',
+        interpolation='inter_area',
         repeat=None,
         ):
         """

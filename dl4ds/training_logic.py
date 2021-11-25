@@ -560,7 +560,7 @@ class CGANTrainer(Trainer):
         gpu_memory_growth=True,
         model_list=None,
         steps_per_epoch=None,
-        interpolation='bicubic', 
+        interpolation='inter_area', 
         topography=None, 
         landocean=None, 
         checkpoints_frequency=5, 
