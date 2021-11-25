@@ -255,8 +255,8 @@ def crop_array(array, size, yx=None, position=False, exclude_borders=False,
         return cropped_array
 
 
-def resize_array(array, newsize, interpolation='bicubic', squeezed=True, 
-                 keep_dynamic_range=True):
+def resize_array(array, newsize, interpolation='inter_area', squeezed=True, 
+                 keep_dynamic_range=False):
     """
     Return a resized version of a 2D or [y,x] 3D ndarray [y,x,channels] or
     4D ndarray [time,y,x,channels] via interpolation.
@@ -284,6 +284,8 @@ def resize_array(array, newsize, interpolation='bicubic', squeezed=True,
         interp = cv2.INTER_CUBIC
     elif interpolation == 'bilinear':
         interp = cv2.INTER_LINEAR
+    elif interpolation == 'inter_area':
+        interp = cv2.INTER_AREA
 
     size_x, size_y = newsize
     
