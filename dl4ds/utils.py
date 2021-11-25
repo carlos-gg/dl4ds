@@ -255,7 +255,8 @@ def crop_array(array, size, yx=None, position=False, exclude_borders=False,
         return cropped_array
 
 
-def resize_array(array, newsize, interpolation='bicubic', squeezed=True):
+def resize_array(array, newsize, interpolation='bicubic', squeezed=True, 
+                 keep_dynamic_range=True):
     """
     Return a resized version of a 2D or [y,x] 3D ndarray [y,x,channels] or
     4D ndarray [time,y,x,channels] via interpolation.
@@ -300,6 +301,8 @@ def resize_array(array, newsize, interpolation='bicubic', squeezed=True):
 
     if squeezed:
         resized_arr = np.squeeze(resized_arr)
+    if keep_dynamic_range:
+        resized_arr = np.clip(resized_arr, a_min=array.min(), a_max=array.max())
     return resized_arr
 
 
