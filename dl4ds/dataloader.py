@@ -188,7 +188,6 @@ def create_pair_hr_lr(
                                                                  yx=(crop_y, crop_x), position=True)
             else:
                 lr_array_predictors = predictors
-                lr_array_predictors = np.expand_dims(lr_array_predictors, -1)
             # concatenating the predictors to the lr image
             lr_array = np.concatenate([lr_array, lr_array_predictors], axis=2)
     elif upsampling_method in POSTUPSAMPLING_METHODS:
@@ -202,7 +201,6 @@ def create_pair_hr_lr(
                 hr_array = crop_array(np.squeeze(hr_array), patch_size, yx=(crop_y, crop_x))   
             else:
                 lr_array_predictors = resize_array(predictors, (lr_x, lr_y), interpolation) 
-                lr_array_predictors = np.expand_dims(lr_array_predictors, -1)
             lr_array = resize_array(hr_array, (lr_x, lr_y), interpolation)       
             hr_array = np.expand_dims(hr_array, -1)
             lr_array = np.expand_dims(lr_array, -1) 
@@ -298,11 +296,11 @@ def create_pair_hr_lr(
         
         if topography is not None or landocean is not None or season is not None:
             ecv.plot_ndarray(np.moveaxis(static_array_hr, -1, 0), interactive=False, dpi=100, 
-                             plot_title='Auxiliary array HR')
+                             plot_title='HR auxiliary array')
 
         if predictors is not None:
             ecv.plot_ndarray(np.rollaxis(lr_array_predictors, 2, 0), dpi=100, interactive=False, 
-                             subplot_titles=('LR cropped predictors'), multichannel4d=True)
+                             subplot_titles=('LR predictors'))
 
     if topography is not None or landocean is not None or season is not None:
         return hr_array, lr_array, static_array_hr, local_lws_array
@@ -529,13 +527,15 @@ class DataGenerator(tf.keras.utils.Sequence):
         batch_static_hr_images = []
         batch_lws = []
 
+        if self.predictors is not None:
+            array_predictors = np.concatenate(self.predictors, axis=-1)
+
         # batch of spatial samples
         if self.time_window is None:
             for i in self.batch_rand_idx:   
                 # concatenating list of ndarray variables along the last 
                 # dimension to create a single ndarray 
                 if self.predictors is not None:
-                    array_predictors = np.concatenate(self.predictors, axis=-1)
                     params = dict(predictors=array_predictors[i])
                 else:
                     params = {}
@@ -579,7 +579,6 @@ class DataGenerator(tf.keras.utils.Sequence):
                 # concatenating list of ndarray variables along the last 
                 # dimension to create a single ndarray 
                 if self.predictors is not None:
-                    array_predictors = np.concatenate(self.predictors, axis=-1)
                     params = dict(predictors=array_predictors[i:i+self.time_window])
                 else:
                     params = {}
