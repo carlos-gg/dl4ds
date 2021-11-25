@@ -1,5 +1,6 @@
 from scipy import sparse
 import numpy as np
+import xarray as xr
 from sklearn.utils.validation import check_is_fitted
 from sklearn.base import BaseEstimator, TransformerMixin
 from sklearn.preprocessing._data import _handle_zeros_in_scale
@@ -15,25 +16,23 @@ class MinMaxScaler(TransformerMixin, BaseEstimator):
     The transformation is given by::
         X_std = (X - X.min(axis)) / (X.max(axis) - X.min(axis))
         X_scaled = X_std * (max - min) + min
-    where min, max = range.
+    where min, max = value_range.
     
     This transformation is often used as an alternative to zero mean,
     unit variance scaling.
     
     Parameters
     ----------
-    range : tuple (min, max), default=(0, 1)
+    value_range : tuple (min, max), default=(0, 1)
         Desired range of transformed data.
     copy : bool, default=True
         Set to False to perform inplace row normalization and avoid a
         copy (if the input is already a numpy array).
-    clip : bool, default=False
-        Set to True to clip transformed values of held-out data to
-        provided `range`.
-    axis : int, tuple of int or None, optional
+    axis : int, tuple of int or None, default=None
         Axis or axes along which the minimum and maximum will be computed (via 
         ``np.nanmin`` and ``np.nanmax`` functions). If None then the new range
-    fillnanto : float or int, optional
+        is computed from the whole dataset (all dimensions/axes).
+    fillnanto : float or int, deafult=-1
         Value to be used when filling in NaN values. 
     
     Notes
@@ -59,11 +58,9 @@ class MinMaxScaler(TransformerMixin, BaseEstimator):
     [[1.5 0. ]]
     """
 
-    def __init__(self, range=(0, 1), *, copy=True, clip=False, axis=None, 
-                 fillnanto=-1):
-        self.range = range
+    def __init__(self, value_range=(0, 1), copy=True, axis=None, fillnanto=-1):
+        self.value_range = value_range
         self.copy = copy
-        self.clip = clip
         self.fillnanto = fillnanto
         self.axis = axis
 
@@ -76,7 +73,6 @@ class MinMaxScaler(TransformerMixin, BaseEstimator):
         if hasattr(self, "scale_"):
             del self.scale_
             del self.min_
-            del self.n_samples_seen_
             del self.data_min_
             del self.data_max_
             del self.data_range_
@@ -91,42 +87,34 @@ class MinMaxScaler(TransformerMixin, BaseEstimator):
     def partial_fit(self, X, y=None):
         """Online computation of min and max on X for later scaling.
         """
-        range = self.range
-        if range[0] >= range[1]:
+        value_range = self.value_range
+        if value_range[0] >= value_range[1]:
             raise ValueError(
-                "Minimum of desired feature range must be smaller than maximum. Got %s."
+                "Minimum of desired value_range must be smaller than maximum. Got %s."
                 % str(range)
             )
 
         if sparse.issparse(X):
             raise TypeError("MinMaxScaler does not support sparse input.")
-
-        first_pass = not hasattr(self, "n_samples_seen_")
-        
-        ### TO-DO: other data validation steps 
-
-        if self.copy:
-            X = X.copy()
         
         ### creating a nan mask
         if np.any(np.isnan(X)):
             self.nan_mask = np.isnan(X)
 
-        data_min = np.nanmin(X, axis=self.axis)
-        data_max = np.nanmax(X, axis=self.axis)
-
-        if first_pass:
-            self.n_samples_seen_ = X.shape[0]
+        ### data type validation
+        if isinstance(X, np.ndarray):
+            data_min = np.nanmin(X, axis=self.axis)
+            data_max = np.nanmax(X, axis=self.axis)
+        elif isinstance(X, xr.DataArray):
+            data_min = X.min(axis=self.axis, skipna=True).values
+            data_max = X.max(axis=self.axis, skipna=True).values
         else:
-            data_min = np.minimum(self.data_min_, data_min)
-            data_max = np.maximum(self.data_max_, data_max)
-            self.n_samples_seen_ += X.shape[0]
+            raise TypeError('`X` is neither a np.ndarray or xr.DataArray')
 
         data_range = data_max - data_min
-        self.scale_ = (range[1] - range[0]) / _handle_zeros_in_scale(
-            data_range, copy=True
-        )
-        self.min_ = range[0] - data_min * self.scale_
+        self.scale_ = (value_range[1] - value_range[0]) / _handle_zeros_in_scale(
+            data_range, copy=True)
+        self.min_ = value_range[0] - data_min * self.scale_
         self.data_min_ = data_min
         self.data_max_ = data_max
         self.data_range_ = data_range
@@ -137,30 +125,34 @@ class MinMaxScaler(TransformerMixin, BaseEstimator):
         """
         check_is_fitted(self)
 
-        ### TO-DO: other data validation steps 
-        
+        if self.copy:
+            X = X.copy()
+
         X *= self.scale_
         X += self.min_
-        if self.clip:
-            np.clip(X, self.range[0], self.range[1], out=X)
             
         ### filling nan values
         if np.any(np.isnan(X)):
-            X = np.nan_to_num(X, copy=self.copy, nan=self.fillnanto)
+            if isinstance(X, np.ndarray):
+                X = np.nan_to_num(X, nan=self.fillnanto)
+            elif isinstance(X, xr.DataArray):
+                X = X.fillna(value=self.fillnanto)
         return X
 
     def inverse_transform(self, X):
         """Undo the scaling of X according to range.
         """
         check_is_fitted(self)
-    
-        ### TO-DO: other data validation steps 
 
-        X = X.copy()
+        if self.copy():
+            X = X.copy()
 
         ### restoring nan mask
         if hasattr(self, 'nan_mask'):
-            X[self.nan_mask] = np.nan
+            if isinstance(X, np.ndarray):
+                X[self.nan_mask] = np.nan
+            elif isinstance(X, xr.DataArray):
+                X.values[self.nan_mask] = np.nan
 
         X -= self.min_
         X /= self.scale_
