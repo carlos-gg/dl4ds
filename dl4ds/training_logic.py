@@ -750,6 +750,7 @@ class CGANTrainer(Trainer):
         self.discriminator = residual_discriminator(n_channels=n_channels_disc, 
                                                     scale=self.scale, 
                                                     model=self.model_name,
+                                                    lr_size=(lr_height, lr_width),
                                                     **self.discriminator_params)
         
         if self.verbose == 1 and self.running_on_first_worker:
