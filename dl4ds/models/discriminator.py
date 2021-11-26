@@ -1,7 +1,8 @@
 import tensorflow as tf
 from tensorflow.keras.layers import (Input, Dropout, Dense, Conv2D, Add, 
                                      Concatenate, GlobalAveragePooling2D, 
-                                     GlobalAveragePooling3D, Cropping2D)
+                                     GlobalAveragePooling3D, Cropping2D,
+                                     Resizing)
 
 from .blocks import ResidualBlock, RecurrentConvBlock
 from .. import POSTUPSAMPLING_METHODS
@@ -11,6 +12,7 @@ def residual_discriminator(
     n_channels, 
     model, 
     scale, 
+    lr_size,
     n_filters, 
     n_res_blocks, 
     normalization=None, 
@@ -69,6 +71,8 @@ def residual_discriminator(
         elif scale == 4:
             c = Conv2D(n_filters, (3, 3), padding='same', strides=(2,2))(c)
             x_2 = Conv2D(n_filters, (3, 3), padding='same', strides=(2,2))(c)
+        else:
+            x_2 = Resizing(lr_size[0], lr_size[1], interpolation='bilinear')(c)
     elif model in ['resnet_bi', 'recresnet_bi']:
         c = Conv2D(n_filters, (3, 3), padding='same')(c)
         x_2 = Add()([x_2, c])
