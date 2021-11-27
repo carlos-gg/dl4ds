@@ -107,10 +107,11 @@ def create_batch_hr_lr(x_train, batch_size, predictors, scale, topography,
         return batch_hr, batch_lr, batch_auxvars, batch_lws
     else:
         return batch_hr, batch_lr, batch_lws
-
+ 
 
 def create_pair_hr_lr(
     array, 
+    array_lr,
     scale, 
     patch_size, 
     topography=None, 
@@ -149,17 +150,35 @@ def create_pair_hr_lr(
         If True, plots and debugging information are shown.
 
     """
-    if isinstance(array, xr.DataArray):
-        array = array.values
-    hr_array = np.squeeze(array)
-    hr_y, hr_x = hr_array.shape
     upsampling_method = model.split('_')[-1]
 
+    if isinstance(array, xr.DataArray):
+        array = array.values
+    if isinstance(array_lr, xr.DataArray):
+        array_lr = array_lr.values
+    hr_array = np.squeeze(array)
+    if array_lr is not None:
+        lr_array = np.squeeze(array_lr)
+        lr_is_given = True
+    else:
+        lr_is_given = False
+    hr_y, hr_x = hr_array.shape
+
+    # --------------------------------------------------------------------------
+    # Cropping/resizing the arrays        
     if upsampling_method == 'pin': 
-        lr_x, lr_y = int(hr_x / scale), int(hr_y / scale) 
-        # whole image is downsampled and upsampled via interpolation
-        lr_array_resized = resize_array(hr_array, (lr_x, lr_y), interpolation)
-        lr_array_resized = resize_array(lr_array_resized, (hr_x, hr_y), interpolation)
+        if lr_is_given:
+            lr_y = array_lr.shape[0]
+            lr_x = array_lr.shape[1]
+            # lr grid is upsampled via interpolation
+            lr_array_resized = resize_array(lr_array, (hr_x, hr_y), interpolation)  
+        else:
+            lr_x, lr_y = int(hr_x / scale), int(hr_y / scale) 
+            # hr grid is downsampled and upsampled via interpolation
+            lr_array_resized = resize_array(hr_array, (lr_x, lr_y), interpolation)
+            # coarsened grid is upsampled via interpolation
+            lr_array_resized = resize_array(lr_array_resized, (hr_x, hr_y), interpolation)  
+        
         if patch_size is not None:
             # cropping both hr_array and lr_array (same sizes)
             hr_array, crop_y, crop_x = crop_array(np.squeeze(hr_array), patch_size, 
@@ -171,18 +190,12 @@ def create_pair_hr_lr(
         hr_array = np.expand_dims(hr_array, -1)
         lr_array = np.expand_dims(lr_array, -1)
     
-    elif upsampling_method in POSTUPSAMPLING_METHODS:
-        if patch_size is not None:
-            patch_size_lr = int(patch_size / scale)
-        else:
-            lr_x, lr_y = int(hr_x / scale), int(hr_y / scale)
-    
-    # --------------------------------------------------------------------------
-    # Cropping/resizing the arrays
-    if upsampling_method == 'pin':
         if predictors is not None:
-            predictors = resize_array(predictors, (lr_x, lr_y), interpolation)
-            predictors = resize_array(predictors, (hr_x, hr_y), interpolation)  # upsampling the lr predictors
+            if predictors.shape[1] != lr_y and predictors.shape[2] != lr_x:
+                # we coarsen/interpolate the mid-res or high-res predictors
+                predictors = resize_array(predictors, (lr_x, lr_y), interpolation)  
+
+            predictors = resize_array(predictors, (hr_x, hr_y), interpolation)  
             if patch_size is not None:
                 # cropping first the predictors 
                 lr_array_predictors, crop_y, crop_x = crop_array(predictors, patch_size,
@@ -191,31 +204,61 @@ def create_pair_hr_lr(
                 lr_array_predictors = predictors
             # concatenating the predictors to the lr image
             lr_array = np.concatenate([lr_array, lr_array_predictors], axis=2)
+
     elif upsampling_method in POSTUPSAMPLING_METHODS:
+        if patch_size is not None:
+            patch_size_lr = int(patch_size / scale)
+
+        if lr_is_given:
+            lr_y = array_lr.shape[0]
+            lr_x = array_lr.shape[1]
+        else:
+            lr_x, lr_y = int(hr_x / scale), int(hr_y / scale)
+    
         if predictors is not None:
-            if patch_size is not None:
-                # cropping first the predictors 
-                lr_array_predictors, crop_y, crop_x = crop_array(predictors, patch_size_lr,
-                                                                 yx=None, position=True)
-                crop_y = int(crop_y * scale)
-                crop_x = int(crop_x * scale)
-                hr_array = crop_array(np.squeeze(hr_array), patch_size, yx=(crop_y, crop_x))   
-            else:
+            if predictors.shape[1] != lr_y and predictors.shape[2] != lr_x:
+                # we coarsen/interpolate the mid-res or high-res predictors
                 lr_array_predictors = resize_array(predictors, (lr_x, lr_y), interpolation) 
-            lr_array = resize_array(hr_array, (lr_x, lr_y), interpolation)       
+            else:
+                lr_array_predictors = predictors 
+
+            if patch_size is not None:
+                # cropping the lr predictors 
+                lr_array_predictors, crop_y, crop_x = crop_array(lr_array_predictors, patch_size_lr,
+                                                                 yx=None, position=True)
+                crop_y_hr = int(crop_y * scale)
+                crop_x_hr = int(crop_x * scale)
+                # cropping the hr_array
+                hr_array = crop_array(np.squeeze(hr_array), patch_size, yx=(crop_y_hr, crop_x_hr))   
+                if lr_is_given:
+                    lr_array = crop_array(lr_array, patch_size_lr, yx=(crop_y, crop_x))
+            
+            # downsampling the hr array to get lr_array when the lr array is not provided
+            if not lr_is_given:
+                lr_array = resize_array(hr_array, (lr_x, lr_y), interpolation)       
             hr_array = np.expand_dims(hr_array, -1)
             lr_array = np.expand_dims(lr_array, -1) 
-            # concatenating the predictors to the lr image
-            lr_array = np.concatenate([lr_array, lr_array_predictors], axis=2)
+            # concatenating the predictors to the lr grid
+            lr_array = np.concatenate([lr_array, lr_array_predictors], axis=-1)
         else:
             if patch_size is not None:
-                # cropping the hr array 
-                hr_array, crop_y, crop_x = crop_array(hr_array, patch_size, yx=None, position=True)
-                # downsampling the hr array to get lr_array
-                lr_array = resize_array(hr_array, (patch_size_lr, patch_size_lr), interpolation)
+                if lr_is_given:
+                    # cropping the lr array
+                    lr_array, crop_y, crop_x = crop_array(lr_array, patch_size_lr,
+                                                          yx=None, position=True)
+                    crop_y_hr = int(crop_y * scale)
+                    crop_x_hr = int(crop_x * scale)
+                    # cropping the hr_array
+                    hr_array = crop_array(np.squeeze(hr_array), patch_size, yx=(crop_y_hr, crop_x_hr)) 
+                else:
+                    # cropping the hr array 
+                    hr_array, crop_y, crop_x = crop_array(hr_array, patch_size, yx=None, position=True)
+                    # downsampling the hr array to get lr_array
+                    lr_array = resize_array(hr_array, (patch_size_lr, patch_size_lr), interpolation)
             else:
-                # downsampling the hr array to get lr_array
-                lr_array = resize_array(hr_array, (lr_x, lr_y), interpolation)    
+                if not lr_is_given:
+                    # downsampling the hr array to get lr_array
+                    lr_array = resize_array(hr_array, (lr_x, lr_y), interpolation)    
             hr_array = np.expand_dims(hr_array, -1)
             lr_array = np.expand_dims(lr_array, -1)
 
@@ -301,7 +344,7 @@ def create_pair_hr_lr(
 
         if predictors is not None:
             ecv.plot_ndarray(np.rollaxis(lr_array_predictors, 2, 0), dpi=100, interactive=False, 
-                             subplot_titles=('LR predictors'))
+                             plot_title=('LR predictors'))
 
     if topography is not None or landocean is not None or season is not None:
         return hr_array, lr_array, static_array_hr, local_lws_array
@@ -454,6 +497,7 @@ class DataGenerator(tf.keras.utils.Sequence):
     """
     def __init__(self, 
         array, 
+        array_lr,
         scale=4, 
         batch_size=32, 
         patch_size=None,
@@ -468,8 +512,8 @@ class DataGenerator(tf.keras.utils.Sequence):
         """
         Parameters
         ----------
-        model : {'resnet_spc', 'resnet_bi', 'resnet_rc'}
-            Name of the model architecture.
+        model : 
+            Name of the model architecture. eg, 'resnet_spc', 'convnet_pin'
         predictors : list of ndarray 
             List of predictor ndarrays.
 
@@ -479,6 +523,7 @@ class DataGenerator(tf.keras.utils.Sequence):
         netcdf files lazily or memmap a numpy array
         """
         self.array = array
+        self.array_lr = array_lr
         self.batch_size = batch_size
         self.scale = scale
         self.patch_size = patch_size
@@ -548,6 +593,7 @@ class DataGenerator(tf.keras.utils.Sequence):
 
                 res = create_pair_hr_lr(
                     array=self.array[i],
+                    array_lr=None if self.array_lr is None else self.array_lr[i],
                     scale=self.scale, 
                     patch_size=self.patch_size, 
                     topography=self.topography, 
