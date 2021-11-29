@@ -39,23 +39,6 @@ class MinMaxScaler(TransformerMixin, BaseEstimator):
     -----
     NaNs are disregarded in fit when transforming to the new value range, and 
     then replaced according to ``fillnanto`` in transform. 
-    
-    Examples
-    --------
-    >>> from sklearn.preprocessing import MinMaxScaler
-    >>> data = [[-1, 2], [-0.5, 6], [0, 10], [1, 18]]
-    >>> scaler = MinMaxScaler()
-    >>> print(scaler.fit(data))
-    MinMaxScaler()
-    >>> print(scaler.data_max_)
-    [ 1. 18.]
-    >>> print(scaler.transform(data))
-    [[0.   0.  ]
-     [0.25 0.25]
-     [0.5  0.5 ]
-     [1.   1.  ]]
-    >>> print(scaler.transform([[2, 2]]))
-    [[1.5 0. ]]
     """
 
     def __init__(self, value_range=(0, 1), copy=True, axis=None, fillnanto=-1):
@@ -85,7 +68,7 @@ class MinMaxScaler(TransformerMixin, BaseEstimator):
         return self.partial_fit(X, y)
 
     def partial_fit(self, X, y=None):
-        """Online computation of min and max on X for later scaling.
+        """Computation of min and max on X for later scaling.
         """
         value_range = self.value_range
         if value_range[0] >= value_range[1]:
@@ -121,7 +104,7 @@ class MinMaxScaler(TransformerMixin, BaseEstimator):
         return self
 
     def transform(self, X):
-        """Scale features of X according to range.
+        """Scale X according to range.
         """
         check_is_fitted(self)
 
@@ -156,6 +139,144 @@ class MinMaxScaler(TransformerMixin, BaseEstimator):
 
         X -= self.min_
         X /= self.scale_
+        return X
+
+    def _more_tags(self):
+        return {"allow_nan": True}
+
+
+class StandardScaler(TransformerMixin, BaseEstimator):
+    """Standardize features by removing the mean and scaling to unit variance.
+    
+    The standard score of a sample `x` is calculated as:
+        z = (x - u) / s
+    where `u` is the mean of the data or zero if `with_mean=False`,
+    and `s` is the standard deviation of the data or one if `with_std=False`.
+    
+    Mean and standard deviation are then stored to be used on later data using
+    :meth:`transform`.
+    
+    Parameters
+    ----------
+    copy : bool, default=True
+        If False, try to avoid a copy and do inplace scaling instead.
+        This is not guaranteed to always work inplace; e.g. if the data is
+        not a NumPy array or scipy.sparse CSR matrix, a copy may still be
+        returned.
+    with_mean : bool, default=True
+        If True, center the data before scaling.
+        This does not work (and will raise an exception) when attempted on
+        sparse matrices, because centering them entails building a dense
+        matrix which in common use cases is likely to be too large to fit in
+        memory.
+    with_std : bool, default=True
+        If True, scale the data to unit variance (or equivalently,
+        unit standard deviation).
+    axis : None or int or tuple of int, default=None
+        Axis or axes along which the minimum and maximum will be computed (via 
+        ``np.nanmin`` and ``np.nanmax`` functions). If None then the new range
+        is computed from the whole dataset (all dimensions/axes).
+    fillnanto : float or int, deafult=0
+        Value to be used when filling in NaN values. 
+
+    Notes
+    -----
+    NaNs are disregarded in fit when transforming to the new value range, and 
+    then replaced according to ``fillnanto`` in transform. 
+    """
+
+    def __init__(self, copy=True, with_mean=True, with_std=True, axis=None,
+                 fillnanto=0):
+        self.with_mean = with_mean
+        self.with_std = with_std
+        self.copy = copy
+        self.axis = axis
+        self.fillnanto = fillnanto
+
+    def _reset(self):
+        """Reset internal data-dependent state of the scaler, if necessary.
+        __init__ parameters are not touched.
+        """
+        # Checking one attribute is enough, because they are all set together
+        # in partial_fit
+        if hasattr(self, "mean_"):
+            del self.mean_
+            del self.std_
+
+    def fit(self, X, y=None):
+        """Compute the minimum and maximum to be used for later scaling.
+        """
+        # Reset internal state before fitting
+        self._reset()
+        return self.partial_fit(X, y)
+
+    def partial_fit(self, X, y=None):
+        """Computation of mean and standard deviation of X for later scaling.
+        """
+        ### creating a nan mask
+        if np.any(np.isnan(X)):
+            self.nan_mask = np.isnan(X)
+
+        ### data type validation
+        if isinstance(X, np.ndarray):
+            if self.with_mean:
+                data_mean = np.nanmean(X, axis=self.axis)
+            if self.with_std:
+                data_std = np.nanstd(X, axis=self.axis)
+        elif isinstance(X, xr.DataArray):
+            if self.with_mean:
+                data_mean = X.mean(axis=self.axis, skipna=True).values
+            if self.with_std:
+                data_std = X.std(axis=self.axis, skipna=True).values
+        else:
+            raise TypeError('`X` is neither a np.ndarray or xr.DataArray')
+
+        if self.with_mean:
+            self.mean_ = data_mean
+        if self.with_std:
+            self.std_ = data_std
+        return self
+
+    def transform(self, X):
+        """Scale X according to range.
+        """
+        check_is_fitted(self)
+
+        if self.copy:
+            X = X.copy()
+
+        if self.with_std:
+            X -= self.mean_
+        if self.with_std:
+            X /= self.std_
+            
+        ### filling nan values
+        if np.any(np.isnan(X)):
+            if isinstance(X, np.ndarray):
+                X = np.nan_to_num(X, nan=self.fillnanto)
+            elif isinstance(X, xr.DataArray):
+                X = X.fillna(value=self.fillnanto)
+        return X
+
+    def inverse_transform(self, X):
+        """Undo the scaling of X according to range.
+        """
+        check_is_fitted(self)
+
+        if self.copy():
+            X = X.copy()
+
+        ### restoring nan mask
+        if hasattr(self, 'nan_mask'):
+            if isinstance(X, np.ndarray):
+                X[self.nan_mask] = np.nan
+            elif isinstance(X, xr.DataArray):
+                X.values[self.nan_mask] = np.nan
+
+        if self.with_std:
+            X *= self.scale_
+        if self.with_mean:
+            X += self.mean_
         return X
 
     def _more_tags(self):
