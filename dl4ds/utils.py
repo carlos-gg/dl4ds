@@ -291,6 +291,8 @@ def resize_array(array, newsize, interpolation='inter_area', squeezed=True,
     
     if array.ndim in [2, 3]:
         resized_arr = cv2.resize(array, (size_x, size_y), interpolation=interp)
+        if resized_arr.ndim == 2 and array.ndim == 3:
+            resized_arr = np.expand_dims(resized_arr, -1)
     elif array.ndim == 4:
         n = array.shape[0]
         n_ch = array.shape[-1]
