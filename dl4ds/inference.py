@@ -5,7 +5,7 @@ import tensorflow as tf
 
 from .utils import Timing
 from . import SPATIAL_MODELS, SPATIOTEMP_MODELS, POSTUPSAMPLING_METHODS
-from .dataloader import _get_season_, create_pair_hr_lr, create_pair_temp_hr_lr
+from .dataloader import create_batch_hr_lr
 from .training_logic import CGANTrainer, SupervisedTrainer
 
 
@@ -83,64 +83,30 @@ def predict(
     n_samples = array.shape[0]
     if model_architecture in SPATIOTEMP_MODELS:
         n_samples -= time_window - 1
-    batch_hr = []
-    batch_lr = []
-    batch_aux_hr = []
-    batch_lws = []
-    params = {}
 
+    # concatenating list of ndarray variables along the last dimension  
     if predictors is not None:
-        array_predictors = np.concatenate(predictors, axis=-1)
+        predictors = np.concatenate(predictors, axis=-1)
 
-    for i in range(n_samples):
+    batch = create_batch_hr_lr(       
+        np.arange(n_samples),
+        0,
+        array, 
+        None,
+        scale=scale, 
+        batch_size=n_samples, 
+        patch_size=None,
+        time_window=time_window,
+        topography=topography, 
+        landocean=landocean, 
+        predictors=predictors,
+        model=model_architecture, 
+        interpolation=interpolation)
 
-        if isinstance(array, xr.DataArray):
-            season = _get_season_(array[i])
-        else:
-            season = None
-
-        if model_architecture in SPATIAL_MODELS:
-            # concatenating list of ndarray variables along the last 
-            # dimension to create a single ndarray 
-            if predictors is not None:
-                params = dict(predictors=array_predictors[i])                
-
-            dataloader_res = create_pair_hr_lr(
-                array=array[i],
-                scale=scale, 
-                patch_size=None, 
-                topography=topography, 
-                season=season,
-                landocean=landocean, 
-                model=model_architecture,
-                interpolation=interpolation,
-                **params)
-
-        elif model_architecture in SPATIOTEMP_MODELS:
-            # concatenating list of ndarray variables along the last 
-            # dimension to create a single ndarray 
-            if predictors is not None:
-                params = dict(predictors=array_predictors[i:i+time_window])
-
-            dataloader_res = create_pair_temp_hr_lr(
-                array=array[i:i+time_window],
-                scale=scale, 
-                patch_size=None, 
-                topography=topography, 
-                landocean=landocean, 
-                season=season,
-                model=model_architecture,
-                interpolation=interpolation,
-                **params)
-        
-        if topography is not None or landocean is not None or season is not None:
-            hr_array, lr_array, static_array_hr, lws = dataloader_res
-            batch_aux_hr.append(static_array_hr)
-        else:
-            hr_array, lr_array, lws = dataloader_res
-        batch_lr.append(lr_array)
-        batch_hr.append(hr_array)
-        batch_lws.append(lws)
+    if topography is not None or landocean is not None or use_season is not None:
+        [batch_lr, batch_aux_hr, batch_lws], [batch_hr] = batch
+    else:
+        [batch_lr, batch_lws], [batch_hr] = batch
 
     if data_in_hr:
         x_test_lr = batch_lr
@@ -150,7 +116,7 @@ def predict(
     ### Casting as TF tensors, creating inputs ---------------------------------
     x_test_lr = tf.cast(x_test_lr, tf.float32)   
     local_lws_array = tf.cast(batch_lws, tf.float32)     
-    if topography is not None or landocean is not None or season is not None: 
+    if topography is not None or landocean is not None or use_season is not None: 
         aux_vars_hr = tf.cast(batch_aux_hr, tf.float32) 
         inputs = [x_test_lr, aux_vars_hr, local_lws_array]
     else:
