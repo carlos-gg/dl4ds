@@ -30,6 +30,7 @@ class Trainer(ABC):
         self,
         model_name, 
         data_train,
+        data_train_lr=None,
         use_season=True,
         loss='mae',
         batch_size=64, 
@@ -49,6 +50,12 @@ class Trainer(ABC):
         self.model_name = model_name
         self.use_season = use_season
         self.data_train = checkarg_datatype(data_train, self.use_season)
+        self.data_train_lr = data_train_lr
+        if self.data_train_lr is not None:
+            if self.data_train_lr.shape[0] != self.data_train.shape[0]:
+                msg = '`data_train_lr` and `data_train` must contain '
+                msg += 'the same number of samples (equal 1st dim lenght)'
+                raise ValueError(msg)
         self.batch_size = batch_size
         self.patch_size = patch_size
         self.loss = loss
@@ -183,6 +190,9 @@ class SupervisedTrainer(Trainer):
         data_train, 
         data_val, 
         data_test,  
+        data_train_lr=None,
+        data_val_lr=None,
+        data_test_lr=None,
         predictors_train=None,
         predictors_val=None,
         predictors_test=None,
@@ -264,7 +274,7 @@ class SupervisedTrainer(Trainer):
         epochs : int, optional
             Number of epochs or passes through the whole training dataset. 
         steps_per_epoch : int or None, optional
-            Total number of steps (batches of samples) before decalrin one epoch
+            Total number of steps (batches of samples) before declaring one epoch
             finished.``batch_size * steps_per_epoch`` samples are passed per 
             epoch. If None, ``then steps_per_epoch`` is equal to the number of 
             samples diviced by the ``batch_size``.
@@ -312,6 +322,7 @@ class SupervisedTrainer(Trainer):
         super().__init__(
             model_name=model_name, 
             data_train=data_train,
+            data_train_lr=data_train_lr,
             use_season=use_season,
             loss=loss,
             batch_size=batch_size, 
@@ -328,6 +339,8 @@ class SupervisedTrainer(Trainer):
             )
         self.data_val = checkarg_datatype(data_val, use_season)
         self.data_test = checkarg_datatype(data_test, use_season)
+        self.data_val_lr = data_val_lr
+        self.data_test_lr = data_test_lr
         self.predictors_train = predictors_train
         if self.predictors_train is not None and not isinstance(self.predictors_train, list):
             raise TypeError('`predictors_train` must be a list of ndarrays')
@@ -371,9 +384,15 @@ class SupervisedTrainer(Trainer):
             model=self.model_name, 
             interpolation=self.interpolation,
             time_window=self.time_window)
-        self.ds_train = DataGenerator(self.data_train, predictors=self.predictors_train, **datagen_params)
-        self.ds_val = DataGenerator(self.data_val, predictors=self.predictors_val, **datagen_params)
-        self.ds_test = DataGenerator(self.data_test, predictors=self.predictors_test, **datagen_params)
+        self.ds_train = DataGenerator(
+            self.data_train, self.data_train_lr, 
+            predictors=self.predictors_train, **datagen_params)
+        self.ds_val = DataGenerator(
+            self.data_val, self.data_val_lr, 
+            predictors=self.predictors_val, **datagen_params)
+        self.ds_test = DataGenerator(
+            self.data_test, self.data_test_lr,
+            predictors=self.predictors_test, **datagen_params)
 
     def setup_model(self):
         """Setting up the model
@@ -783,17 +802,23 @@ class CGANTrainer(Trainer):
             checkpoint_prefix = os.path.join(self.savecheckpoint_path + 'chkpts/', 'checkpoint_epoch')
             checkpoint = tf.train.Checkpoint(generator_optimizer=generator_optimizer,
                                              discriminator_optimizer=discriminator_optimizer,
-                                             generator=self.generator, discriminator=self.discriminator)
-
-        n_samples = self.data_train.shape[0]
-        if self.steps_per_epoch is None:
-            self.steps_per_epoch = int(n_samples / self.batch_size)
+                                             generator=self.generator, discriminator=self.discriminator)   
 
         # creating a single ndarrays concatenating list of ndarray variables along the last dimension 
         if self.predictors_train is not None:
             self.predictors_train = np.concatenate(self.predictors_train, axis=-1)
         else:
             self.predictors_train = None
+
+        # shuffling the order of the available indices (n samples)
+        if self.time_window is not None:
+            self.n = self.data_train.shape[0] - self.time_window
+        else:
+            self.n = self.data_train.shape[0]
+        self.indices_train = np.random.permutation(np.arange(self.n))
+
+        if self.steps_per_epoch is None:
+            self.steps_per_epoch = int(self.n / self.batch_size)
 
         for epoch in range(self.epochs):
             print(f'\nEpoch {epoch+1}/{self.epochs}')
@@ -804,25 +829,25 @@ class CGANTrainer(Trainer):
 
             for i in range(self.steps_per_epoch):
                 res = create_batch_hr_lr(
-                    self.data_train,
-                    batch_size=self.global_batch_size,
-                    predictors=self.predictors_train, 
+                    self.indices_train,
+                    i,
+                    self.data_train, 
+                    self.data_train_lr,
                     scale=self.scale, 
+                    batch_size=self.batch_size, 
+                    patch_size=self.patch_size,
+                    time_window=self.time_window,
                     topography=self.topography, 
                     landocean=self.landocean, 
-                    patch_size=self.patch_size, 
-                    time_window=self.time_window,
+                    predictors=self.predictors_train,
                     model=self.model_name, 
                     interpolation=self.interpolation)
-
-                hr_array = res[0]
-                lr_array = res[1]
-                static_array = None
-                if self.topography is not None or self.landocean is not None or isinstance(self.data_train, xr.DataArray):
-                    static_array = res[2]
-                    lws = res[3]
+               
+                if (self.topography is not None or self.landocean is not None 
+                    or isinstance(self.data_train, xr.DataArray)):
+                    [lr_array, aux_hr, lws], [hr_array] = res
                 else:
-                    lws = res[2]
+                    [lr_array, lws], [hr_array] = res
 
                 losses = train_step(
                     lr_array, 
@@ -835,7 +860,7 @@ class CGANTrainer(Trainer):
                     gen_pxloss_function=self.lossf,
                     summary_writer=summary_writer, 
                     first_batch=True if epoch==0 and i==0 else False,
-                    static_array=static_array,
+                    static_array=aux_hr,
                     lws_array=lws)
                 
                 gen_total_loss, gen_gan_loss, gen_px_loss, disc_loss = losses
@@ -875,32 +900,42 @@ class CGANTrainer(Trainer):
             self.predictors_test = np.concatenate(self.predictors_test, axis=-1)
         else:
             self.predictors_test = None
-            
-        if self.running_on_first_worker:
-            test_steps = int(self.data_test.shape[0] / self.batch_size)
-            
+        
+        # shuffling the order of the available indices (n samples)
+        self.n_test = self.data_test.shape[0]
+        if self.time_window is not None:
+            self.indices_test = np.random.permutation(np.arange(0, self.n_test - self.time_window))
+        else:
+            self.indices_test = np.random.permutation(np.arange(self.n_test))
+
+        if self.running_on_first_worker:            
             res = create_batch_hr_lr(
-                self.data_test,
-                batch_size=test_steps,
-                predictors=self.predictors_test, 
+                self.indices_test,
+                0,
+                self.data_train, 
+                self.data_train_lr,
                 scale=self.scale, 
+                batch_size=self.n_test, 
+                patch_size=self.patch_size,
+                time_window=self.time_window,
                 topography=self.topography, 
                 landocean=self.landocean, 
-                patch_size=self.patch_size, 
-                time_window=self.time_window,
+                predictors=self.predictors_train,
                 model=self.model_name, 
-                interpolation=self.interpolation,
-                shuffle=False)
-
-            hr_arrtest = tf.cast(res[0], tf.float32)
-            lr_arrtest = tf.cast(res[1], tf.float32)
-            static_arrtest = None
-            if self.topography is not None or self.landocean is not None or isinstance(self.data_train, xr.DataArray):
-                static_arrtest = tf.cast(res[2], tf.float32)
-                lws_arrtest = tf.cast(res[3], tf.float32)
-                input_test = [lr_arrtest, static_arrtest, lws_arrtest]
+                interpolation=self.interpolation)
+            
+            if (self.topography is not None or self.landocean is not None 
+                or isinstance(self.data_test, xr.DataArray)):
+                [lr_array, aux_hr, lws], [hr_array] = res
+                hr_arrtest = tf.cast(hr_array, tf.float32)
+                lr_arrtest = tf.cast(lr_array, tf.float32)
+                lws_arrtest = tf.cast(lws, tf.float32)
+                auxhr_arrtest = tf.cast(aux_hr, tf.float32)
+                input_test = [lr_arrtest, auxhr_arrtest, lws_arrtest]
             else:
-                lws_arrtest = tf.cast(res[2], tf.float32)
+                [lr_array, lws], [hr_array] = res
+                lr_arrtest = tf.cast(lr_array, tf.float32)
+                lws_arrtest = tf.cast(lws, tf.float32)
                 input_test = [lr_arrtest, lws_arrtest]
             
             y_test_pred = self.generator.predict(input_test)
