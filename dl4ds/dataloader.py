@@ -325,24 +325,20 @@ def create_batch_hr_lr(
     batch_aux_hr = []
     batch_lws = []
 
-    # concatenating list of ndarray variables along the last dimension  
-    if predictors is not None:
-        array_predictors = np.concatenate(predictors, axis=-1)
-
     # looping to create a batch of samples
     for i in batch_rand_idx:
         # spatial samples
         if time_window is None:  
             data_i = array[i]
             data_lr_i = None if array_lr is None else array_lr[i]
-            predictors_i = None if predictors is None else array_predictors[i]
+            predictors_i = None if predictors is None else predictors[i]
             season_i = _get_season_(array[i]) if isinstance(array, xr.DataArray) else None
 
         # spatio-temporal samples
         else:
             data_i = array[i:i+time_window]
             data_lr_i = None if array_lr is None else array_lr[i:i+time_window]     
-            predictors_i = None if predictors is None else array_predictors[i:i+time_window]   
+            predictors_i = None if predictors is None else predictors[i:i+time_window]   
             season_i = _get_season_(array[i:i+time_window]) if isinstance(array, xr.DataArray) else None
 
         res = create_pair_hr_lr(
@@ -420,17 +416,20 @@ class DataGenerator(tf.keras.utils.Sequence):
         self.topography = topography
         self.landocean = landocean
         self.predictors = predictors
+        # concatenating list of ndarray variables along the last dimension  
+        if self.predictors is not None:
+            self.predictors = np.concatenate(self.predictors, axis=-1)
         self.model = checkarg_model(model)
         self.upsampling = self.model.split('_')[-1]
         self.interpolation = interpolation
         self.repeat = repeat
-        self.n = array.shape[0]
         
         # shuffling the order of the available indices (n samples)
         if self.time_window is not None:
-            self.indices = np.random.permutation(np.arange(0, self.n - self.time_window))
+            self.n = self.array.shape[0] - self.time_window
         else:
-            self.indices = np.random.permutation(np.arange(self.n))
+            self.n = self.array.shape[0]
+        self.indices = np.random.permutation(np.arange(self.n))
         
         if self.repeat is not None and isinstance(self.repeat, int):
             self.indices = np.hstack([self.indices for i in range(self.repeat)])
