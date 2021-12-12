@@ -278,6 +278,12 @@ def resize_array(array, newsize, interpolation='inter_area', squeezed=True,
     resized_arr : numpy ndarray
         Interpolated array with size ``newsize``.
     """
+    if isinstance(array, xr.DataArray):
+        array = array.values
+
+    if array.dtype == 'bool':
+        array = array.astype('int')
+
     if interpolation == 'nearest':
         interp = cv2.INTER_NEAREST
     elif interpolation == 'bicubic':
