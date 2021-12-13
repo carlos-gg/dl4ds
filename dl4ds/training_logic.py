@@ -263,7 +263,6 @@ class SupervisedTrainer(Trainer):
             Scaling factor. 
         interpolation : str, optional
             Interpolation used when upsampling/downsampling the training samples.
-            By default 'bicubic'. 
         patch_size : int or None, optional
             Size of the square patches used to grab training samples.
         time_window : int or None, optional
@@ -624,7 +623,6 @@ class CGANTrainer(Trainer):
             Scaling factor. 
         interpolation : str, optional
             Interpolation used when upsampling/downsampling the training samples.
-            By default 'bicubic'. 
         patch_size : int, optional
             Size of the square patches used to grab training samples.
         batch_size : int, optional

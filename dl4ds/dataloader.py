@@ -32,6 +32,9 @@ def create_pair_hr_lr(
     ----------
     array : np.ndarray
         HR gridded data.
+    array_lr : np.ndarray
+        LR gridded data. If not provided, then implicit/coarsened pairs are
+        created from ``array``.
     scale : int
         Scaling factor.
     patch_size : int or None
@@ -383,7 +386,7 @@ class DataGenerator(tf.keras.utils.Sequence):
     def __init__(self, 
         array, 
         array_lr,
-        scale=4, 
+        scale, 
         batch_size=32, 
         patch_size=None,
         time_window=None,
@@ -397,10 +400,33 @@ class DataGenerator(tf.keras.utils.Sequence):
         """
         Parameters
         ----------
-        model : 
-            Name of the model architecture. eg, 'resnet_spc', 'convnet_pin'
+        array : np.ndarray
+            HR gridded data.
+        array_lr : np.ndarray
+            LR gridded data. If not provided, then implicit/coarsened pairs are
+            created from ``array``.
+        scale : int
+            Scaling factor.
+        batch_size : int, optional
+            How many samples are included in each batch. 
+        patch_size : int or None
+            Size of the square patches to be extracted, in pixels for the HR grid.
+        time_window : int or None, optional
+            If not None, then each sample will have a temporal dimension 
+            (``time_window`` slices to the past are grabbed for the LR array).
+        topography : None or 2D ndarray, optional
+            Elevation data.
+        landocean : None or 2D ndarray, optional
+            Binary land-ocean mask.
         predictors : list of ndarray 
             List of predictor ndarrays.
+        model : str, optional
+            Name of the model architecture. eg, 'resnet_spc', 'convnet_pin'
+        interpolation : str, optional
+            Interpolation used when upsampling/downsampling the training samples.
+        repeat : int or None, optional
+            Factor to repeat the samples in ``array``. Useful when ``patch_size``
+            is not None.
 
         TO-DO
         -----

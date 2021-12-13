@@ -304,10 +304,8 @@ def resize_array(array, newsize, interpolation='inter_area', squeezed=True,
         n_ch = array.shape[-1]
         resized_arr = np.zeros((n, size_y, size_x, n_ch))
         for i in range(n):
-            ti = cv2.resize(array[i], (size_x, size_y), interpolation=interp)
-            if n_ch == 1:
-                ti = np.expand_dims(ti, -1)
-            resized_arr[i] = ti
+            ti = cv2.resize(array[i], (size_x, size_y), interpolation=interp)                
+            resized_arr[i] = np.expand_dims(ti, -1) if n_ch ==1 else ti
 
     if squeezed:
         resized_arr = np.squeeze(resized_arr)
