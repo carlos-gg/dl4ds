@@ -565,6 +565,8 @@ class CGANTrainer(Trainer):
         model_name,
         data_train,
         data_test,
+        data_train_lr=None,
+        data_test_lr=None,
         predictors_train=None,
         predictors_test=None,
         scale=5, 
@@ -650,6 +652,7 @@ class CGANTrainer(Trainer):
         super().__init__(
             model_name=model_name, 
             data_train=data_train, 
+            data_train_lr=data_train_lr,
             use_season=use_season,
             loss=loss, 
             batch_size=batch_size, 
@@ -664,6 +667,7 @@ class CGANTrainer(Trainer):
             show_plot=False
             )
         self.data_test = self.data_test = checkarg_datatype(data_test, use_season)
+        self.data_test_lr = data_test_lr
         self.scale = scale
         self.patch_size = patch_size
         self.time_window = time_window
