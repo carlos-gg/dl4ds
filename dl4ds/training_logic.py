@@ -43,6 +43,7 @@ class Trainer(ABC):
         model_list=None,
         save=True,
         save_path=None,
+        savecheckpoint_path=None,
         show_plot=False,
         ):
         """
@@ -67,12 +68,15 @@ class Trainer(ABC):
         self.model_list = model_list
         self.save = save
         self.save_path = save_path
-        self.show_plot = show_plot
         if self.save_path is None:
             self.save_path = './'
         else:
             if not self.save_path.endswith('/'):
                 self.save_path += '/'
+        self.savecheckpoint_path = savecheckpoint_path
+        if self.savecheckpoint_path is None and self.save:
+            self.savecheckpoint_path = self.save_path
+        self.show_plot = show_plot
         self.upsampling = model_name.split('_')[-1]
         self.backbone = self.model_name.split('_')[0]
         if self.backbone.startswith('rec'):
@@ -296,11 +300,11 @@ class SupervisedTrainer(Trainer):
             Whether to save the final model. 
         save_path : None or str
             Path for saving the final model, running time and test score. If 
-            None, then ``'./saved_model/'`` is used. The SavedModel format is a 
+            None, then ``'./'`` is used. The SavedModel format is a 
             directory containing a protobuf binary and a TensorFlow checkpoint.
         savecheckpoint_path : None or str
             Path for saving the training checkpoints. If None, then no 
-            checkpoints are saved during training. 
+            checkpoints are saved during training.
         device : str
             Choice of 'GPU' or 'CPU' for the training of the Tensorflow models. 
         gpu_memory_growth : bool, optional
@@ -334,6 +338,7 @@ class SupervisedTrainer(Trainer):
             model_list=model_list,
             save=save,
             save_path=save_path,
+            savecheckpoint_path=savecheckpoint_path,
             show_plot=show_plot
             )
         self.data_val = checkarg_datatype(data_val, use_season)
@@ -361,7 +366,6 @@ class SupervisedTrainer(Trainer):
         self.early_stopping = early_stopping
         self.patience = patience
         self.min_delta = min_delta
-        self.savecheckpoint_path = savecheckpoint_path
         self.show_plot = show_plot
         self.architecture_params = architecture_params
         self.time_window = time_window
@@ -662,6 +666,7 @@ class CGANTrainer(Trainer):
             model_list=model_list, 
             save=save, 
             save_path=save_path, 
+            savecheckpoint_path=savecheckpoint_path,
             show_plot=False
             )
         self.data_test = self.data_test = checkarg_datatype(data_test, use_season)
@@ -682,7 +687,6 @@ class CGANTrainer(Trainer):
         self.topography = topography 
         self.landocean = landocean
         self.checkpoints_frequency = checkpoints_frequency
-        self.savecheckpoint_path = savecheckpoint_path
         self.save_loss_history = save_loss_history
         self.save_logs = save_logs
         self.generator_params = generator_params
