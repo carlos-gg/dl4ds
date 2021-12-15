@@ -226,6 +226,8 @@ class SupervisedTrainer(Trainer):
         save=False,
         save_path=None, 
         savecheckpoint_path=None,
+        trained_model=None,
+        trained_epochs=0,
         verbose=True,
         **architecture_params
         ):
@@ -374,6 +376,8 @@ class SupervisedTrainer(Trainer):
         if self.model_is_spatiotemp and self.time_window is None:
             msg = f'``model={self.model_name}``, the argument ``time_window`` must be a postive integer'
             raise ValueError(msg)
+        self.trained_model = trained_model
+        self.trained_epochs = trained_epochs
 
     def setup_datagen(self):
         """Setting up the data generators
@@ -436,46 +440,53 @@ class SupervisedTrainer(Trainer):
             lr_height = lr_width = int(self.patch_size / self.scale)
             hr_height = hr_width = int(self.patch_size)
 
-        ### instantiating and fitting the model
-        if self.upsampling in POSTUPSAMPLING_METHODS:
-            if not self.model_is_spatiotemp:
-                self.model = net_postupsampling(
-                    backbone_block=self.backbone,
-                    upsampling=self.upsampling, 
-                    scale=self.scale, 
-                    lr_size=(lr_height, lr_width),
-                    n_channels=n_channels, 
-                    n_aux_channels=n_aux_channels,
-                    **self.architecture_params)
-            else:
-                self.model = recnet_postupsampling(
-                    backbone_block=self.backbone,
-                    upsampling=self.upsampling, 
-                    scale=self.scale, 
-                    n_channels=n_channels, 
-                    n_aux_channels=n_aux_channels,
-                    lr_size=(lr_height, lr_width),
-                    time_window=self.time_window, 
-                    **self.architecture_params)
-        elif self.upsampling == 'pin':
-            if not self.model_is_spatiotemp:
-                self.model = net_pin(
-                    backbone_block=self.backbone,
-                    n_channels=n_channels, 
-                    n_aux_channels=n_aux_channels,
-                    hr_size=(hr_height, hr_width),
-                    **self.architecture_params)        
-            else:
-                self.model = recnet_pin(
-                    backbone_block=self.backbone,
-                    n_channels=n_channels,
-                    n_aux_channels=n_aux_channels,
-                    hr_size=(hr_height, hr_width),
-                    time_window=self.time_window, 
-                    **self.architecture_params)
+        ### instantiating the model
+        if self.trained_model is None:
+            if self.upsampling in POSTUPSAMPLING_METHODS:
+                if not self.model_is_spatiotemp:
+                    self.model = net_postupsampling(
+                        backbone_block=self.backbone,
+                        upsampling=self.upsampling, 
+                        scale=self.scale, 
+                        lr_size=(lr_height, lr_width),
+                        n_channels=n_channels, 
+                        n_aux_channels=n_aux_channels,
+                        **self.architecture_params)
+                else:
+                    self.model = recnet_postupsampling(
+                        backbone_block=self.backbone,
+                        upsampling=self.upsampling, 
+                        scale=self.scale, 
+                        n_channels=n_channels, 
+                        n_aux_channels=n_aux_channels,
+                        lr_size=(lr_height, lr_width),
+                        time_window=self.time_window, 
+                        **self.architecture_params)
+            elif self.upsampling == 'pin':
+                if not self.model_is_spatiotemp:
+                    self.model = net_pin(
+                        backbone_block=self.backbone,
+                        n_channels=n_channels, 
+                        n_aux_channels=n_aux_channels,
+                        hr_size=(hr_height, hr_width),
+                        **self.architecture_params)        
+                else:
+                    self.model = recnet_pin(
+                        backbone_block=self.backbone,
+                        n_channels=n_channels,
+                        n_aux_channels=n_aux_channels,
+                        hr_size=(hr_height, hr_width),
+                        time_window=self.time_window, 
+                        **self.architecture_params)
 
-        if self.verbose == 1 and self.running_on_first_worker:
-            self.model.summary(line_length=150)
+            if self.verbose == 1 and self.running_on_first_worker:
+                self.model.summary(line_length=150)
+        
+        # loading pre-trained model
+        else:
+            self.model = self.trained_model
+            print('Loading pre-trained model')
+
 
     def run(self):
         """Compiling, training and saving the model
@@ -539,6 +550,7 @@ class SupervisedTrainer(Trainer):
         self.fithist = self.model.fit(
             self.ds_train, 
             epochs=self.epochs, 
+            initial_epoch=self.trained_epochs,
             steps_per_epoch=self.steps_per_epoch,
             validation_data=self.ds_val, 
             validation_steps=self.validation_steps, 
