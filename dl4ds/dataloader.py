@@ -296,7 +296,7 @@ def create_pair_hr_lr(
 
             if predictors is not None:
                 ecv.plot_ndarray(np.rollaxis(lr_array_predictors, 2, 0), dpi=100, interactive=False, 
-                                plot_title=('LR predictors'))
+                                plot_title='LR predictors')
 
     if topography is not None or landocean is not None or season is not None:
         return hr_array, lr_array, static_array_hr, local_lws_array

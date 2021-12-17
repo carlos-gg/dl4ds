@@ -3,7 +3,7 @@ import numpy as np
 import xarray as xr
 import tensorflow as tf
 
-from .utils import Timing
+from .utils import Timing, resize_array
 from . import SPATIAL_MODELS, SPATIOTEMP_MODELS, POSTUPSAMPLING_METHODS
 from .dataloader import create_batch_hr_lr
 from .training_logic import CGANTrainer, SupervisedTrainer
@@ -13,7 +13,7 @@ def predict(
     model, 
     array, 
     scale, 
-    data_in_hr=True,
+    array_in_hr=True,
     use_season=True,
     topography=None, 
     landocean=None, 
@@ -36,7 +36,7 @@ def predict(
         Batch of HR grids. 
     scale : int
         Scaling factor. 
-    data_in_hr : bool, optional
+    array_in_hr : bool, optional
         If True, the data is assumed to be a HR groundtruth to be downsampled. 
         Otherwise, data is a LR gridded dataset to be downscaled.
     topography : None or 2D ndarray, optional
@@ -88,6 +88,12 @@ def predict(
     if predictors is not None:
         predictors = np.concatenate(predictors, axis=-1)
 
+    # when array is in LR, it gets upsampled according to scale
+    if not array_in_hr and model_architecture.endswith('pin'):
+        hr_x = array.shape[2]
+        hr_y = array.shape[1]
+        array = resize_array(array, (hr_x, hr_y), interpolation) 
+
     batch = create_batch_hr_lr(       
         np.arange(n_samples),
         0,
@@ -108,7 +114,8 @@ def predict(
     else:
         [batch_lr, batch_lws], [batch_hr] = batch
 
-    if data_in_hr:
+    # if array in HR,we take the coarsened version according to scale
+    if array_in_hr:
         x_test_lr = batch_lr
     else:
         x_test_lr = batch_hr
