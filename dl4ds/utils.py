@@ -278,7 +278,8 @@ def resize_array(array, newsize, interpolation='inter_area', squeezed=True,
     resized_arr : numpy ndarray
         Interpolated array with size ``newsize``.
     """
-    if isinstance(array, xr.DataArray):
+    # in the case of a xr.DataArray, isinstance(array, xr.DataArray) is too slow
+    if hasattr(array, 'values'):
         array = array.values
 
     if array.dtype == 'bool':
