@@ -57,9 +57,10 @@ def create_pair_hr_lr(
     """
     upsampling_method = model.split('_')[-1]
 
-    if isinstance(array, xr.DataArray):
+    # in the case of a xr.DataArray, isinstance(array, xr.DataArray) is too slow
+    if hasattr(array, 'values'):
         array = array.values
-    if isinstance(array_lr, xr.DataArray):
+    if hasattr(array_lr, 'values'):
         array_lr = array_lr.values
 
     hr_array = array
@@ -335,14 +336,14 @@ def create_batch_hr_lr(
             data_i = array[i]
             data_lr_i = None if array_lr is None else array_lr[i]
             predictors_i = None if predictors is None else predictors[i]
-            season_i = _get_season_(array[i]) if isinstance(array, xr.DataArray) else None
+            season_i = _get_season_(array[i]) if hasattr(array, 'time') else None
 
         # spatio-temporal samples
         else:
             data_i = array[i:i+time_window]
             data_lr_i = None if array_lr is None else array_lr[i:i+time_window]     
             predictors_i = None if predictors is None else predictors[i:i+time_window]   
-            season_i = _get_season_(array[i:i+time_window]) if isinstance(array, xr.DataArray) else None
+            season_i = _get_season_(array[i:i+time_window]) if hasattr(array, 'time') else None
 
         res = create_pair_hr_lr(
             array=data_i,
