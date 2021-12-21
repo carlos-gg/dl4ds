@@ -1,3 +1,4 @@
+from datetime import time
 import os
 import numpy as np
 import xarray as xr
@@ -73,10 +74,21 @@ def predict(
     if model_architecture in SPATIOTEMP_MODELS and time_window is None:
         raise ValueError('`time_window` must be provided')
 
-    # Season is passed to each sample
-    if use_season and not isinstance(array, xr.DataArray):
-        raise ValueError('when `use_season` is True, `data` must be a xr.DataArray')
- 
+    if isinstance(array, xr.DataArray):
+        if use_season:
+            time_metadata = array.time.copy()
+        else:
+            time_metadata = None
+        array = array.values
+    else:
+        if use_season:
+            raise ValueError('when `use_season` is True, `data` must be a xr.DataArray')
+
+    if static_vars is not None:
+        for i in range(len(static_vars)):
+            if isinstance(static_vars[i], xr.DataArray):
+                static_vars[i] = static_vars[i].values
+
     n_samples = array.shape[0]
     if model_architecture in SPATIOTEMP_MODELS:
         n_samples -= time_window - 1
@@ -103,7 +115,8 @@ def predict(
         static_vars=static_vars, 
         predictors=predictors,
         model=model_architecture, 
-        interpolation=interpolation)
+        interpolation=interpolation,
+        time_metadata=time_metadata)
 
     if static_vars is not None or use_season:
         [batch_lr, batch_aux_hr, batch_lws], [batch_hr] = batch
