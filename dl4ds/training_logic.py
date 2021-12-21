@@ -591,8 +591,7 @@ class CGANTrainer(Trainer):
         model_list=None,
         steps_per_epoch=None,
         interpolation='inter_area', 
-        topography=None, 
-        landocean=None, 
+        static_vars=None,
         checkpoints_frequency=5, 
         savecheckpoint_path=None,
         save=False,
@@ -637,10 +636,8 @@ class CGANTrainer(Trainer):
             Size of the square patches used to grab training samples.
         batch_size : int, optional
             Batch size per replica.
-        topography : None or 2D ndarray, optional
-            Elevation data.
-        landocean : None or 2D ndarray, optional
-            Binary land-ocean mask.
+        static_vars : None or list of 2D ndarrays, optional
+            Static variables such as elevation data or a binary land-ocean mask.
         checkpoints_frequency : int, optional
             The training loop saves a checkpoint every ``checkpoints_frequency`` 
             epochs. If None, then no checkpoints are saved during training. 
@@ -690,8 +687,7 @@ class CGANTrainer(Trainer):
         self.learning_rates = learning_rates
         self.steps_per_epoch = steps_per_epoch
         self.interpolation = interpolation 
-        self.topography = topography 
-        self.landocean = landocean
+        self.static_vars = static_vars 
         self.checkpoints_frequency = checkpoints_frequency
         self.save_loss_history = save_loss_history
         self.save_logs = save_logs
@@ -714,14 +710,10 @@ class CGANTrainer(Trainer):
         """
         n_channels = self.data_train.shape[-1]
         n_aux_channels = 0
-        if self.topography is not None:
+        if self.static_vars is not None:
             if not self.model_is_spatiotemp:
-                n_channels += 1
-            n_aux_channels += 1
-        if self.landocean is not None:
-            if not self.model_is_spatiotemp:
-                n_channels += 1
-            n_aux_channels += 1
+                n_channels += len(self.static_vars)
+            n_aux_channels += len(self.static_vars)
         if isinstance(self.data_train, xr.DataArray):
             if not self.model_is_spatiotemp:
                 n_channels += 4
@@ -816,7 +808,7 @@ class CGANTrainer(Trainer):
                                              discriminator_optimizer=discriminator_optimizer,
                                              generator=self.generator, discriminator=self.discriminator)   
 
-        # creating a single ndarrays concatenating list of ndarray variables along the last dimension 
+        # creating a single ndarray concatenating list of ndarray predictors along the last dimension 
         if self.predictors_train is not None:
             self.predictors_train = np.concatenate(self.predictors_train, axis=-1)
         else:
@@ -832,12 +824,17 @@ class CGANTrainer(Trainer):
         if self.steps_per_epoch is None:
             self.steps_per_epoch = int(self.n / self.batch_size)
 
+        if isinstance(self.data_train, xr.DataArray):
+            self.time_metadata = self.data_train.time.copy()
+            self.data_train = self.data_train.values
+        if isinstance(self.data_train_lr, xr.DataArray):
+            self.data_train_lr = self.data_train_lr.values
+
         for epoch in range(self.epochs):
             print(f'\nEpoch {epoch+1}/{self.epochs}')
-            pb_i = Progbar(self.steps_per_epoch, stateful_metrics=['gen_total_loss', 
-                                                                   'gen_crosentr_loss', 
-                                                                   'gen_mae_loss', 
-                                                                   'disc_loss'])
+            pb_i = Progbar(self.steps_per_epoch, 
+                           stateful_metrics=['gen_total_loss', 'gen_crosentr_loss', 
+                                             'gen_mae_loss', 'disc_loss'])
 
             for i in range(self.steps_per_epoch):
                 res = create_batch_hr_lr(
@@ -849,14 +846,13 @@ class CGANTrainer(Trainer):
                     batch_size=self.batch_size, 
                     patch_size=self.patch_size,
                     time_window=self.time_window,
-                    topography=self.topography, 
-                    landocean=self.landocean, 
+                    static_vars=self.static_vars, 
                     predictors=self.predictors_train,
                     model=self.model_name, 
-                    interpolation=self.interpolation)
+                    interpolation=self.interpolation,
+                    time_metadata=self.time_metadata)
                
-                if (self.topography is not None or self.landocean is not None 
-                    or isinstance(self.data_train, xr.DataArray)):
+                if self.static_vars is not None or self.use_season:
                     [lr_array, aux_hr, lws], [hr_array] = res
                 else:
                     [lr_array, lws], [hr_array] = res
@@ -912,32 +908,37 @@ class CGANTrainer(Trainer):
             self.predictors_test = np.concatenate(self.predictors_test, axis=-1)
         else:
             self.predictors_test = None
-        
+
+        if isinstance(self.data_test, xr.DataArray):
+            self.time_metadata_test = self.data_test.time.copy()
+            self.data_test = self.data_test.values
+        if isinstance(self.data_test_lr, xr.DataArray):
+            self.data_test_lr = self.data_test_lr.values
+
         # shuffling the order of the available indices (n samples)
-        self.n_test = self.data_test.shape[0]
         if self.time_window is not None:
-            self.indices_test = np.random.permutation(np.arange(0, self.n_test - self.time_window))
+            self.n_test = self.data_test.shape[0] - self.time_window
         else:
-            self.indices_test = np.random.permutation(np.arange(self.n_test))
+            self.n_test = self.data_test.shape[0]
+        self.indices_test = np.random.permutation(np.arange(self.n_test))
 
         if self.running_on_first_worker:            
             res = create_batch_hr_lr(
                 self.indices_test,
                 0,
-                self.data_train, 
-                self.data_train_lr,
+                self.data_test, 
+                self.data_test_lr,
                 scale=self.scale, 
                 batch_size=self.n_test, 
                 patch_size=self.patch_size,
                 time_window=self.time_window,
-                topography=self.topography, 
-                landocean=self.landocean, 
-                predictors=self.predictors_train,
+                static_vars=self.static_vars, 
+                predictors=self.predictors_test,
                 model=self.model_name, 
-                interpolation=self.interpolation)
+                interpolation=self.interpolation,
+                time_metadata=self.time_metadata_test)
             
-            if (self.topography is not None or self.landocean is not None 
-                or isinstance(self.data_test, xr.DataArray)):
+            if self.static_vars is not None or self.use_season:
                 [lr_array, aux_hr, lws], [hr_array] = res
                 hr_arrtest = tf.cast(hr_array, tf.float32)
                 lr_arrtest = tf.cast(lr_array, tf.float32)
