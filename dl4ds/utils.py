@@ -71,23 +71,6 @@ def checkarg_dropout_variant(dropout):
                              '(`gaussian` or `spatial`)')
 
 
-def checkarg_datatype(data_train, use_season):
-    """ """
-    if isinstance(data_train, xr.DataArray):
-        if use_season:
-            if not hasattr(data_train, 'time'):
-                raise TypeError('input data must be a xr.DataArray and have' 
-                                'time metadata when use_season=True')
-        else:
-            # removing the time metadata (season is not used as input)
-            data_train = data_train.values
-    elif isinstance(data_train, np.ndarray):
-        if use_season:
-            msg = 'input data must be a xr.DataArray when use_season=True'
-            raise TypeError(msg)
-    return data_train
-
-
 def set_gpu_memory_growth(verbose=True):
     physical_devices = list_devices(verbose=verbose) 
     for gpu in physical_devices:
@@ -278,12 +261,9 @@ def resize_array(array, newsize, interpolation='inter_area', squeezed=True,
     resized_arr : numpy ndarray
         Interpolated array with size ``newsize``.
     """
-    # in the case of a xr.DataArray, isinstance(array, xr.DataArray) is too slow
-    if hasattr(array, 'values'):
-        array = array.values
-
-    if array.dtype == 'bool':
+    if array.dtype in ['bool', 'int', 'int64']:
         array = array.astype('int')
+        interpolation = 'nearest'  # only nearest is supported in opencv for int
 
     if interpolation == 'nearest':
         interp = cv2.INTER_NEAREST

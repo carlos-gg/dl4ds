@@ -114,9 +114,10 @@ def predict(
     else:
         [batch_lr, batch_lws], [batch_hr] = batch
 
-    # if array in HR,we take the coarsened version according to scale
+    # if array in HR, we take the coarsened version according to scale
     if array_in_hr:
         x_test_lr = batch_lr
+    # otherwise we take the unmodified array
     else:
         x_test_lr = batch_hr
 
@@ -143,8 +144,7 @@ def predict(
     
     timing.runtime()
     if return_lr:
-        x_test_lr = np.array(x_test_lr)
-        return x_test_pred,  np.moveaxis(np.squeeze(x_test_lr), -1, 1)
+        return x_test_pred,  np.array(x_test_lr)
     else:
         return x_test_pred        
     
