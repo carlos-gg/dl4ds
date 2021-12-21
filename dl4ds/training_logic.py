@@ -15,7 +15,7 @@ tf.get_logger().setLevel(logging.ERROR)
 
 from . import POSTUPSAMPLING_METHODS, MODELS, SPATIAL_MODELS, SPATIOTEMP_MODELS
 from .utils import (Timing, list_devices, set_gpu_memory_growth, plot_history,
-                    set_visible_gpus, checkarg_datatype, checkarg_model)
+                    set_visible_gpus, checkarg_model)
 from .dataloader import DataGenerator, create_batch_hr_lr
 from .losses import mae, mse, dssim, dssim_mae, dssim_mae_mse, dssim_mse
 from .models import (net_pin, recnet_pin, net_postupsampling, 
@@ -50,13 +50,19 @@ class Trainer(ABC):
         """
         self.model_name = model_name
         self.use_season = use_season
-        self.data_train = checkarg_datatype(data_train, self.use_season)
+        if self.use_season:
+            if not hasattr(data_train, 'time'):
+                raise TypeError('input data must be a xr.DataArray and have' 
+                                'time metadata when use_season=True')
+        
+        self.data_train = data_train
         self.data_train_lr = data_train_lr
         if self.data_train_lr is not None:
             if self.data_train_lr.shape[0] != self.data_train.shape[0]:
                 msg = '`data_train_lr` and `data_train` must contain '
                 msg += 'the same number of samples (equal 1st dim lenght)'
                 raise ValueError(msg)
+        
         self.batch_size = batch_size
         self.patch_size = patch_size
         self.loss = loss
@@ -204,10 +210,9 @@ class SupervisedTrainer(Trainer):
         batch_size=64, 
         device='GPU', 
         gpu_memory_growth=True,
-        use_multiprocessing=False, 
+        use_multiprocessing=True, 
         model_list=None,
-        topography=None, 
-        landocean=None,
+        static_vars=None, 
         use_season=True,
         scale=5, 
         interpolation='bicubic', 
@@ -261,10 +266,8 @@ class SupervisedTrainer(Trainer):
             Predictor variables for testing. Given as list of 4D ndarrays with 
             dims [nsamples, lat, lon, 1] or 5D ndarrays with dims 
             [nsamples, time, lat, lon, 1]. 
-        topography : None or 2D ndarray, optional
-            Elevation data.
-        landocean : None or 2D ndarray, optional
-            Binary land-ocean mask.
+        static_vars : None or list of 2D ndarrays, optional
+            Static variables such as elevation data or a binary land-ocean mask.
         scale : int, optional
             Scaling factor. 
         interpolation : str, optional
@@ -343,8 +346,8 @@ class SupervisedTrainer(Trainer):
             savecheckpoint_path=savecheckpoint_path,
             show_plot=show_plot
             )
-        self.data_val = checkarg_datatype(data_val, use_season)
-        self.data_test = checkarg_datatype(data_test, use_season)
+        self.data_val = data_val
+        self.data_test = data_test
         self.data_val_lr = data_val_lr
         self.data_test_lr = data_test_lr
         self.predictors_train = predictors_train
@@ -356,8 +359,7 @@ class SupervisedTrainer(Trainer):
         self.predictors_val = predictors_val
         if self.predictors_val is not None and not isinstance(self.predictors_val, list):
             raise TypeError('`predictors_val` must be a list of ndarrays')
-        self.topography = topography 
-        self.landocean = landocean
+        self.static_vars = static_vars 
         self.interpolation = interpolation 
         self.epochs = epochs
         self.steps_per_epoch = steps_per_epoch
@@ -385,8 +387,7 @@ class SupervisedTrainer(Trainer):
         datagen_params = dict(
             scale=self.scale, 
             batch_size=self.global_batch_size,
-            topography=self.topography, 
-            landocean=self.landocean, 
+            static_vars=self.static_vars, 
             patch_size=self.patch_size, 
             model=self.model_name, 
             interpolation=self.interpolation,
@@ -408,13 +409,10 @@ class SupervisedTrainer(Trainer):
         if self.model_name in SPATIAL_MODELS:
             n_channels = self.data_train.shape[-1]
             n_aux_channels = 0
-            if self.topography is not None:
-                n_channels += 1
-                n_aux_channels = 1
-            if self.landocean is not None:
-                n_channels += 1
-                n_aux_channels += 1
-            if isinstance(self.data_train, xr.DataArray):
+            if self.static_vars is not None:
+                n_channels += len(self.static_vars)
+                n_aux_channels = len(self.static_vars)
+            if self.use_season:
                 n_channels += 4
                 n_aux_channels += 4
             if self.predictors_train is not None:
@@ -424,11 +422,9 @@ class SupervisedTrainer(Trainer):
             n_aux_channels = 0
             if self.predictors_train is not None:
                 n_channels += len(self.predictors_train)
-            if self.topography is not None:
-                n_aux_channels += 1
-            if self.landocean is not None:
-                n_aux_channels += 1
-            if isinstance(self.data_train, xr.DataArray):
+            if self.static_vars is not None:
+                n_aux_channels += len(self.static_vars)
+            if self.use_season:
                 n_aux_channels += 4
 
         if self.patch_size is None:
@@ -559,10 +555,8 @@ class SupervisedTrainer(Trainer):
             use_multiprocessing=self.use_multiprocessing)
         
         if self.running_on_first_worker:
-            self.test_loss = self.model.evaluate(
-                self.ds_test, 
-                steps=self.test_steps, 
-                verbose=verbose)
+            self.test_loss = self.model.evaluate(self.ds_test, 
+                steps=self.test_steps, verbose=verbose)
             
             if self.verbose:
                 print(f'\nScore on the test set: {self.test_loss}')
@@ -681,7 +675,7 @@ class CGANTrainer(Trainer):
             savecheckpoint_path=savecheckpoint_path,
             show_plot=False
             )
-        self.data_test = self.data_test = checkarg_datatype(data_test, use_season)
+        self.data_test = data_test
         self.data_test_lr = data_test_lr
         self.scale = scale
         self.patch_size = patch_size
