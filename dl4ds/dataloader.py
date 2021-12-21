@@ -373,6 +373,7 @@ class DataGenerator(tf.keras.utils.Sequence):
         time_window=None,
         static_vars=None, 
         predictors=None,
+        use_season=False,
         model='resnet_spc', 
         interpolation='inter_area',
         repeat=None
@@ -411,8 +412,12 @@ class DataGenerator(tf.keras.utils.Sequence):
         * instead of the in-memory array, we could input the path and load the 
         netcdf files lazily or memmap a numpy array
         """
+        self.use_season = use_season
         if isinstance(array, xr.DataArray):
-            self.time_metadata = array.time.copy()
+            if self.use_season:
+                self.time_metadata = array.time.copy()
+            else:
+                self.time_metadata = None
             self.array = array.values
         else:
             self.array = array
