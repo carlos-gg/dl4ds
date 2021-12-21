@@ -825,7 +825,10 @@ class CGANTrainer(Trainer):
             self.steps_per_epoch = int(self.n / self.batch_size)
 
         if isinstance(self.data_train, xr.DataArray):
-            self.time_metadata = self.data_train.time.copy()
+            if self.use_season:
+                self.time_metadata = self.data_train.time.copy()
+            else:
+                self.time_metadata = None
             self.data_train = self.data_train.values
         if isinstance(self.data_train_lr, xr.DataArray):
             self.data_train_lr = self.data_train_lr.values
@@ -910,7 +913,10 @@ class CGANTrainer(Trainer):
             self.predictors_test = None
 
         if isinstance(self.data_test, xr.DataArray):
-            self.time_metadata_test = self.data_test.time.copy()
+            if self.use_season:
+                self.time_metadata_test = self.data_test.time.copy()
+            else:
+                self.time_metadata = None
             self.data_test = self.data_test.values
         if isinstance(self.data_test_lr, xr.DataArray):
             self.data_test_lr = self.data_test_lr.values
