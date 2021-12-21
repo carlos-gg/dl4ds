@@ -14,9 +14,8 @@ def predict(
     array, 
     scale, 
     array_in_hr=True,
-    use_season=True,
-    topography=None, 
-    landocean=None, 
+    use_season=False,
+    static_vars=None, 
     predictors=None, 
     time_window=None,
     interpolation='inter_area', 
@@ -39,10 +38,8 @@ def predict(
     array_in_hr : bool, optional
         If True, the data is assumed to be a HR groundtruth to be downsampled. 
         Otherwise, data is a LR gridded dataset to be downscaled.
-    topography : None or 2D ndarray, optional
-        Elevation data.
-    landocean : None or 2D ndarray, optional
-        Binary land-ocean mask.
+    static_vars : None or list of 2D ndarrays, optional
+            Static variables such as elevation data or a binary land-ocean mask.
     predictors : list of ndarray, optional
         Predictor variables for trianing. Given as list of 4D ndarrays with 
         dims [nsamples, lat, lon, 1] or 5D ndarrays with dims 
@@ -103,13 +100,12 @@ def predict(
         batch_size=n_samples, 
         patch_size=None,
         time_window=time_window,
-        topography=topography, 
-        landocean=landocean, 
+        static_vars=static_vars, 
         predictors=predictors,
         model=model_architecture, 
         interpolation=interpolation)
 
-    if topography is not None or landocean is not None or use_season is not None:
+    if static_vars is not None or use_season:
         [batch_lr, batch_aux_hr, batch_lws], [batch_hr] = batch
     else:
         [batch_lr, batch_lws], [batch_hr] = batch
@@ -124,7 +120,7 @@ def predict(
     ### Casting as TF tensors, creating inputs ---------------------------------
     x_test_lr = tf.cast(x_test_lr, tf.float32)   
     local_lws_array = tf.cast(batch_lws, tf.float32)     
-    if topography is not None or landocean is not None or use_season is not None: 
+    if static_vars is not None or use_season: 
         aux_vars_hr = tf.cast(batch_aux_hr, tf.float32) 
         inputs = [x_test_lr, aux_vars_hr, local_lws_array]
     else:
