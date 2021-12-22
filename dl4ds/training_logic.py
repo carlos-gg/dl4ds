@@ -391,7 +391,8 @@ class SupervisedTrainer(Trainer):
             patch_size=self.patch_size, 
             model=self.model_name, 
             interpolation=self.interpolation,
-            time_window=self.time_window)
+            time_window=self.time_window,
+            use_season=self.use_season)
         self.ds_train = DataGenerator(
             self.data_train, self.data_train_lr, 
             predictors=self.predictors_train, **datagen_params)
