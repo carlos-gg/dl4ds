@@ -4,7 +4,7 @@ import numpy as np
 import xarray as xr
 import tensorflow as tf
 
-from .utils import Timing, resize_array
+from .utils import Timing, checkarray_ndim, resize_array
 from . import SPATIAL_MODELS, SPATIOTEMP_MODELS, POSTUPSAMPLING_METHODS
 from .dataloader import create_batch_hr_lr
 from .training_logic import CGANTrainer, SupervisedTrainer
@@ -19,6 +19,7 @@ def predict(
     static_vars=None, 
     predictors=None, 
     time_window=None,
+    time_metadata=None,
     interpolation='inter_area', 
     save_path=None,
     save_fname='y_hat.npy',
@@ -74,15 +75,21 @@ def predict(
     if model_architecture in SPATIOTEMP_MODELS and time_window is None:
         raise ValueError('`time_window` must be provided')
 
-    if isinstance(array, xr.DataArray):
-        if use_season:
+    if use_season:
+        if isinstance(array, xr.DataArray):
             time_metadata = array.time.copy()
         else:
-            time_metadata = None
-        array = array.values
+            if time_metadata is None:
+                msg = 'when `use_season` is True, `data` must be a xr.DataArray'
+                msg += ' or `time_metadata` must be provided'
+                raise ValueError(msg)
+            else:
+                time_metadata = time_metadata
     else:
-        if use_season:
-            raise ValueError('when `use_season` is True, `data` must be a xr.DataArray')
+        time_metadata = None
+
+    if isinstance(array, xr.DataArray):    
+        array = array.values  
 
     if static_vars is not None:
         for i in range(len(static_vars)):
@@ -98,16 +105,21 @@ def predict(
         predictors = np.concatenate(predictors, axis=-1)
 
     # when array is in LR, it gets upsampled according to scale
-    if not array_in_hr and model_architecture.endswith('pin'):
-        hr_x = array.shape[2]
-        hr_y = array.shape[1]
-        array = resize_array(array, (hr_x, hr_y), interpolation) 
+    if not array_in_hr:
+        array = checkarray_ndim(array, 4, -1)
+        hr_x = array.shape[2] * scale
+        hr_y = array.shape[1] * scale
+        array_hr = resize_array(array, (hr_x, hr_y), interpolation, squeezed=False) 
+        array_lr = array
+    else:
+        array_hr = array
+        array_lr = None
 
     batch = create_batch_hr_lr(       
         np.arange(n_samples),
         0,
-        array, 
-        None,
+        array=array_hr, 
+        array_lr=array_lr,
         scale=scale, 
         batch_size=n_samples, 
         patch_size=None,
@@ -123,12 +135,7 @@ def predict(
     else:
         [batch_lr, batch_lws], [batch_hr] = batch
 
-    # if array in HR, we take the coarsened version according to scale
-    if array_in_hr:
-        x_test_lr = batch_lr
-    # otherwise we take the unmodified array
-    else:
-        x_test_lr = batch_hr
+    x_test_lr = batch_lr
 
     ### Casting as TF tensors, creating inputs ---------------------------------
     x_test_lr = tf.cast(x_test_lr, tf.float32)   
