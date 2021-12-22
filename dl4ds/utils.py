@@ -266,18 +266,20 @@ def resize_array(array, newsize, interpolation='inter_area', squeezed=True,
         interpolation = 'nearest'  # only nearest is supported in opencv for int
 
     if interpolation == 'nearest':
-        interp = cv2.INTER_NEAREST
+        intmethod = cv2.INTER_NEAREST
     elif interpolation == 'bicubic':
-        interp = cv2.INTER_CUBIC
+        intmethod = cv2.INTER_CUBIC
     elif interpolation == 'bilinear':
-        interp = cv2.INTER_LINEAR
+        intmethod = cv2.INTER_LINEAR
     elif interpolation == 'inter_area':
-        interp = cv2.INTER_AREA
+        intmethod = cv2.INTER_AREA
+    elif interpolation == 'lanczos':
+        intmethod = cv2.INTER_LANCZOS4
 
     size_x, size_y = newsize
     
     if array.ndim in [2, 3]:
-        resized_arr = cv2.resize(array, (size_x, size_y), interpolation=interp)
+        resized_arr = cv2.resize(array, (size_x, size_y), interpolation=intmethod)
         if resized_arr.ndim == 2 and array.ndim == 3:
             resized_arr = np.expand_dims(resized_arr, -1)
     elif array.ndim == 4:
@@ -285,7 +287,7 @@ def resize_array(array, newsize, interpolation='inter_area', squeezed=True,
         n_ch = array.shape[-1]
         resized_arr = np.zeros((n, size_y, size_x, n_ch))
         for i in range(n):
-            ti = cv2.resize(array[i], (size_x, size_y), interpolation=interp)                
+            ti = cv2.resize(array[i], (size_x, size_y), interpolation=intmethod)                
             resized_arr[i] = np.expand_dims(ti, -1) if n_ch ==1 else ti
 
     if squeezed:
