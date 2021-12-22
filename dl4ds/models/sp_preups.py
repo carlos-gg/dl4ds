@@ -22,7 +22,7 @@ def net_pin(
     normalization=None,
     attention=False,
     output_activation=None,
-    localcon_layer=True):
+    localcon_layer=False):
     """
     Deep neural network with different backbone architectures (according to the
     ``backbone_block``) and pre-upsampling via (bicubic) interpolation.

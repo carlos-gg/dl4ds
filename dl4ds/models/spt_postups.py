@@ -27,7 +27,7 @@ def recnet_postupsampling(
     normalization=None,
     attention=False,
     output_activation=None,
-    localcon_layer=True):
+    localcon_layer=False):
     """
     Recurrent deep neural network with different backbone architectures 
     (according to the ``backbone_block``) and post-upsampling methods (according 

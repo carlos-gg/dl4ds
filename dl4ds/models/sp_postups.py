@@ -26,7 +26,7 @@ def net_postupsampling(
     attention=False,
     activation='relu',
     output_activation=None,
-    localcon_layer=True):
+    localcon_layer=False):
     """
     Deep neural network with different backbone architectures (according to the
     ``backbone_block``) and post-upsampling methods (according to 

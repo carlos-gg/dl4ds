@@ -23,7 +23,7 @@ def recnet_pin(
     dropout_variant='spatial',
     attention=False,
     output_activation=None,
-    localcon_layer=True):
+    localcon_layer=False):
     """
     Recurrent deep neural network with different backbone architectures 
     (according to the ``backbone_block``) and pre-upsampling via interpolation. 
