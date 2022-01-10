@@ -98,22 +98,18 @@ def compute_correlation(y, y_hat, over='time', mode='spearman', n_jobs=40):
         return list_corrs
 
 
-def compute_metrics(y_test, y_test_hat, dpi=150, n_jobs=40, mean_std=None, save_path=None):
+def compute_metrics(y_test, y_test_hat, dpi=150, n_jobs=40, scaler=None, save_path=None):
     """ 
-    MSE
-    https://keras.io/api/losses/regression_losses/#mean_squared_error-function
-
     """
-    # assuming y_test_hat has been destandardized
-    if mean_std is not None:
-        y_test = y_test.copy()
-        mean, std = mean_std
-        y_test *= std
-        y_test += mean
-
     if y_test.ndim == 5:
         y_test = np.squeeze(y_test, -1)
         y_test_hat = np.squeeze(y_test_hat, -1)
+
+    # backward transformation with the provided scaler
+    if scaler is not None:
+        if hasattr(scaler, 'inverse_transform'):
+            y_test = scaler.inverse_transform(y_test)
+            y_test_hat = scaler.inverse_transform(y_test_hat)
 
     ### Computing metrics
     drange = max(y_test.max(), y_test_hat.max()) - min(y_test.min(), y_test_hat.min())
