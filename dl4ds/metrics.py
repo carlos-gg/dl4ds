@@ -98,8 +98,32 @@ def compute_correlation(y, y_hat, over='time', mode='spearman', n_jobs=40):
         return list_corrs
 
 
-def compute_metrics(y_test, y_test_hat, dpi=150, n_jobs=40, scaler=None, save_path=None):
-    """ 
+def compute_metrics(
+    y_test, 
+    y_test_hat, 
+    dpi=150, 
+    n_jobs=40, 
+    scaler=None, 
+    save_path=None):
+    """ Compute temporal and spatial-wise metrics, e.g., RMSE and CORRELATION, 
+    based on the groundtruth and prediction ndarrays.
+
+    Parameters
+    ----------
+    y_test : np.ndarray
+        Groundtruth.
+    y_test_hat : np.ndarray
+        Prediction.
+    dpi : int, optional
+        DPI of the plots.  
+    n_jobs : int, optional
+        Number of cores for the computation of metrics (parallelizing over
+        grid points).
+    scaler : scaler object
+        Scaler object from preprocessing module. 
+    save_path : str or None, optional
+        Path to save results to disk. 
+        
     """
     if y_test.ndim == 5:
         y_test = np.squeeze(y_test, -1)
