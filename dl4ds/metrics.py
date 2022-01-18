@@ -104,6 +104,7 @@ def compute_metrics(
     dpi=150, 
     n_jobs=40, 
     scaler=None, 
+    mask=None,
     save_path=None):
     """ Compute temporal and spatial-wise metrics, e.g., RMSE and CORRELATION, 
     based on the groundtruth and prediction ndarrays.
@@ -121,6 +122,8 @@ def compute_metrics(
         grid points).
     scaler : scaler object
         Scaler object from preprocessing module. 
+    mask : np.ndarray or None
+        Mask with valid grid points.
     save_path : str or None, optional
         Path to save results to disk. 
         
@@ -134,6 +137,17 @@ def compute_metrics(
         if hasattr(scaler, 'inverse_transform'):
             y_test = scaler.inverse_transform(y_test)
             y_test_hat = scaler.inverse_transform(y_test_hat)
+
+    # applying valid grid points mask
+    if mask is not None:
+        if mask.ndim == 2:
+            mask = np.expand_dims(mask, -1)
+        y_test = y_test.copy()
+        y_test_hat = y_test_hat.copy()
+        for i in range(y_test.shape[0]):
+            y_test[i] *= mask
+        for i in range(y_test_hat.shape[0]):
+            y_test_hat[i] *= mask
 
     ### Computing metrics
     drange = max(y_test.max(), y_test_hat.max()) - min(y_test.min(), y_test_hat.min())
