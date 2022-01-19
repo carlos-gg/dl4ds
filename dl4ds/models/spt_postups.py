@@ -39,7 +39,7 @@ def recnet_postupsampling(
     upsampling = checkarg_upsampling(upsampling)
     dropout_variant = checkarg_dropout_variant(dropout_variant)
         
-    auxvar_arr = True if n_aux_channels > 0 else False
+    auxvar_array_is_given = True if n_aux_channels > 0 else False
 
     h_lr = lr_size[0]
     w_lr = lr_size[1]
@@ -83,7 +83,7 @@ def recnet_postupsampling(
 
     #---------------------------------------------------------------------------
     # HR aux channels are processed
-    if auxvar_arr:
+    if auxvar_array_is_given:
         s_in = Input(shape=(None, None, n_aux_channels))
         s = ConvBlock(n_filters, activation=activation, dropout_rate=0, 
                       normalization=None, attention=attention)(s_in)
@@ -93,12 +93,14 @@ def recnet_postupsampling(
     
     #---------------------------------------------------------------------------
     # Localized convolutional layer
-    lws_in = Input(shape=(int(h_lr * scale), int(w_lr * scale), 2))
     if localcon_layer:
+        lws_in = Input(shape=(int(h_lr * scale), int(w_lr * scale), 2))
         lws = LocalizedConvBlock()(lws_in)
         lws = tf.expand_dims(lws, 1)
         lws = tf.repeat(lws, time_window, axis=1)
         x = Concatenate()([x, lws])
+    else:
+        lws_in = Input(shape=(None, None, 2))
 
     #---------------------------------------------------------------------------
     # Last conv layers
@@ -117,7 +119,7 @@ def recnet_postupsampling(
         attention=False)(x) 
 
     model_name = 'rec' + backbone_block + '_' + upsampling
-    if auxvar_arr:
+    if auxvar_array_is_given:
         return Model(inputs=[x_in, s_in, lws_in], outputs=x, name=model_name)
     else:
         return Model(inputs=[x_in, lws_in], outputs=x, name=model_name)

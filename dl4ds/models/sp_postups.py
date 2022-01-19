@@ -55,8 +55,8 @@ def net_postupsampling(
         h_hr = int(h_lr * scale)
         w_hr = int(w_lr * scale)                                    
 
-    auxvar_arr = True if n_aux_channels > 0 else False
-    if auxvar_arr:
+    auxvar_array_is_given = True if n_aux_channels > 0 else False
+    if auxvar_array_is_given:
         if not localcon_layer:
             s_in = Input(shape=(None, None, n_aux_channels))
         else:
@@ -104,7 +104,7 @@ def net_postupsampling(
     #---------------------------------------------------------------------------
     # Upsampling
     model_name = backbone_block + '_' + upsampling
-    if auxvar_arr:
+    if auxvar_array_is_given:
         ups_activation = activation
     else:
         ups_activation = output_activation
@@ -120,14 +120,16 @@ def net_postupsampling(
     
     #---------------------------------------------------------------------------
     # Localized convolutional layer
-    lws_in = Input(shape=(h_hr, w_hr, 2))
     if localcon_layer:
+        lws_in = Input(shape=(h_hr, w_hr, 2))
         lws = LocalizedConvBlock()(lws_in)
         x = Concatenate()([x, lws])
+    else:
+        lws_in = Input(shape=(None, None, 2))
     
     #---------------------------------------------------------------------------
     # HR aux channels are processed
-    if auxvar_arr:
+    if auxvar_array_is_given:
         s = ConvBlock(  
             n_filters, 
             activation=activation, 
@@ -152,7 +154,7 @@ def net_postupsampling(
         normalization=normalization, 
         attention=False)(x) 
 
-    if auxvar_arr:
+    if auxvar_array_is_given:
         return Model(inputs=[x_in, s_in, lws_in], outputs=x, name=model_name)  
     else:
         return Model(inputs=[x_in, lws_in], outputs=x, name=model_name)  
