@@ -12,16 +12,31 @@ from .utils import checkarg_model
 from . import POSTUPSAMPLING_METHODS, SPATIAL_MODELS, SPATIOTEMP_MODELS
 
 
-def load_checkpoint(checkpoint_dir, checkpoint_number, scale, model='resnet_spc', 
-                    topography=None, landocean=None, time_window=None,
-                    n_res_blocks=(20, 4), n_filters=64, attention=False):
+def load_checkpoint(
+    checkpoint_dir, 
+    checkpoint_number, 
+    scale, 
+    input_size_hw, 
+    model='resnet_spc', 
+    static_vars=None, 
+    predictors=None,
+    time_window=None, 
+    n_blocks=(20, 4), 
+    n_filters=64, 
+    attention=False, 
+    use_season=False):
     """
     """
     n_channels = 1
-    if topography is not None:
-        n_channels += 1
-    if landocean is not None:
-        n_channels += 1
+    n_aux_channels = 0
+    if static_vars is not None:
+        n_channels += len(static_vars)
+        n_aux_channels += len(static_vars)
+    if use_season:
+        n_aux_channels += 4
+        n_channels += 4
+    if predictors is not None:
+        n_channels += len(predictors)
 
     # generator
     model = checkarg_model(model)
@@ -34,27 +49,34 @@ def load_checkpoint(checkpoint_dir, checkpoint_number, scale, model='resnet_spc'
         if model in SPATIAL_MODELS:
             generator = model = net_postupsampling(
                 backbone_block=backbone, upsampling=upsampling, scale=scale, 
-                n_channels=n_channels, n_filters=n_filters, n_res_blocks=n_res_blocks[0], 
+                n_channels=n_channels, n_aux_channels=n_aux_channels, 
+                n_filters=n_filters, n_blocks=n_blocks[0], lr_size=input_size_hw,
                 n_channels_out=1, attention=attention)
         elif model in SPATIOTEMP_MODELS:
             generator = model = recnet_postupsampling(
                 backbone_block=backbone, upsampling=upsampling, scale=scale, 
-                n_channels=n_channels, n_filters=n_filters, n_res_blocks=n_res_blocks[0], 
+                n_channels=n_channels, n_aux_channels=n_aux_channels, 
+                n_filters=n_filters, n_blocks=n_blocks[0], lr_size=input_size_hw,
                 n_channels_out=1, time_window=time_window, attention=attention)
     elif upsampling == 'pin':
-        if model in SPATIAL_MODELS:
-            generator = net_pin(backbone_block=backbone, n_channels=n_channels, 
-                                n_filters=n_filters, n_res_blocks=n_res_blocks[0], 
-                                n_channels_out=1, attention=attention)
+        if model in SPATIAL_MODELS: 
+            generator = net_pin(
+                backbone_block=backbone, n_channels=n_channels, 
+                n_aux_channels=n_aux_channels, hr_size=input_size_hw,
+                n_filters=n_filters, n_blocks=n_blocks[0], 
+                n_channels_out=1, attention=attention)
         elif model in SPATIOTEMP_MODELS:
-            generator = recnet_pin(backbone_block=backbone, n_channels=n_channels, 
-                                   n_filters=n_filters, n_res_blocks=n_res_blocks[0], 
-                                   n_channels_out=1, time_window=time_window, 
-                                   attention=attention)
+            generator = recnet_pin(
+                backbone_block=backbone, n_channels=n_channels, 
+                n_aux_channels=n_aux_channels, hr_size=input_size_hw,
+                n_filters=n_filters, n_blocks=n_blocks[0], 
+                n_channels_out=1, time_window=time_window, attention=attention)
         
     # discriminator
-    discriminator = residual_discriminator(n_channels=n_channels, n_filters=n_filters, scale=scale,
-                                           n_res_blocks=n_res_blocks[1], model=model, attention=attention)
+    discriminator = residual_discriminator(
+        n_channels=n_channels, n_filters=n_filters, scale=scale,
+        lr_size=input_size_hw, n_res_blocks=n_blocks[1], model=model.name, 
+        attention=attention)
     
     # optimizers
     generator_optimizer = tf.keras.optimizers.Adam(2e-4, beta_1=0.5)
