@@ -274,7 +274,7 @@ def compute_metrics(
     if save_path is not None:
         f.close()
 
-    return spatial_rmse, spatial_pearson_corr
+    return (temp_rmse_map, pearson_corrmap), (spatial_rmse, spatial_pearson_corr)
 
 
 def plot_sample(model, lr_image, topography=None, landocean=None, 
