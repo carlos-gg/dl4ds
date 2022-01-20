@@ -360,6 +360,10 @@ class SupervisedTrainer(Trainer):
         if self.predictors_val is not None and not isinstance(self.predictors_val, list):
             raise TypeError('`predictors_val` must be a list of ndarrays')
         self.static_vars = static_vars 
+        if self.static_vars is not None:
+            for i in range(len(self.static_vars)):
+                if isinstance(self.static_vars[i], xr.DataArray):
+                    self.static_vars[i] = self.static_vars[i].values
         self.interpolation = interpolation 
         self.epochs = epochs
         self.steps_per_epoch = steps_per_epoch
@@ -689,6 +693,10 @@ class CGANTrainer(Trainer):
         self.steps_per_epoch = steps_per_epoch
         self.interpolation = interpolation 
         self.static_vars = static_vars 
+        if self.static_vars is not None:
+            for i in range(len(self.static_vars)):
+                if isinstance(self.static_vars[i], xr.DataArray):
+                    self.static_vars[i] = self.static_vars[i].values
         self.checkpoints_frequency = checkpoints_frequency
         self.save_loss_history = save_loss_history
         self.save_logs = save_logs
