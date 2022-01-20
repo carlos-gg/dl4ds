@@ -47,13 +47,13 @@ def load_checkpoint(
 
     if upsampling in POSTUPSAMPLING_METHODS:
         if model in SPATIAL_MODELS:
-            generator = model = net_postupsampling(
+            generator = net_postupsampling(
                 backbone_block=backbone, upsampling=upsampling, scale=scale, 
                 n_channels=n_channels, n_aux_channels=n_aux_channels, 
                 n_filters=n_filters, n_blocks=n_blocks[0], lr_size=input_size_hw,
                 n_channels_out=1, attention=attention)
         elif model in SPATIOTEMP_MODELS:
-            generator = model = recnet_postupsampling(
+            generator = recnet_postupsampling(
                 backbone_block=backbone, upsampling=upsampling, scale=scale, 
                 n_channels=n_channels, n_aux_channels=n_aux_channels, 
                 n_filters=n_filters, n_blocks=n_blocks[0], lr_size=input_size_hw,
@@ -75,7 +75,7 @@ def load_checkpoint(
     # discriminator
     discriminator = residual_discriminator(
         n_channels=n_channels, n_filters=n_filters, scale=scale,
-        lr_size=input_size_hw, n_res_blocks=n_blocks[1], model=model.name, 
+        lr_size=input_size_hw, n_res_blocks=n_blocks[1], model=model, 
         attention=attention)
     
     # optimizers
