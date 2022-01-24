@@ -18,8 +18,8 @@ def load_checkpoint(
     scale, 
     input_size_hw, 
     model='resnet_spc', 
-    static_vars=None, 
-    predictors=None,
+    n_static_vars=0, 
+    n_predictors=None,
     time_window=None, 
     n_blocks=(20, 4), 
     n_filters=64, 
@@ -29,14 +29,14 @@ def load_checkpoint(
     """
     n_channels = 1
     n_aux_channels = 0
-    if static_vars is not None:
-        n_channels += len(static_vars)
-        n_aux_channels += len(static_vars)
+    if n_static_vars > 0:
+        n_channels += n_static_vars
+        n_aux_channels += n_static_vars
     if use_season:
         n_aux_channels += 4
         n_channels += 4
-    if predictors is not None:
-        n_channels += len(predictors)
+    if n_predictors > 0:
+        n_channels += n_predictors
 
     # generator
     model = checkarg_model(model)
