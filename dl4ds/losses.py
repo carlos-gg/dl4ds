@@ -21,7 +21,8 @@ def mse(y_true, y_pred):
 def dssim(y_true, y_pred):
     """
     Structural Dissimilarity (DSSIM). DSSIM is derived from the structural 
-    similarity index measure (Wang, Z. et al. 2004).
+    similarity index measure (Wang, Z. et al. 2004, Image quality assessment: 
+    from error visibility to structural similarity).
 
     Notes
     -----
@@ -35,8 +36,9 @@ def dssim(y_true, y_pred):
     maxv = tfk.maximum(tfk.max(y_true), tfk.max(y_pred))
     minv = tfk.minimum(tfk.min(y_true), tfk.min(y_pred))
     drange = maxv - minv
-    ssim = tf.image.ssim(y_true, y_pred, drange)
-    dssim = tf.reduce_mean(1 - ssim / 2.0)
+    ssim = tf.image.ssim(y_true, y_pred, max_val=drange, filter_size=11,
+                         filter_sigma=1.5, k1=0.01, k2=0.03)
+    dssim = tf.reduce_mean((1 - ssim) / 2.0)
     return dssim
 
 
