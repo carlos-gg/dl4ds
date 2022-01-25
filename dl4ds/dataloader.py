@@ -100,6 +100,8 @@ def create_pair_hr_lr(
                 lr_y = array_lr.shape[0]
                 lr_x = array_lr.shape[1]
             # lr grid is upsampled via interpolation
+            if is_spatiotemp:
+                lr_array = checkarray_ndim(lr_array, 4, -1)
             lr_array_resized = resize_array(lr_array, (hr_x, hr_y), interpolation, squeezed=False)         
         else:
             lr_x, lr_y = int(hr_x / scale), int(hr_y / scale) 
@@ -117,10 +119,13 @@ def create_pair_hr_lr(
             # no cropping
             lr_array = lr_array_resized
         
-        if not is_spatiotemp:
+        if is_spatiotemp:
+            hr_array = checkarray_ndim(hr_array, 4, -1)
+            lr_array = checkarray_ndim(lr_array, 4, -1)
+        else:
             hr_array = checkarray_ndim(hr_array, 3, -1)
             lr_array = checkarray_ndim(lr_array, 3, -1)
-    
+
         if predictors is not None:
             if predictors.shape[1] != lr_y or predictors.shape[2] != lr_x:
                 # we coarsen/interpolate the mid-res or high-res predictors
@@ -134,7 +139,7 @@ def create_pair_hr_lr(
             else:
                 lr_array_predictors = predictors
             
-            # concatenating the predictors to the lr image    
+            # concatenating the predictors to the lr image   
             lr_array = np.concatenate([lr_array, lr_array_predictors], axis=-1)
 
     elif upsampling_method in POSTUPSAMPLING_METHODS:
@@ -173,7 +178,10 @@ def create_pair_hr_lr(
             if not lr_is_given:
                 lr_array = resize_array(hr_array, (lr_x, lr_y), interpolation, squeezed=False)   
 
-            if not is_spatiotemp:
+            if is_spatiotemp:
+                hr_array = checkarray_ndim(hr_array, 4, -1)
+                lr_array = checkarray_ndim(lr_array, 4, -1)                
+            else:
                 hr_array = checkarray_ndim(hr_array, 3, -1)
                 lr_array = checkarray_ndim(lr_array, 3, -1)
 
