@@ -21,8 +21,11 @@ def mse(y_true, y_pred):
 def dssim(y_true, y_pred):
     """
     Structural Dissimilarity (DSSIM). DSSIM is derived from the structural 
-    similarity index measure (Wang, Z. et al. 2004, Image quality assessment: 
-    from error visibility to structural similarity).
+    similarity index measure.
+    
+    References
+    ----------
+    Wang, Z. et al. 2004, Image quality assessment: from error visibility to structural similarity
 
     Notes
     -----
@@ -37,7 +40,7 @@ def dssim(y_true, y_pred):
     minv = tfk.minimum(tfk.min(y_true), tfk.min(y_pred))
     drange = maxv - minv
     ssim = tf.image.ssim(y_true, y_pred, max_val=drange, filter_size=11,
-                         filter_sigma=1.5, k1=0.01, k2=0.03)
+        filter_sigma=1.5, k1=0.01, k2=0.03)
     dssim = tf.reduce_mean((1 - ssim) / 2.0)
     return dssim
 
@@ -70,3 +73,35 @@ def dssim_mse(y_true, y_pred):
     mse_loss = mse(y_true, y_pred)  
     dssim_loss = dssim(y_true, y_pred)
     return  0.8 * dssim_loss + 0.2 * mse_loss
+
+
+def msdssim(y_true, y_pred):
+    """
+    Multiscale Structural Dissimilarity (MSDSSIM). 
+    
+    References
+    ----------
+    Wang, Z. 20014, "Multiscale structural similarity for image quality assessment"
+
+    Notes
+    -----
+    https://www.tensorflow.org/api_docs/python/tf/image/ssim_multiscale
+ 
+    """
+    maxv = tfk.maximum(tfk.max(y_true), tfk.max(y_pred))
+    minv = tfk.minimum(tfk.min(y_true), tfk.min(y_pred))
+    drange = maxv - minv
+    msssim = tf.image.ssim_multiscale(y_true, y_pred, max_val=drange, 
+        filter_size=11, filter_sigma=1.5, k1=0.01, k2=0.03,
+        power_factors=(0.0448, 0.2856, 0.3001, 0.2363, 0.1333))
+    msssim = tf.reduce_mean((1 - msssim) / 2.0)
+    return msssim
+
+
+def msdssim_mae(y_true, y_pred):
+    """
+    MSDSSIM + MAE (L1)
+    """
+    mae_loss = mae(y_true, y_pred)  
+    msdssim_loss = msdssim(y_true, y_pred)
+    return  0.8 * msdssim_loss + 0.2 * mae_loss
