@@ -17,7 +17,8 @@ from . import POSTUPSAMPLING_METHODS, MODELS, SPATIAL_MODELS, SPATIOTEMP_MODELS
 from .utils import (Timing, list_devices, set_gpu_memory_growth, plot_history,
                     set_visible_gpus, checkarg_model)
 from .dataloader import DataGenerator, create_batch_hr_lr
-from .losses import mae, mse, dssim, dssim_mae, dssim_mae_mse, dssim_mse
+from .losses import (mae, mse, dssim, dssim_mae, dssim_mae_mse, dssim_mse,
+                     msdssim, msdssim_mae)
 from .models import (net_pin, recnet_pin, net_postupsampling, 
                      recnet_postupsampling, residual_discriminator)
 from .cgan import train_step
@@ -152,6 +153,10 @@ class Trainer(ABC):
             self.lossf = dssim_mse
         elif loss == 'dssim_mae_mse':
             self.lossf = dssim_mae_mse
+        elif loss == 'msdssim':
+            self.lossf = msdssim
+        elif loss == 'msdssim_mae':
+            self.lossf = msdssim_mae
         else:
             raise ValueError('`loss` not recognized')
 
