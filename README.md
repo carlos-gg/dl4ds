@@ -4,7 +4,7 @@ Python package with state-of-the-art and novel deep learning algorithms for spat
 
 A wide variety of network architectures have been implemented. The main modelling approahces can be combined into many different architectures:
 
-|Downscaling type      |Training                     |Sample type     |Backbone block |Upsampling strategy   |
+|Downscaling type      |Training (loss type)         |Sample type     |Stem section   |Upsampling strategy   |
 |---                   |---                          |---             |---            |---|
 |MOS (explicit pairs)  |Supervised (non-adversarial) |Spatial         |Plain convolutional     |Pre-upsampling: interpolation  |
 |PP (implicit pairs)   |Adversarial (conditional)    |Spatio-temporal |Residual       |Post-upsampling: sub-pixel convolution (SPC)|
