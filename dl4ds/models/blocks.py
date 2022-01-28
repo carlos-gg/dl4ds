@@ -212,7 +212,7 @@ class TransitionBlock(tf.keras.layers.Layer):
 
 class LocalizedConvBlock(tf.keras.layers.Layer):
     """ 
-    Localized convolutional layer. To implement learnable inputs, this block 
+    Localized convolutional block. To implement learnable inputs, this block 
     gets an auxillary input (matrix of 1s) and processes it through a locally 
     connected layer without biases with a 1x1 kernel.
     """

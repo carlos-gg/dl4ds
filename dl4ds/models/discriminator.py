@@ -29,6 +29,7 @@ def residual_discriminator(
     else:
         is_recurrent = False
 
+    # Branch with the LR input array
     if is_recurrent:
         x_in = Input(shape=(None, None, None, n_channels))    
     else:
@@ -73,7 +74,7 @@ def residual_discriminator(
             x_2 = Conv2D(n_filters, (3, 3), padding='same', strides=(2,2))(c)
         else:
             x_2 = Resizing(lr_size[0], lr_size[1], interpolation='bilinear')(c)
-    elif model in ['resnet_bi', 'recresnet_bi']:
+    elif upsampling == 'pin':
         c = Conv2D(n_filters, (3, 3), padding='same')(c)
         x_2 = Add()([x_2, c])
 
