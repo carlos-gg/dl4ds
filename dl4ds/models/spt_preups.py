@@ -85,15 +85,12 @@ def recnet_pin(
         x = Concatenate()([x, s])
 
     #---------------------------------------------------------------------------
-    # Localized convolutional layer
+   # Localized convolutional layer
     if localcon_layer:
-        lws_in = Input(shape=(h_hr, w_hr, 2))
-        lws = LocalizedConvBlock()(lws_in)
+        lws = LocalizedConvBlock(filters=2, use_bias=True)(x)
         lws = tf.expand_dims(lws, 1)
         lws = tf.repeat(lws, time_window, axis=1)
         x = Concatenate()([x, lws])
-    else:
-        lws_in = Input(shape=(None, None, 2))
 
     #---------------------------------------------------------------------------
     # Last conv layers
@@ -113,6 +110,6 @@ def recnet_pin(
     
     model_name = 'rec' + backbone_block + '_pin' 
     if auxvar_array_is_given:
-        return Model(inputs=[x_in, s_in, lws_in], outputs=x, name=model_name)
+        return Model(inputs=[x_in, s_in], outputs=x, name=model_name)
     else:
-        return Model(inputs=[x_in, lws_in], outputs=x, name=model_name)
+        return Model(inputs=[x_in], outputs=x, name=model_name)

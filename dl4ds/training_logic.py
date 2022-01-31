@@ -870,9 +870,9 @@ class CGANTrainer(Trainer):
                     time_metadata=self.time_metadata)
                
                 if self.static_vars is not None or self.use_season:
-                    [lr_array, aux_hr, lws], [hr_array] = res
+                    [lr_array, aux_hr], [hr_array] = res
                 else:
-                    [lr_array, lws], [hr_array] = res
+                    [lr_array], [hr_array] = res
 
                 losses = train_step(
                     lr_array, 
@@ -885,8 +885,7 @@ class CGANTrainer(Trainer):
                     gen_pxloss_function=self.lossf,
                     summary_writer=summary_writer, 
                     first_batch=True if epoch==0 and i==0 else False,
-                    static_array=aux_hr,
-                    lws_array=lws)
+                    static_array=aux_hr)
                 
                 gen_total_loss, gen_gan_loss, gen_px_loss, disc_loss = losses
                 lossvals = [('gen_total_loss', gen_total_loss), 
@@ -959,17 +958,15 @@ class CGANTrainer(Trainer):
                 time_metadata=self.time_metadata_test)
             
             if self.static_vars is not None or self.use_season:
-                [lr_array, aux_hr, lws], [hr_array] = res
+                [lr_array, aux_hr], [hr_array] = res
                 hr_arrtest = tf.cast(hr_array, tf.float32)
                 lr_arrtest = tf.cast(lr_array, tf.float32)
-                lws_arrtest = tf.cast(lws, tf.float32)
                 auxhr_arrtest = tf.cast(aux_hr, tf.float32)
-                input_test = [lr_arrtest, auxhr_arrtest, lws_arrtest]
+                input_test = [lr_arrtest, auxhr_arrtest]
             else:
-                [lr_array, lws], [hr_array] = res
+                [lr_array], [hr_array] = res
                 lr_arrtest = tf.cast(lr_array, tf.float32)
-                lws_arrtest = tf.cast(lws, tf.float32)
-                input_test = [lr_arrtest, lws_arrtest]
+                input_test = [lr_arrtest]
             
             y_test_pred = self.generator.predict(input_test)
             self.test_loss = self.lossf(hr_arrtest, y_test_pred)

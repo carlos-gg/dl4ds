@@ -119,13 +119,10 @@ def net_postupsampling(
         x = DeconvolutionBlock(scale, n_channels_out, ups_activation)(x)
     
     #---------------------------------------------------------------------------
-    # Localized convolutional layer
+     # Localized convolutional layer
     if localcon_layer:
-        lws_in = Input(shape=(h_hr, w_hr, 2))
-        lws = LocalizedConvBlock()(lws_in)
+        lws = LocalizedConvBlock(filters=2, use_bias=True)(x)
         x = Concatenate()([x, lws])
-    else:
-        lws_in = Input(shape=(None, None, 2))
     
     #---------------------------------------------------------------------------
     # HR aux channels are processed
@@ -155,6 +152,6 @@ def net_postupsampling(
         attention=False)(x) 
 
     if auxvar_array_is_given:
-        return Model(inputs=[x_in, s_in, lws_in], outputs=x, name=model_name)  
+        return Model(inputs=[x_in, s_in], outputs=x, name=model_name)  
     else:
-        return Model(inputs=[x_in, lws_in], outputs=x, name=model_name)  
+        return Model(inputs=[x_in], outputs=x, name=model_name)  

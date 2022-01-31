@@ -131,20 +131,19 @@ def predict(
         time_metadata=time_metadata)
 
     if static_vars is not None or use_season:
-        [batch_lr, batch_aux_hr, batch_lws], [batch_hr] = batch
+        [batch_lr, batch_aux_hr], [batch_hr] = batch
     else:
-        [batch_lr, batch_lws], [batch_hr] = batch
+        [batch_lr], [batch_hr] = batch
 
     x_test_lr = batch_lr
 
     ### Casting as TF tensors, creating inputs ---------------------------------
     x_test_lr = tf.cast(x_test_lr, tf.float32)   
-    local_lws_array = tf.cast(batch_lws, tf.float32)     
     if static_vars is not None or use_season: 
         aux_vars_hr = tf.cast(batch_aux_hr, tf.float32) 
-        inputs = [x_test_lr, aux_vars_hr, local_lws_array]
+        inputs = [x_test_lr, aux_vars_hr]
     else:
-        inputs = [x_test_lr, local_lws_array]
+        inputs = [x_test_lr]
     
     ### Inference --------------------------------------------------------------
     # Stochasticity via dropout. It usually only applies when training (no values 

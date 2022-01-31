@@ -246,9 +246,6 @@ def create_pair_hr_lr(
     lr_array = np.asarray(lr_array, 'float32')
     if static_vars is not None or season is not None:
         static_array_hr = np.asanyarray(static_array_hr, 'float32')
-    # Including the lws array --------------------------------------------------
-    local_lws_array = np.ones((hr_y, hr_x, 2))
-    local_lws_array = np.asarray(local_lws_array, 'float32')
 
     if debug: 
         if is_spatiotemp:
@@ -288,9 +285,9 @@ def create_pair_hr_lr(
                                 plot_title='LR predictors')
 
     if static_vars is not None or season is not None:
-        return hr_array, lr_array, static_array_hr, local_lws_array
+        return hr_array, lr_array, static_array_hr
     else:
-        return hr_array, lr_array, local_lws_array
+        return hr_array, lr_array
 
 
 def create_batch_hr_lr(
@@ -315,7 +312,6 @@ def create_batch_hr_lr(
     batch_hr = []
     batch_lr = []
     batch_aux_hr = []
-    batch_lws = []
 
     # looping to create a batch of samples
     for i in batch_rand_idx:
@@ -345,21 +341,19 @@ def create_batch_hr_lr(
             predictors=predictors_i)
 
         if static_vars is not None or season_i is not None:
-            hr_array, lr_array, static_array_hr, lws = res
+            hr_array, lr_array, static_array_hr = res
             batch_aux_hr.append(static_array_hr)
         else:
-            hr_array, lr_array, lws = res
+            hr_array, lr_array = res
         batch_lr.append(lr_array)
         batch_hr.append(hr_array)
-        batch_lws.append(lws)
     batch_lr = np.asarray(batch_lr)
     batch_hr = np.asarray(batch_hr) 
-    batch_lws = np.asarray(batch_lws)
     if static_vars is not None or season_i is not None:
         batch_aux_hr = np.asarray(batch_aux_hr)
-        return [batch_lr, batch_aux_hr, batch_lws], [batch_hr]
+        return [batch_lr, batch_aux_hr], [batch_hr]
     else:
-        return [batch_lr, batch_lws], [batch_hr]
+        return [batch_lr], [batch_hr]
 
 
 class DataGenerator(tf.keras.utils.Sequence):
