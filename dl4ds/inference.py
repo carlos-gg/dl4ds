@@ -24,7 +24,6 @@ def predict(
     save_path=None,
     save_fname='y_hat.npy',
     return_lr=False,
-    stochastic_output=False,
     device='GPU'):
     """Inference with ``model`` on ``array``, which is super-resolved/downscaled 
     using the trained super-resolution network. 
@@ -59,10 +58,6 @@ def predict(
         Filename to complete the path were the prediciton is saved. 
     return_lr : bool, optional
         If True, the LR array is returned along with the downscaled one. 
-    stochastic_output : bool, optional
-        If True, the output will be stochastic rather than deterministic. This 
-        works only when certain layers, such as dropout, are present in the 
-        trained ``model``.
     """         
     timing = Timing()
 
@@ -146,11 +141,8 @@ def predict(
         inputs = [x_test_lr]
     
     ### Inference --------------------------------------------------------------
-    # Stochasticity via dropout. It usually only applies when training (no values 
-    # are dropped during inference). With training=True, the Dropout layer will 
-    # behave in training mode and dropout will be applied at inference time
     with tf.device('/' + device + ':0'):
-        x_test_pred = model(inputs, training=stochastic_output)
+        x_test_pred = model(inputs, training=False)
         x_test_pred = x_test_pred.numpy()
     
     if save_path is not None and save_fname is not None:
