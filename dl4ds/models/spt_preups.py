@@ -1,6 +1,6 @@
 import tensorflow as tf
 from tensorflow.keras.layers import (Add, Conv2D, Input, Concatenate, Dropout, 
-                                     GaussianDropout)
+                                     GaussianDropout, TimeDistributed)
 from tensorflow.keras.models import Model
 
 from .blocks import (RecurrentConvBlock, ResidualBlock, ConvBlock, 
@@ -36,7 +36,10 @@ def recnet_pin(
     h_hr = hr_size[0]
     w_hr = hr_size[1]
 
-    x_in = Input(shape=(None, None, None, n_channels))
+    if not localcon_layer: 
+        x_in = Input(shape=(None, None, None, n_channels))
+    else:
+        x_in = Input(shape=(None, h_hr, w_hr, n_channels))
    
     x = b = RecurrentConvBlock(
         n_filters, 
@@ -85,11 +88,10 @@ def recnet_pin(
         x = Concatenate()([x, s])
 
     #---------------------------------------------------------------------------
-   # Localized convolutional layer
+    # Localized convolutional layer
     if localcon_layer:
-        lws = LocalizedConvBlock(filters=2, use_bias=True)(x)
-        lws = tf.expand_dims(lws, 1)
-        lws = tf.repeat(lws, time_window, axis=1)
+        lcb = LocalizedConvBlock(filters=2, use_bias=True)
+        lws = TimeDistributed(lcb, name='localized_conv_block')(x)
         x = Concatenate()([x, lws])
 
     #---------------------------------------------------------------------------

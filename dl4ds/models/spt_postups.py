@@ -43,7 +43,11 @@ def recnet_postupsampling(
 
     h_lr = lr_size[0]
     w_lr = lr_size[1]
-    x_in = Input(shape=(None, h_lr, w_lr, n_channels))
+
+    if not localcon_layer: 
+        x_in = Input(shape=(None, None, None, n_channels))
+    else:
+        x_in = Input(shape=(None, h_lr, w_lr, n_channels))
     
     x = b = RecurrentConvBlock(
         n_filters, 
@@ -94,9 +98,8 @@ def recnet_postupsampling(
     #---------------------------------------------------------------------------
     # Localized convolutional layer
     if localcon_layer:
-        lws = LocalizedConvBlock(filters=2, use_bias=True)(x)
-        lws = tf.expand_dims(lws, 1)
-        lws = tf.repeat(lws, time_window, axis=1)
+        lcb = LocalizedConvBlock(filters=2, use_bias=True)
+        lws = TimeDistributed(lcb, name='localized_conv_block')(x)
         x = Concatenate()([x, lws])
 
     #---------------------------------------------------------------------------
