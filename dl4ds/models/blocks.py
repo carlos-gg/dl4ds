@@ -210,11 +210,12 @@ class TransitionBlock(tf.keras.layers.Layer):
 
 class LocalizedConvBlock(tf.keras.layers.Layer):
     """ 
-    Localized convolutional block. Uses a locally connected layer (1x1 kernel) 
+    Localized convolutional block through a locally connected layer (1x1 kernel) 
     with biases.
     """
     def __init__(self, filters=2, activation=None, use_bias=True, **kwargs):
         super().__init__(**kwargs)
+        self.filters = filters
         self.transition = TransitionBlock(filters=filters)
         self.localconv = LocallyConnected2D(
             filters=filters,
@@ -225,8 +226,12 @@ class LocalizedConvBlock(tf.keras.layers.Layer):
             activation=activation)
 
     def call(self, X):
-        Y = self.localconv(X)
+        Y = self.transition(X)
+        Y = self.localconv(Y)
         return Y
+
+    def compute_output_shape(self, input_shape):
+        return (input_shape[0], input_shape[1], input_shape[2], self.filters)
 
 
 class RecurrentConvBlock(tf.keras.layers.Layer): 
