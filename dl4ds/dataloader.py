@@ -2,9 +2,6 @@ import tensorflow as tf
 import numpy as np
 import scipy as sc
 import xarray as xr
-
-import sys
-sys.path.append('/gpfs/home/bsc32/bsc32409/src/ecubevis/')
 import ecubevis as ecv
 
 from . import POSTUPSAMPLING_METHODS

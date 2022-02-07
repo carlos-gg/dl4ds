@@ -7,9 +7,6 @@ from sklearn.metrics import mean_squared_error
 from scipy.stats import spearmanr, pearsonr
 import os
 import seaborn as sns
-
-import sys
-sys.path.append('/gpfs/home/bsc32/bsc32409/src/ecubevis/')
 import ecubevis as ecv
 
 from .utils import resize_array
