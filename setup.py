@@ -10,7 +10,7 @@ def resource(*args):
                         *args)
 
 
-with open(resource('ecubevis', '__init__.py')) as version_file:
+with open(resource('dl4ds', '__init__.py')) as version_file:
     version_file = version_file.read()
     VERSION = re.search(r"""^__version__ = ['"]([^'"]*)['"]""",
                         version_file, re.M)
