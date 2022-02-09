@@ -21,7 +21,8 @@ with open(resource('README.md')) as readme_file:
 
 setup(
     name='dl4ds',
-    packages=['dl4ds'],
+    packages=['dl4ds',
+              'dl4ds.models'],
     version=VERSION,
     description='Deep Learning for empirical DownScaling',
     long_description=README,
