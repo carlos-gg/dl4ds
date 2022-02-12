@@ -7,7 +7,7 @@ import tensorflow as tf
 from .utils import Timing, checkarray_ndim, resize_array
 from . import SPATIAL_MODELS, SPATIOTEMP_MODELS, POSTUPSAMPLING_METHODS
 from .dataloader import create_batch_hr_lr
-from .training_logic import CGANTrainer, SupervisedTrainer
+from .training import CGANTrainer, SupervisedTrainer
 
 
 def predict(
