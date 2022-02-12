@@ -3,6 +3,7 @@ Base training class
 """
 
 import os
+import xarray as xr
 import numpy as np
 import tensorflow as tf
 from abc import ABC, abstractmethod
@@ -50,14 +51,27 @@ class Trainer(ABC):
                 raise TypeError('input data must be a xr.DataArray and have' 
                                 'time metadata when use_season=True')
         
+        # checking training data split (both hr and lr)
         self.data_train = data_train
+        if not isinstance(self.data_train, (xr.DataArray, np.ndarray)):
+            msg = '`data_train` must be a np.ndarray or xr.DataArray object'
+            raise TypeError(msg)
+        if not self.data_train.ndim > 3:
+            msg = '`data_train` must be at least 4D [samples, lat, lon, variables]'
+            raise ValueError(msg)
         self.data_train_lr = data_train_lr
         if self.data_train_lr is not None:
+            if not isinstance(self.data_train_lr, (xr.DataArray, np.ndarray)):
+                msg = '`data_train_lr` must be a np.ndarray or xr.DataArray object'
+                raise TypeError(msg)
             if self.data_train_lr.shape[0] != self.data_train.shape[0]:
                 msg = '`data_train_lr` and `data_train` must contain '
                 msg += 'the same number of samples (equal 1st dim lenght)'
                 raise ValueError(msg)
-        
+            if not self.data_train_lr.ndim > 3:
+                msg = '`data_train_lr` must be at least 4D [samples, lat, lon, variables]'
+                raise ValueError(msg)
+
         self.batch_size = batch_size
         self.patch_size = patch_size
         self.loss = loss
