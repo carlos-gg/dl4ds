@@ -65,7 +65,7 @@ class SupervisedTrainer(Trainer):
         verbose=True,
         **architecture_params
         ):
-        """Training supervised models.
+        """Training procedure for supervised models.
 
         Parameters
         ----------

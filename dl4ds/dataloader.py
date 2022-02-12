@@ -412,18 +412,22 @@ class DataGenerator(tf.keras.utils.Sequence):
         netcdf files lazily or memmap a numpy array
         """
         self.use_season = use_season
+        
         if isinstance(array, xr.DataArray):
             if self.use_season:
                 self.time_metadata = array.time.copy()
             else:
                 self.time_metadata = None
             self.array = array.values
-        else:
+        elif isinstance(array, np.ndarray):
             self.array = array
+            self.time_metadata = None
+
         if isinstance(array_lr, xr.DataArray):
             self.array_lr = array_lr.values
         else:
             self.array_lr = array_lr
+        
         self.batch_size = batch_size
         self.scale = scale
         self.patch_size = patch_size
