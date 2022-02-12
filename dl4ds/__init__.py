@@ -15,11 +15,10 @@ SPATIOTEMP_MODELS = ['rec' + p + '_' + u for p in BACKBONE_BLOCKS for u in UPSAM
 MODELS = [n + '_' + u for n in NETS for u in UPSAMPLING_METHODS]
 
 from .metrics import *
-from .training_logic import *
 from .inference import *
 from .utils import *
 from .dataloader import *
 from .models import *
-from .cgan import *
+from .training import *
 from .preprocessing import *
 
