@@ -5,7 +5,7 @@ import cv2
 from datetime import datetime
 
 import matplotlib.pyplot as plt
-from typing import List, Dict, Union, Tuple, Callable
+from typing import List, Dict, Type, Union, Tuple, Callable
 import os
 import math
 import pandas as pd
@@ -37,7 +37,8 @@ def checkarray_ndim(array, ndim=3, add_axis_position=-1):
 def checkarg_model(model, model_list=MODELS):
     """ """
     if not isinstance(model, str) or model not in model_list:
-        msg = f'`model` not recognized. Must be one of the following: {model_list}'
+        msg = f'`model` not recognized. Must be one of the '
+        msg += 'following: {model_list}. Got {model}'
         raise ValueError(msg)
     else:
         return model
@@ -45,8 +46,12 @@ def checkarg_model(model, model_list=MODELS):
 
 def checkarg_backbone(backbone_block):
     """ """ 
-    if not isinstance(backbone_block, str) or backbone_block not in BACKBONE_BLOCKS:
-        msg = f'`backbone_block` not recognized. Must be one of the following: {BACKBONE_BLOCKS}'
+    if not isinstance(backbone_block, str):
+        raise TypeError('`backbone_block` must be a string')
+    
+    if backbone_block not in BACKBONE_BLOCKS + ['unet']:
+        msg = f"`backbone_block` not recognized. Must be one of the "
+        msg += f"following: {BACKBONE_BLOCKS + ['unet']}. Got {backbone_block}"
         raise ValueError(msg)
     else:
         return backbone_block
@@ -55,7 +60,8 @@ def checkarg_backbone(backbone_block):
 def checkarg_upsampling(upsampling):
     """ """ 
     if not isinstance(upsampling, str) or upsampling not in UPSAMPLING_METHODS:
-        msg = f'`upsampling` not recognized. Must be one of the following: {UPSAMPLING_METHODS}'
+        msg = f'`upsampling` not recognized. Must be one of the '
+        msg += f'following: {UPSAMPLING_METHODS}. Got {upsampling}'
         raise ValueError(msg)
     else:
         return upsampling
@@ -67,8 +73,9 @@ def checkarg_dropout_variant(dropout):
         return dropout
     elif isinstance(dropout, str):
         if dropout not in ['spatial', 'gaussian']:
-            raise ValueError('`dropout_variant` must be either None or str '
-                             '(`gaussian` or `spatial`)')
+            msg = f"`dropout_variant` must be one of "
+            msg += f"[None, 'gaussian', 'spatial'], got {dropout}"
+            raise ValueError(msg)
 
 
 def set_gpu_memory_growth(verbose=True):
