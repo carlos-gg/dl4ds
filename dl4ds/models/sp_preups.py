@@ -145,12 +145,12 @@ def unet_pin(
 
     auxvar_array_is_given = True if n_aux_channels > 0 else False
     if auxvar_array_is_given:
-        if not localcon_layer:
+        if not localcon_layer and h_hr == w_hr:
             s_in = Input(shape=(None, None, n_aux_channels))
         else:
             s_in = Input(shape=(h_hr, w_hr, n_aux_channels))
 
-    if not localcon_layer:  
+    if not localcon_layer and h_hr == w_hr:  
         x_in = Input(shape=(None, None, n_channels))
     else:
         x_in = Input(shape=(h_hr, w_hr, n_channels))
