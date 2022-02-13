@@ -8,7 +8,7 @@ import numpy as np
 import xarray as xr
 import tensorflow as tf
 from tensorflow.keras.utils import Progbar
-import horovod.tensorflow.keras as hvd
+import horovod.tensorflow as hvd
 import logging
 tf.get_logger().setLevel(logging.ERROR)
 
@@ -17,7 +17,7 @@ from ..dataloader import create_batch_hr_lr
 from ..models import (net_pin, recnet_pin, net_postupsampling, 
                      recnet_postupsampling, residual_discriminator)
 from ..models import (net_postupsampling, recnet_postupsampling, net_pin, 
-                     recnet_pin)
+                     recnet_pin, unet_pin)
 from .. import POSTUPSAMPLING_METHODS, SPATIAL_MODELS, SPATIOTEMP_MODELS
 from .base import Trainer
 
@@ -213,12 +213,20 @@ class CGANTrainer(Trainer):
                     **self.generator_params)
         elif self.upsampling == 'pin':
             if not self.model_is_spatiotemp:
-                self.generator = net_pin(
-                    backbone_block=self.backbone,
-                    n_channels=n_channels, 
-                    n_aux_channels=n_aux_channels,
-                    hr_size=(hr_height, hr_width),
-                    **self.generator_params)            
+                if self.backbone == 'unet':
+                    self.generator = unet_pin(
+                        backbone_block=self.backbone,
+                        n_channels=n_channels,
+                        n_aux_channels=n_aux_channels,
+                        hr_size=(hr_height, hr_width),
+                        **self.generator_params)
+                else:
+                    self.generator = net_pin(
+                        backbone_block=self.backbone,
+                        n_channels=n_channels, 
+                        n_aux_channels=n_aux_channels,
+                        hr_size=(hr_height, hr_width),
+                        **self.generator_params)            
             else:
                 self.generator = recnet_pin(
                     backbone_block=self.backbone,
