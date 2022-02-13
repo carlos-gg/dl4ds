@@ -15,7 +15,7 @@ tf.get_logger().setLevel(logging.ERROR)
 from .. import POSTUPSAMPLING_METHODS, SPATIAL_MODELS, SPATIOTEMP_MODELS
 from ..utils import Timing
 from ..dataloader import DataGenerator
-from ..models import (net_pin, recnet_pin, net_postupsampling, 
+from ..models import (net_pin, recnet_pin, unet_pin, net_postupsampling, 
                      recnet_postupsampling)
 from .base import Trainer
 
@@ -294,12 +294,20 @@ class SupervisedTrainer(Trainer):
                         **self.architecture_params)
             elif self.upsampling == 'pin':
                 if not self.model_is_spatiotemp:
-                    self.model = net_pin(
-                        backbone_block=self.backbone,
-                        n_channels=n_channels, 
-                        n_aux_channels=n_aux_channels,
-                        hr_size=(hr_height, hr_width),
-                        **self.architecture_params)        
+                    if self.backbone == 'unet':
+                        self.model = unet_pin(
+                            backbone_block=self.backbone,
+                            n_channels=n_channels,
+                            n_aux_channels=n_aux_channels,
+                            hr_size=(hr_height, hr_width),
+                            **self.architecture_params)
+                    else:
+                        self.model = net_pin(
+                            backbone_block=self.backbone,
+                            n_channels=n_channels, 
+                            n_aux_channels=n_aux_channels,
+                            hr_size=(hr_height, hr_width),
+                            **self.architecture_params)        
                 else:
                     self.model = recnet_pin(
                         backbone_block=self.backbone,
