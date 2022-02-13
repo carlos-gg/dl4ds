@@ -2,8 +2,10 @@ import tensorflow as tf
 from tensorflow.keras.layers import (Add, Conv2D, ConvLSTM2D, Concatenate,
                                      SeparableConv2D, BatchNormalization, 
                                      LayerNormalization, Activation, 
+                                     Dropout, GaussianDropout,
                                      SpatialDropout2D, Conv2DTranspose, 
-                                     SpatialDropout3D, LocallyConnected2D)
+                                     SpatialDropout3D, LocallyConnected2D,
+                                     ZeroPadding2D, MaxPooling2D, UpSampling2D)
 
 
 class ConvBlock(tf.keras.layers.Layer): 
@@ -20,8 +22,8 @@ class ConvBlock(tf.keras.layers.Layer):
     def __init__(self, filters, strides=1, ks_cl1=(3,3), ks_cl2=(3,3), 
                  activation='relu', normalization=None, attention=False, 
                  dropout_rate=0, dropout_variant=None, 
-                 depthwise_separable=False, **conv_kwargs):
-        super().__init__()
+                 depthwise_separable=False, name=None, **conv_kwargs):
+        super().__init__(name=name)
         self.normalization = normalization
         self.attention = attention
         self.dropout_variant = dropout_variant
@@ -33,11 +35,13 @@ class ConvBlock(tf.keras.layers.Layer):
                 kernel_size=ks_cl1, 
                 padding='same', 
                 strides=strides, 
+                use_bias=True if self.normalization is None else False,
                 **conv_kwargs)
             self.conv2 = SeparableConv2D(
                 filters, 
                 kernel_size=ks_cl2, 
                 padding='same', 
+                use_bias=True if self.normalization is None else False,
                 **conv_kwargs)
         else:
             self.conv1 = Conv2D(
@@ -45,32 +49,47 @@ class ConvBlock(tf.keras.layers.Layer):
                 kernel_size=ks_cl1, 
                 padding='same', 
                 strides=strides, 
+                use_bias=True if self.normalization is None else False,
                 **conv_kwargs)
             self.conv2 = Conv2D(
                 filters, 
                 kernel_size=ks_cl2, 
                 padding='same', 
+                use_bias=True if self.normalization is None else False,
                 **conv_kwargs)
 
+        if self.normalization is not None:
+            if self.normalization not in ['bn', 'ln']:
+                raise ValueError(f'Normalization not supported, got {self.normalization}')
         if self.normalization == 'bn':
             self.norm1 = BatchNormalization()
             self.norm2 = BatchNormalization()
         elif self.normalization == 'ln':
             self.norm1 = LayerNormalization()
             self.norm2 = LayerNormalization()
-        elif normalization is not None:
-            raise ValueError('Normalization not supported')
 
         if self.attention:
             self.att = ChannelAttention2D(filters)
         self.activation = Activation(activation)
         
         self.apply_dropout = False
-        # Only spatial dropout is applied inside convolutional blocks
-        if self.dropout_variant == 'spatial' and self.dropout_rate > 0:
-            self.apply_dropout = True
-            self.dropout1 = SpatialDropout2D(self.dropout_rate)
-            self.dropout2 = SpatialDropout2D(self.dropout_rate)
+        if self.dropout_rate > 0:
+            if self.dropout_variant not in [None, 'spatial' 'gaussian']:
+                raise ValueError(f'Dropout not supported, got {self.dropout_variant}')
+            else:
+                self.apply_dropout = True
+
+            if self.dropout_variant == 'spatial':
+                self.dropout1 = SpatialDropout2D(self.dropout_rate)
+                self.dropout2 = SpatialDropout2D(self.dropout_rate)
+            elif self.dropout_variant == 'gaussian':
+                self.dropout1 = GaussianDropout(self.dropout_rate)
+                self.dropout2 = GaussianDropout(self.dropout_rate)
+            elif self.dropout_variant is None:
+                self.dropout1 = Dropout(self.dropout_rate)
+                self.dropout2 = Dropout(self.dropout_rate)
+        else:
+            self.apply_dropout = False
 
     def call(self, X):
         """Model's forward pass.
@@ -107,10 +126,10 @@ class ResidualBlock(ConvBlock):
     """
     def __init__(self, filters, strides=1, ks_cl1=(3,3), ks_cl2=(3,3), 
                  activation='relu', normalization=None, attention=False, 
-                 dropout_rate=0, dropout_variant=None, **conv_kwargs):
+                 dropout_rate=0, dropout_variant=None, name=None, **conv_kwargs):
         super().__init__(filters, strides, ks_cl1, ks_cl2, activation, 
                          normalization, attention, dropout_rate, 
-                         dropout_variant, **conv_kwargs)
+                         dropout_variant, name=name, **conv_kwargs)
 
     def call(self, X):
         Y = self.dropout1(X) if self.apply_dropout else X
@@ -142,10 +161,10 @@ class DenseBlock(ConvBlock):
     """
     def __init__(self, filters, strides=1, ks_cl1=(1,1), ks_cl2=(3,3), 
                  activation='relu', normalization=None, attention=False, 
-                 dropout_rate=0, dropout_variant=None, **conv_kwargs):
+                 dropout_rate=0, dropout_variant=None, name=None, **conv_kwargs):
         super().__init__(filters, strides, ks_cl1, ks_cl2, activation, 
                          normalization, attention, dropout_rate, 
-                         dropout_variant, **conv_kwargs)
+                         dropout_variant, name=name, **conv_kwargs)
         self.conv1 = Conv2D(
             4 * filters, 
             padding='same', 
@@ -188,8 +207,9 @@ class TransitionBlock(tf.keras.layers.Layer):
         Densely Connected Convolutional Networks: 
         https://arxiv.org/abs/1608.06993
     """
-    def __init__(self, filters, activation='relu', normalization=None, **kwargs):
-        super().__init__(**kwargs)
+    def __init__(self, filters, activation='relu', normalization=None, 
+                 name_suffix='', **kwargs):
+        super().__init__(name='Transition' + name_suffix, **kwargs)
         if normalization is not None and normalization == 'bn':
             self.batch_norm = BatchNormalization()
         else:
@@ -213,8 +233,9 @@ class LocalizedConvBlock(tf.keras.layers.Layer):
     Localized convolutional block through a locally connected layer (1x1 kernel) 
     with biases.
     """
-    def __init__(self, filters=2, activation=None, use_bias=True, **kwargs):
-        super().__init__(**kwargs)
+    def __init__(self, filters=2, activation=None, use_bias=True, 
+                 name_sufix='', **kwargs):
+        super().__init__(name='LocalizedConvBlock' + name_sufix, **kwargs)
         self.filters = filters
         self.transition = TransitionBlock(filters=filters)
         self.localconv = LocallyConnected2D(
@@ -240,36 +261,49 @@ class RecurrentConvBlock(tf.keras.layers.Layer):
     """
     def __init__(self, filters, ks_cl1=(5,5), ks_cl2=(3,3), activation='relu', 
                  normalization=None, dropout_rate=0, dropout_variant=None, 
-                 **conv_kwargs):
-        super().__init__()
+                 name_suffix='', **conv_kwargs):
+        super().__init__(name='RecurrentConvBlock' + name_suffix)
         self.normalization = normalization
         self.dropout_rate = dropout_rate
         self.dropout_variant = dropout_variant
         self.convlstm1 = ConvLSTM2D(
             filters, kernel_size=ks_cl1, return_sequences=True, padding='same', 
-            **conv_kwargs)
+            recurrent_dropout=0, **conv_kwargs)
         self.convlstm2 = ConvLSTM2D(
             filters, kernel_size=ks_cl2, return_sequences=True, padding='same', 
-            **conv_kwargs)
- 
+            recurrent_dropout=0, **conv_kwargs)
+
+        if self.normalization is not None:
+            if self.normalization not in ['bn', 'ln']:
+                raise ValueError(f'Normalization not supported, got {self.normalization}')
         if self.normalization == 'bn':
             self.norm1 = BatchNormalization()
             self.norm2 = BatchNormalization()
         elif self.normalization == 'ln':
             self.norm1 = LayerNormalization()
             self.norm2 = LayerNormalization()
-        elif normalization is not None:
-            raise ValueError('Normalization not supported')
 
         self.activation = Activation(activation)
         self.skipconnection = Add()
 
         self.apply_dropout = False
-        # Only spatial dropout is applied inside convolutional blocks
-        if self.dropout_variant == 'spatial' and self.dropout_rate > 0:
-            self.apply_dropout = True
-            self.dropout1 = SpatialDropout3D(self.dropout_rate)
-            self.dropout2 = SpatialDropout3D(self.dropout_rate)
+        if self.dropout_rate > 0:
+            if self.dropout_variant not in [None, 'spatial' 'gaussian']:
+                raise ValueError(f'Dropout not supported, got {self.dropout_variant}')
+            else:
+                self.apply_dropout = True
+
+            if self.dropout_variant == 'spatial':
+                self.dropout1 = SpatialDropout3D(self.dropout_rate)
+                self.dropout2 = SpatialDropout3D(self.dropout_rate)
+            elif self.dropout_variant == 'gaussian':
+                self.dropout1 = GaussianDropout(self.dropout_rate)
+                self.dropout2 = GaussianDropout(self.dropout_rate)
+            elif self.dropout_variant is None:
+                self.dropout1 = Dropout(self.dropout_rate)
+                self.dropout2 = Dropout(self.dropout_rate)
+        else:
+            self.apply_dropout = False
 
     def call(self, X):
         """
@@ -298,8 +332,8 @@ class SubpixelConvolutionBlock(tf.keras.layers.Layer):
     [1] Real-Time Single Image and Video Super-Resolution Using an Efficient 
     Sub-Pixel Convolutional Neural Network: https://arxiv.org/abs/1609.05158
     """
-    def __init__(self, scale, n_filters, **kwargs):
-        super().__init__()
+    def __init__(self, scale, n_filters, name_suffix='', **kwargs):
+        super().__init__(name='SubpixelConvolution' + name_suffix)
         self.scale = scale
         self.n_filters = n_filters
         self.conv = Conv2D(self.n_filters * (self.scale ** 2), 3, padding='same', **kwargs)
@@ -355,8 +389,9 @@ class DeconvolutionBlock(tf.keras.layers.Layer):
     [1] FSRCNN - Accelerating the Super-Resolution Convolutional Neural Network: 
     https://arxiv.org/abs/1608.00367
     """
-    def __init__(self, scale, n_filters, output_activation=None):
-        super().__init__()
+    def __init__(self, scale, n_filters, output_activation=None, 
+                 name_suffix=''):
+        super().__init__(name='Deconvolution' + name_suffix)
         self.scale = scale
         self.output_activation = output_activation
         self.conv2dtranspose1 = Conv2DTranspose(n_filters, (9, 9), strides=(2, 2), 
@@ -445,3 +480,59 @@ class ChannelAttention2D(tf.keras.layers.Layer):
         config.update({"Red_factor": self.r})
         return config
 
+
+class EncoderBlock(tf.keras.layers.Layer):
+    """
+    """
+    def __init__(self, n_filters, activation=None, dropout_rate=0,
+                 dropout_variant=None, normalization=None, attention=False,
+                 name_suffix=''):
+        super().__init__(name='EncoderBlock' + name_suffix)
+        self.conv = ConvBlock(
+            n_filters, activation=activation, dropout_rate=dropout_rate, 
+            dropout_variant=dropout_variant, normalization=normalization, 
+            attention=attention)
+        self.maxpool = MaxPooling2D(pool_size=(2, 2))
+
+    def call(self, X):
+        Y = self.conv(X)
+        Y_downsampled = self.maxpool(Y)
+
+        return [Y_downsampled, Y]
+
+
+class PadConcat(tf.keras.layers.Layer):
+    """ 
+    """
+    def __init__(self, debug=False, name_suffix=''):
+        super().__init__(name='Concatenate' + name_suffix)
+        self.debug = debug
+
+    def call(self, X):
+        (t1, t2) = X
+        y1 = t1.get_shape().as_list()[1]
+        x1 = t1.get_shape().as_list()[2]
+        y2 = t2.get_shape().as_list()[1]
+        x2 = t2.get_shape().as_list()[2]
+
+        if self.debug:
+            print(f'inp t1 ({y1},{x1}) t2 ({y2},{x2})')
+
+        if y2 < y1:
+            t2 = ZeroPadding2D(padding=((0, y1 - y2), (0, 0)))(t2)
+        elif y2 > y1:
+            t1 = ZeroPadding2D(padding=((0, y2 - y1), (0, 0)))(t1)
+
+        if x2 < x1:
+            t2 = ZeroPadding2D(padding=((0, 0), (0, x1 - x2)))(t2)
+        elif x2 > x1:
+            t1 = ZeroPadding2D(padding=((0, 0), (0, x2 - x1)))(t1)
+
+        if self.debug:
+            y1 = t1.get_shape().as_list()[1]
+            x1 = t1.get_shape().as_list()[2]
+            y2 = t2.get_shape().as_list()[1]
+            x2 = t2.get_shape().as_list()[2]
+            print(f'out t1 ({y1},{x1}) t2 ({y2},{x2})')
+
+        return Concatenate()([t1, t2])
