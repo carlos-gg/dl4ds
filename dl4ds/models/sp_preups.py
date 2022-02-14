@@ -1,11 +1,13 @@
 import tensorflow as tf
 from tensorflow.keras.layers import (Add, Conv2D, Input, Concatenate, Dropout, 
-                                     GaussianDropout, UpSampling2D)
+                                     GaussianDropout, UpSampling2D, 
+                                     SpatialDropout2D)
 from tensorflow.keras.models import Model
 
 from .blocks import (ResidualBlock, ConvBlock, DenseBlock, TransitionBlock,
                      LocalizedConvBlock, SubpixelConvolutionBlock, 
-                     DeconvolutionBlock, EncoderBlock, PadConcat)
+                     DeconvolutionBlock, EncoderBlock, PadConcat, MCDropout, 
+                     MCSpatialDropout2D, MCGaussianDropout)
 from ..utils import checkarg_backbone, checkarg_dropout_variant
  
 
@@ -70,11 +72,20 @@ def net_pin(
                 attention=attention)(b)
             b = TransitionBlock(n_filters // 2)(b)  # another option: half of the DenseBlock channels
     b = Conv2D(n_filters, (3, 3), padding='same')(b)
+    
     if dropout_rate > 0:
         if dropout_variant is None:
             b = Dropout(dropout_rate)(b)
         elif dropout_variant == 'gaussian':
             b = GaussianDropout(dropout_rate)(b)
+        elif dropout_variant == 'spatial':
+            b = SpatialDropout2D(dropout_rate)(b)
+        elif dropout_variant == 'mcdrop':
+            b = MCDropout(dropout_rate)(b)
+        elif dropout_variant == 'mcgaussiandrop':
+            b = MCGaussianDropout(dropout_rate)
+        elif dropout_variant == 'mcspatialdrop':
+            b = MCSpatialDropout2D(dropout_rate)
 
     if backbone_block == 'convnet':
         x = b
@@ -99,12 +110,10 @@ def net_pin(
 
     #---------------------------------------------------------------------------
     # Last conv layers
-    x = ConvBlock(
-        n_filters, activation=None, dropout_rate=dropout_rate, 
+    x = ConvBlock(n_filters, activation=None, dropout_rate=dropout_rate, 
         normalization=normalization, attention=True)(x)  
 
-    x = ConvBlock(
-        n_channels_out, activation=output_activation, dropout_rate=0, 
+    x = ConvBlock(n_channels_out, activation=output_activation, dropout_rate=0, 
         normalization=normalization, attention=False)(x)     
     
     model_name = backbone_block + '_pin'
@@ -197,19 +206,16 @@ def unet_pin(
     #---------------------------------------------------------------------------
     # HR aux channels are processed
     if auxvar_array_is_given:
-        s = ConvBlock(
-            n_filters, activation=activation, dropout_rate=0, 
+        s = ConvBlock(n_filters, activation=activation, dropout_rate=0, 
             normalization=normalization, attention=False)(s_in)   
         x = Concatenate()([x, s])   
 
     #---------------------------------------------------------------------------
     # Last conv layers
-    x = ConvBlock(
-        n_filters, activation=None, dropout_rate=dropout_rate, 
+    x = ConvBlock(n_filters, activation=None, dropout_rate=dropout_rate, 
         normalization=normalization, attention=True)(x)  
 
-    x = ConvBlock(
-        n_channels_out, activation=output_activation, dropout_rate=0, 
+    x = ConvBlock(n_channels_out, activation=output_activation, dropout_rate=0, 
         normalization=normalization, attention=False)(x)     
     
     model_name = backbone_block + '_pin'

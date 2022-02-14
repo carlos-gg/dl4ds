@@ -1,11 +1,13 @@
 import tensorflow as tf
 from tensorflow.keras.layers import (Add, Conv2D, Input, UpSampling2D, Dropout, 
-                                     GaussianDropout, Concatenate)
+                                     GaussianDropout, SpatialDropout2D, 
+                                     Concatenate)
 from tensorflow.keras.models import Model
 
 from .blocks import (ResidualBlock, ConvBlock, DeconvolutionBlock,
                      DenseBlock, TransitionBlock, SubpixelConvolutionBlock,
-                     LocalizedConvBlock)
+                     LocalizedConvBlock, MCDropout, MCSpatialDropout2D, 
+                     MCGaussianDropout)
 from ..utils import (checkarg_backbone, checkarg_upsampling, 
                     checkarg_dropout_variant)
 
@@ -88,11 +90,20 @@ def net_postupsampling(
                 attention=attention)(b)
             b = TransitionBlock(n_filters // 2)(b)  # another option: half of the DenseBlock channels
     b = Conv2D(n_filters, (3, 3), padding='same', activation=activation)(b)
+    
     if dropout_rate > 0:
         if dropout_variant is None:
             b = Dropout(dropout_rate)(b)
         elif dropout_variant == 'gaussian':
             b = GaussianDropout(dropout_rate)(b)
+        elif dropout_variant == 'spatial':
+            b = SpatialDropout2D(dropout_rate)(b)
+        elif dropout_variant == 'mcdrop':
+            b = MCDropout(dropout_rate)(b)
+        elif dropout_variant == 'mcgaussiandrop':
+            b = MCGaussianDropout(dropout_rate)
+        elif dropout_variant == 'mcspatialdrop':
+            b = MCSpatialDropout2D(dropout_rate)
 
     if backbone_block == 'convnet':
         x = b

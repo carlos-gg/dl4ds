@@ -1,11 +1,12 @@
 import tensorflow as tf
-from tensorflow.keras.layers import (Add, Conv2D, Input, UpSampling2D, Dropout, 
+from tensorflow.keras.layers import (Add, Input, UpSampling2D, Dropout, 
                                      GaussianDropout, Concatenate, 
-                                     TimeDistributed)
+                                     TimeDistributed, SpatialDropout3D)
 from tensorflow.keras.models import Model
 
 from .blocks import (RecurrentConvBlock, ConvBlock, SubpixelConvolutionBlock, 
-                     DeconvolutionBlock, LocalizedConvBlock)
+                     DeconvolutionBlock, LocalizedConvBlock, MCDropout, 
+                     MCSpatialDropout3D, MCGaussianDropout)
 from ..utils import (checkarg_backbone, checkarg_upsampling, 
                     checkarg_dropout_variant)
 
@@ -66,6 +67,14 @@ def recnet_postupsampling(
             b = Dropout(dropout_rate)(b)
         elif dropout_variant == 'gaussian':
             b = GaussianDropout(dropout_rate)(b)
+        elif dropout_variant == 'spatial':
+            b = SpatialDropout3D(dropout_rate)(b)
+        elif dropout_variant == 'mcdrop':
+            b = MCDropout(dropout_rate)(b)
+        elif dropout_variant == 'mcgaussiandrop':
+            b = MCGaussianDropout(dropout_rate)
+        elif dropout_variant == 'mcspatialdrop':
+            b = MCSpatialDropout3D(dropout_rate)
     
     if backbone_block == 'convnet':
         x = b
@@ -104,19 +113,11 @@ def recnet_postupsampling(
 
     #---------------------------------------------------------------------------
     # Last conv layers
-    x = ConvBlock(
-        n_filters, 
-        activation=None, 
-        dropout_rate=dropout_rate, 
-        normalization=normalization, 
-        attention=True)(x)  
+    x = ConvBlock(n_filters, activation=None, dropout_rate=dropout_rate, 
+        normalization=normalization, attention=True)(x)  
 
-    x = ConvBlock(
-        n_channels_out, 
-        activation=output_activation, 
-        dropout_rate=0, 
-        normalization=normalization, 
-        attention=False)(x) 
+    x = ConvBlock(n_channels_out, activation=output_activation, 
+        dropout_rate=0, normalization=normalization, attention=False)(x) 
 
     model_name = 'rec' + backbone_block + '_' + upsampling
     if auxvar_array_is_given:
