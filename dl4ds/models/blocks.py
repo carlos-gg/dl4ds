@@ -5,7 +5,7 @@ from tensorflow.keras.layers import (Add, Conv2D, ConvLSTM2D, Concatenate,
                                      Dropout, GaussianDropout,
                                      SpatialDropout2D, Conv2DTranspose, 
                                      SpatialDropout3D, LocallyConnected2D,
-                                     ZeroPadding2D, MaxPooling2D, UpSampling2D)
+                                     ZeroPadding2D, MaxPooling2D)
 
 
 class ConvBlock(tf.keras.layers.Layer): 
@@ -79,15 +79,24 @@ class ConvBlock(tf.keras.layers.Layer):
             else:
                 self.apply_dropout = True
 
-            if self.dropout_variant == 'spatial':
+            if self.dropout_variant is None:
+                self.dropout1 = Dropout(self.dropout_rate)
+                self.dropout2 = Dropout(self.dropout_rate)
+            elif self.dropout_variant == 'spatial':
                 self.dropout1 = SpatialDropout2D(self.dropout_rate)
                 self.dropout2 = SpatialDropout2D(self.dropout_rate)
             elif self.dropout_variant == 'gaussian':
                 self.dropout1 = GaussianDropout(self.dropout_rate)
                 self.dropout2 = GaussianDropout(self.dropout_rate)
-            elif self.dropout_variant is None:
-                self.dropout1 = Dropout(self.dropout_rate)
-                self.dropout2 = Dropout(self.dropout_rate)
+            elif self.dropout_variant == 'mcdrop':
+                self.dropout1 = MCDropout(self.dropout_rate)
+                self.dropout2 = MCDropout(self.dropout_rate)
+            elif self.dropout_variant == 'mcgaussiandrop':
+                self.dropout1 = MCGaussianDropout(self.dropout_rate)
+                self.dropout2 = MCGaussianDropout(self.dropout_rate)
+            elif self.dropout_variant == 'mcspatialdrop':
+                self.dropout1 = MCSpatialDropout2D(self.dropout_rate)
+                self.dropout2 = MCSpatialDropout2D(self.dropout_rate)
         else:
             self.apply_dropout = False
 
@@ -293,15 +302,24 @@ class RecurrentConvBlock(tf.keras.layers.Layer):
             else:
                 self.apply_dropout = True
 
-            if self.dropout_variant == 'spatial':
-                self.dropout1 = SpatialDropout3D(self.dropout_rate)
-                self.dropout2 = SpatialDropout3D(self.dropout_rate)
+            if self.dropout_variant is None:
+                self.dropout1 = Dropout(self.dropout_rate)
+                self.dropout2 = Dropout(self.dropout_rate)
+            elif self.dropout_variant == 'spatial':
+                self.dropout1 = SpatialDropout2D(self.dropout_rate)
+                self.dropout2 = SpatialDropout2D(self.dropout_rate)
             elif self.dropout_variant == 'gaussian':
                 self.dropout1 = GaussianDropout(self.dropout_rate)
                 self.dropout2 = GaussianDropout(self.dropout_rate)
-            elif self.dropout_variant is None:
-                self.dropout1 = Dropout(self.dropout_rate)
-                self.dropout2 = Dropout(self.dropout_rate)
+            elif self.dropout_variant == 'mcdrop':
+                self.dropout1 = MCDropout(self.dropout_rate)
+                self.dropout2 = MCDropout(self.dropout_rate)
+            elif self.dropout_variant == 'mcgaussiandrop':
+                self.dropout1 = MCGaussianDropout(self.dropout_rate)
+                self.dropout2 = MCGaussianDropout(self.dropout_rate)
+            elif self.dropout_variant == 'mcspatialdrop':
+                self.dropout1 = MCDSpatialDropout3D(self.dropout_rate)
+                self.dropout2 = MCDSpatialDropout3D(self.dropout_rate)
         else:
             self.apply_dropout = False
 
@@ -536,3 +554,23 @@ class PadConcat(tf.keras.layers.Layer):
             print(f'out t1 ({y1},{x1}) t2 ({y2},{x2})')
 
         return Concatenate()([t1, t2])
+
+
+class MCDropout(Dropout):
+  def call(self, inputs):
+    return super().call(inputs, training=True)
+
+
+class MCGaussianDropout(GaussianDropout):
+  def call(self, inputs):
+    return super().call(inputs, training=True)
+
+
+class MCSpatialDropout2D(SpatialDropout2D):
+  def call(self, inputs):
+    return super().call(inputs, training=True)
+
+
+class MCSpatialDropout3D(SpatialDropout3D):
+  def call(self, inputs):
+    return super().call(inputs, training=True)

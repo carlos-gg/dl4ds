@@ -72,9 +72,9 @@ def checkarg_dropout_variant(dropout):
     if dropout is None:
         return dropout
     elif isinstance(dropout, str):
-        if dropout not in ['spatial', 'gaussian']:
+        if dropout not in ['gaussian', 'spatial', 'mcdrop', 'mcgaussiandrop', 'mcspatialdrop']:
             msg = f"`dropout_variant` must be one of "
-            msg += f"[None, 'gaussian', 'spatial'], got {dropout}"
+            msg += f"[None, 'gaussian', 'spatial', 'mcdrop', 'mcgaussiandrop', 'mcspatialdrop'], got {dropout}"
             raise ValueError(msg)
 
 
