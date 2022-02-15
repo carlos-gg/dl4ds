@@ -1,13 +1,12 @@
 import tensorflow as tf
-from tensorflow.keras.layers import (Add, Conv2D, Input, Concatenate, Dropout, 
-                                     GaussianDropout, UpSampling2D, 
-                                     SpatialDropout2D)
+from tensorflow.keras.layers import (Add, Conv2D, Input, Concatenate,  
+                                     UpSampling2D)
 from tensorflow.keras.models import Model
 
 from .blocks import (ResidualBlock, ConvBlock, DenseBlock, TransitionBlock,
                      LocalizedConvBlock, SubpixelConvolutionBlock, 
-                     DeconvolutionBlock, EncoderBlock, PadConcat, MCDropout, 
-                     MCSpatialDropout2D, MCGaussianDropout)
+                     DeconvolutionBlock, EncoderBlock, PadConcat, 
+                     choose_dropout_layer)
 from ..utils import checkarg_backbone, checkarg_dropout_variant
  
 
@@ -20,8 +19,8 @@ def net_pin(
     hr_size,
     n_channels_out=1, 
     activation='relu',
-    dropout_rate=0.2,
-    dropout_variant='spatial',
+    dropout_rate=0,
+    dropout_variant=None,
     normalization=None,
     attention=False,
     output_activation=None,
@@ -73,19 +72,7 @@ def net_pin(
             b = TransitionBlock(n_filters // 2)(b)  # another option: half of the DenseBlock channels
     b = Conv2D(n_filters, (3, 3), padding='same')(b)
     
-    if dropout_rate > 0:
-        if dropout_variant is None:
-            b = Dropout(dropout_rate)(b)
-        elif dropout_variant == 'gaussian':
-            b = GaussianDropout(dropout_rate)(b)
-        elif dropout_variant == 'spatial':
-            b = SpatialDropout2D(dropout_rate)(b)
-        elif dropout_variant == 'mcdrop':
-            b = MCDropout(dropout_rate)(b)
-        elif dropout_variant == 'mcgaussiandrop':
-            b = MCGaussianDropout(dropout_rate)
-        elif dropout_variant == 'mcspatialdrop':
-            b = MCSpatialDropout2D(dropout_rate)
+    b = choose_dropout_layer(b, dropout_rate, dropout_variant)
 
     if backbone_block == 'convnet':
         x = b
@@ -132,12 +119,13 @@ def unet_pin(
     hr_size,
     n_channels_out=1, 
     activation='relu',
-    dropout_rate=0.2,
-    dropout_variant='spatial',
+    dropout_rate=0,
+    dropout_variant=None,
     normalization=None,
     attention=False,
     decoder_upsampling='rc',
     output_activation=None,
+    width_cap=256,
     localcon_layer=False):
     """    
     Deep neural network with UNET (encoder-decoder) backbone and pre-upsampling 
@@ -170,11 +158,13 @@ def unet_pin(
     enconding_filters = []
     n_filters_list = []
     for i in range(n_blocks):
-        x, x_skipcon = EncoderBlock(n_filters, activation, dropout_rate,
-            dropout_variant, normalization, attention, name_suffix=str(i+1))(x)
+        droprate = dropout_rate if i == n_blocks else 0
+        x, x_skipcon = EncoderBlock(n_filters=n_filters, activation=activation, 
+            dropout_rate=droprate, dropout_variant=dropout_variant, 
+            normalization=normalization, attention=attention, name_suffix=str(i+1))(x)
         enconding_filters.append(x_skipcon)
         n_filters_list.append(n_filters)
-        n_filters = min(256, n_filters * 2)   # doubling # of filters with each encoding layer, capping at 256
+        n_filters = min(width_cap, n_filters * 2)   # doubling # of filters with each encoding layer, capping at 256
 
     # bottleneck layer
     x = ConvBlock(n_filters, activation=activation, dropout_rate=dropout_rate, 
@@ -193,9 +183,11 @@ def unet_pin(
             x = DeconvolutionBlock(2, n_filters, activation, name_suffix=str(j+1))(x)
 
         x = PadConcat(name_suffix='_SkipConnection'+str(j+1))([x, skip_connection])        
-        x = ConvBlock(n_filters, activation=activation, dropout_rate=dropout_rate, 
+        x = ConvBlock(n_filters, activation=activation, dropout_rate=0, 
             dropout_variant=dropout_variant, normalization=normalization, 
             attention=attention, name='DecoderConvBlock' + str(j+1))(x)
+
+    x = choose_dropout_layer(x, dropout_rate, dropout_variant)
 
     #---------------------------------------------------------------------------
     # Localized convolutional layer
