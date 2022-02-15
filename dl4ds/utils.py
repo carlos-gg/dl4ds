@@ -67,15 +67,17 @@ def checkarg_upsampling(upsampling):
         return upsampling
 
 
-def checkarg_dropout_variant(dropout):
+def checkarg_dropout_variant(dropout_variant):
     """ """
-    if dropout is None:
-        return dropout
-    elif isinstance(dropout, str):
-        if dropout not in ['gaussian', 'spatial', 'mcdrop', 'mcgaussiandrop', 'mcspatialdrop']:
+    if dropout_variant is None:
+        return dropout_variant
+    elif isinstance(dropout_variant, str):
+        if dropout_variant not in ['gaussian', 'spatial', 'mcdrop', 'mcgaussiandrop', 'mcspatialdrop']:
             msg = f"`dropout_variant` must be one of "
-            msg += f"[None, 'gaussian', 'spatial', 'mcdrop', 'mcgaussiandrop', 'mcspatialdrop'], got {dropout}"
+            msg += f"[None, 'gaussian', 'spatial', 'mcdrop', 'mcgaussiandrop', 'mcspatialdrop'], got {dropout_variant}"
             raise ValueError(msg)
+        else:
+            return dropout_variant
 
 
 def set_gpu_memory_growth(verbose=True):
