@@ -1,12 +1,11 @@
 import tensorflow as tf
-from tensorflow.keras.layers import (Add, Conv2D, Input, Concatenate, Dropout, 
-                                     GaussianDropout, TimeDistributed, 
-                                     SpatialDropout3D)
+from tensorflow.keras.layers import (Add, Conv2D, Input, Concatenate, 
+                                     TimeDistributed)
 from tensorflow.keras.models import Model
 
 from .blocks import (RecurrentConvBlock, ResidualBlock, ConvBlock, 
-                     DenseBlock, TransitionBlock, LocalizedConvBlock, MCDropout,
-                     MCSpatialDropout3D, MCGaussianDropout)
+                     DenseBlock, TransitionBlock, LocalizedConvBlock,
+                     choose_dropout_layer)
 from ..utils import checkarg_backbone, checkarg_dropout_variant
 
 
@@ -21,8 +20,8 @@ def recnet_pin(
     time_window=None, 
     activation='relu',
     normalization=None,
-    dropout_rate=0.2,
-    dropout_variant='spatial',
+    dropout_rate=0,
+    dropout_variant=None,
     attention=False,
     output_activation=None,
     localcon_layer=False):
@@ -67,19 +66,7 @@ def recnet_pin(
             b = TransitionBlock(n_filters // 2)(b)  # another option: half of the DenseBlock channels
     b = Conv2D(n_filters, (3, 3), padding='same')(b)
 
-    if dropout_rate > 0:
-        if dropout_variant is None:
-            b = Dropout(dropout_rate)(b)
-        elif dropout_variant == 'gaussian':
-            b = GaussianDropout(dropout_rate)(b)
-        elif dropout_variant == 'spatial':
-            b = SpatialDropout3D(dropout_rate)(b)
-        elif dropout_variant == 'mcdrop':
-            b = MCDropout(dropout_rate)(b)
-        elif dropout_variant == 'mcgaussiandrop':
-            b = MCGaussianDropout(dropout_rate)
-        elif dropout_variant == 'mcspatialdrop':
-            b = MCSpatialDropout3D(dropout_rate)
+    b = choose_dropout_layer(b, dropout_rate, dropout_variant, dim=3)
 
     if backbone_block == 'convnet':
         x = b

@@ -1,12 +1,11 @@
 import tensorflow as tf
-from tensorflow.keras.layers import (Add, Input, UpSampling2D, Dropout, 
-                                     GaussianDropout, Concatenate, 
-                                     TimeDistributed, SpatialDropout3D)
+from tensorflow.keras.layers import (Add, Input, UpSampling2D, Concatenate, 
+                                     TimeDistributed)
 from tensorflow.keras.models import Model
 
 from .blocks import (RecurrentConvBlock, ConvBlock, SubpixelConvolutionBlock, 
-                     DeconvolutionBlock, LocalizedConvBlock, MCDropout, 
-                     MCSpatialDropout3D, MCGaussianDropout)
+                     DeconvolutionBlock, LocalizedConvBlock, 
+                     choose_dropout_layer)
 from ..utils import (checkarg_backbone, checkarg_upsampling, 
                     checkarg_dropout_variant)
 
@@ -23,8 +22,8 @@ def recnet_postupsampling(
     time_window, 
     n_channels_out=1, 
     activation='relu',
-    dropout_rate=0.2,
-    dropout_variant='spatial',
+    dropout_rate=0,
+    dropout_variant=None,
     normalization=None,
     attention=False,
     output_activation=None,
@@ -62,19 +61,7 @@ def recnet_postupsampling(
         dropout_rate=dropout_rate,
         dropout_variant=dropout_variant)(b)
     
-    if dropout_rate > 0:
-        if dropout_variant is None:
-            b = Dropout(dropout_rate)(b)
-        elif dropout_variant == 'gaussian':
-            b = GaussianDropout(dropout_rate)(b)
-        elif dropout_variant == 'spatial':
-            b = SpatialDropout3D(dropout_rate)(b)
-        elif dropout_variant == 'mcdrop':
-            b = MCDropout(dropout_rate)(b)
-        elif dropout_variant == 'mcgaussiandrop':
-            b = MCGaussianDropout(dropout_rate)
-        elif dropout_variant == 'mcspatialdrop':
-            b = MCSpatialDropout3D(dropout_rate)
+    b = choose_dropout_layer(b, dropout_rate, dropout_variant, dim=3)
     
     if backbone_block == 'convnet':
         x = b
