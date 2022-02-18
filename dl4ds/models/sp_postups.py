@@ -67,7 +67,7 @@ def net_postupsampling(
     else:
         x_in = Input(shape=(h_lr, w_lr, n_channels))
     x = b = Conv2D(n_filters, (3, 3), padding='same')(x_in)
-
+    
     #---------------------------------------------------------------------------
     # N conv blocks
     for i in range(n_blocks):
@@ -101,19 +101,14 @@ def net_postupsampling(
     #---------------------------------------------------------------------------
     # Upsampling
     model_name = backbone_block + '_' + upsampling
-    if auxvar_array_is_given:
-        ups_activation = activation
-    else:
-        ups_activation = output_activation
-
     if upsampling == 'spc':
         x = SubpixelConvolutionBlock(scale, n_filters)(x)
-        x = Conv2D(n_channels_out, (3, 3), padding='same', activation=ups_activation)(x)
+        x = Conv2D(n_filters, (3, 3), padding='same', activation=activation)(x)
     elif upsampling == 'rc':
         x = UpSampling2D(scale, interpolation='bilinear')(x)
-        x = Conv2D(n_channels_out, (3, 3), padding='same', activation=ups_activation)(x)
+        x = Conv2D(n_filters, (3, 3), padding='same', activation=activation)(x)
     elif upsampling == 'dc':
-        x = DeconvolutionBlock(scale, n_channels_out, ups_activation)(x)
+        x = DeconvolutionBlock(scale, n_filters, activation)(x)
     
     #---------------------------------------------------------------------------
      # Localized convolutional layer
