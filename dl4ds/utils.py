@@ -27,8 +27,10 @@ def spatial_to_temporal_samples(array, time_window):
 
 
 def checkarray_ndim(array, ndim=3, add_axis_position=-1):
-    """ """
-    if not array.ndim == ndim:
+    """Check the np.ndarray has at least `ndim` dimensions. If needed a new
+    dimension (of lenght 1) is added at the position given by `add_axis_position`.
+    """
+    if array.ndim < ndim:
         return np.expand_dims(array, axis=add_axis_position)
     else:
         return array
