@@ -203,8 +203,8 @@ def create_pair_hr_lr(
                 if not lr_is_given:
                     # downsampling the hr array to get lr_array
                     lr_array = resize_array(hr_array, (lr_x, lr_y), interpolation)    
-            hr_array = np.expand_dims(hr_array, -1)
-            lr_array = np.expand_dims(lr_array, -1)
+            hr_array = checkarray_ndim(hr_array, 3, -1)
+            lr_array = checkarray_ndim(lr_array, 3, -1)
 
     # --------------------------------------------------------------------------
     # Including the static variables and season
@@ -238,11 +238,15 @@ def create_pair_hr_lr(
             # for spatial samples, the season array is concatenated to the lr
             if not is_spatiotemp:
                 lr_array = np.concatenate([lr_array, season_array_lr], axis=-1)
+    else:
+        season_array_lr = None
 
     hr_array = np.asarray(hr_array, 'float32')
     lr_array = np.asarray(lr_array, 'float32')
-    if static_vars is not None or season is not None:
+    if static_vars is not None or season_array_lr is not None:
         static_array_hr = np.asanyarray(static_array_hr, 'float32')
+    else:
+        static_array_hr = None
 
     if debug: 
         if is_spatiotemp:
