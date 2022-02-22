@@ -51,7 +51,7 @@ class SupervisedTrainer(Trainer):
         steps_per_epoch=None, 
         validation_steps=None, 
         test_steps=None,
-        learning_rate=1e-4, 
+        learning_rate=(1e-3, 1e-4), 
         lr_decay_after=1e5,
         early_stopping=False, 
         patience=6, 
