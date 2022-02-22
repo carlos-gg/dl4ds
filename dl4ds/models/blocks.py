@@ -5,7 +5,8 @@ from tensorflow.keras.layers import (Add, Conv2D, ConvLSTM2D, Concatenate,
                                      Dropout, GaussianDropout,
                                      SpatialDropout2D, Conv2DTranspose, 
                                      SpatialDropout3D, LocallyConnected2D,
-                                     ZeroPadding2D, MaxPooling2D)
+                                     ZeroPadding2D, MaxPooling2D, 
+                                     DepthwiseConv2D, Dense)
 from ..utils import checkarg_dropout_variant
 
 
@@ -128,16 +129,18 @@ class ResidualBlock(ConvBlock):
 
     References
     ----------
-    [1] Kaiming He, Xiangyu Zhang, Shaoqing Ren, Jian Sun
-        Deep Residual Learning for Image Recognition: 
-        https://arxiv.org/abs/1512.03385
+    [1] Deep Residual Learning for Image Recognition: https://arxiv.org/abs/1512.03385
     """
     def __init__(self, filters, strides=1, ks_cl1=(3,3), ks_cl2=(3,3), 
                  activation='relu', normalization=None, attention=False, 
-                 dropout_rate=0, dropout_variant=None, name=None, **conv_kwargs):
+                 dropout_rate=0, dropout_variant=None, use_1x1conv=False, 
+                 name=None, **conv_kwargs):
         super().__init__(filters, strides, ks_cl1, ks_cl2, activation, 
                          normalization, attention, dropout_rate, 
                          dropout_variant, name=name, **conv_kwargs)
+        self.use_1x1conv = use_1x1conv
+        if self.use_1x1conv:
+            self.conv1x1 = Conv2D(filters, kernel_size=1, strides=1)
 
     def call(self, X):
         Y = self.dropout1(X) if self.apply_dropout else X
@@ -152,6 +155,8 @@ class ResidualBlock(ConvBlock):
             Y = self.norm2(Y)
         if self.attention:
             Y = self.att(Y)
+        if self.use_1x1conv:
+            X = self.conv1x1(X)
         Y += X
         Y = self.activation(Y)
         return Y
