@@ -119,6 +119,87 @@ class ConvBlock(tf.keras.layers.Layer):
         return Y
 
 
+class DropPath(tf.keras.layers.Layer):
+    """
+    Drop path layer. 
+
+    Adapted from 
+    https://github.com/rishigami/Swin-Transformer-TF/blob/main/swintransformer/model.py
+    """
+    def __init__(self, drop_prob=None):
+        super().__init__()
+        self.drop_prob = drop_prob
+
+    def call(self, x, training=False):
+        if (not training) or (self.drop_prob == 0.):
+            return x
+
+        keep_prob = 1.0 - self.drop_prob    # Compute keep_prob
+
+        random_tensor = keep_prob   # Compute drop_connect tensor
+        shape = (tf.shape(x)[0],) + (1,) * (len(tf.shape(x)) - 1)
+        random_tensor += tf.random.uniform(shape, dtype=x.dtype)
+        binary_tensor = tf.floor(random_tensor)
+        output = tf.math.divide(x, keep_prob) * binary_tensor
+        return output
+
+
+class ConvNextBlock(tf.keras.layers.Layer): 
+    """
+    ConvNext block.
+
+    References
+    ----------
+    [1] A ConvNext for the 2020s: https://arxiv.org/abs/2201.03545 
+    """
+    def __init__(self, filters, drop_path=0., layer_scale_init_value=0, #1e-6 
+                 use_1x1conv=False, activation='gelu', normalization='ln', 
+                 name=None, **conv_kwargs):
+        super().__init__(name=name)
+        self.filters = filters
+        self.drop_path = drop_path
+        self.layer_scale_init_value = layer_scale_init_value
+        self.dwconv = DepthwiseConv2D(kernel_size=7, padding='same', 
+                                      depth_multiplier=1, **conv_kwargs)
+        self.normalization = normalization
+        self.pwconv1 = Dense(4 * self.filters)
+        self.activation = Activation(activation)
+        self.drop_path = DropPath(drop_path)
+        self.pwconv2 = Dense(self.filters)
+        self.use_1x1conv = use_1x1conv
+
+        if self.normalization is not None:
+            if self.normalization not in ['bn', 'ln']:
+                raise ValueError(f'Normalization not supported, got {self.normalization}')
+        if self.normalization == 'bn':
+            self.norm = BatchNormalization()
+        elif self.normalization == 'ln':
+            self.norm = LayerNormalization(epsilon=1e-6)
+
+        if self.use_1x1conv:
+            self.conv1x1 = Conv2D(self.filters, kernel_size=1, strides=1)
+
+    def build(self, input_shape):
+        self.gamma = tf.Variable(
+            initial_value=self.layer_scale_init_value * tf.ones((self.filters)),
+            trainable=True, name='gamma') if self.layer_scale_init_value > 0 else None
+        self.built = True
+
+    def call(self, x):
+        input = x
+        x = self.dwconv(x)
+        x = self.norm(x)
+        x = self.pwconv1(x)
+        x = self.activation(x)
+        x = self.pwconv2(x)
+        if self.gamma is not None:
+            x = self.gamma * x
+        if self.use_1x1conv:
+            input = self.conv1x1(input)
+        x = input + self.drop_path(x)
+        return x
+
+
 class ResidualBlock(ConvBlock): 
     """
     Residual block. 
@@ -221,8 +302,8 @@ class TransitionBlock(tf.keras.layers.Layer):
         https://arxiv.org/abs/1608.06993
     """
     def __init__(self, filters, activation='relu', normalization=None, 
-                 name_suffix='', **kwargs):
-        super().__init__(name='Transition' + name_suffix, **kwargs)
+                 name=None, **kwargs):
+        super().__init__(name=name, **kwargs)
         if normalization is not None and normalization == 'bn':
             self.batch_norm = BatchNormalization()
         else:
