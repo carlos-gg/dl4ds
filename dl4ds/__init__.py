@@ -1,8 +1,9 @@
-__version__ = "1.2.0"
+__version__ = "1.3.0"
 
 BACKBONE_BLOCKS = ['convnet',       # plain convolutional block w/o skip connections
                    'resnet',        # residual convolutional blocks
-                   'densenet']      # dense convolutional blocks
+                   'densenet',      # dense convolutional blocks
+                   'convnext']      # convnext style residual blocks
 PREFIX_SAMPLE_TYPE = ['', 'rec']
 NETS = [p + b for p in PREFIX_SAMPLE_TYPE for b in BACKBONE_BLOCKS]
 UPSAMPLING_METHODS = ['spc',        # pixel shuffle or subpixel convolution in post-upscaling
