@@ -5,7 +5,7 @@ from tensorflow.keras.models import Model
 
 from .blocks import (ResidualBlock, ConvBlock, DeconvolutionBlock,
                      DenseBlock, TransitionBlock, SubpixelConvolutionBlock,
-                     LocalizedConvBlock, choose_dropout_layer)
+                     LocalizedConvBlock, choose_dropout_layer, ConvNextBlock)
 from ..utils import (checkarg_backbone, checkarg_upsampling, 
                     checkarg_dropout_variant)
 
@@ -66,47 +66,67 @@ def net_postupsampling(
         x_in = Input(shape=(None, None, n_channels))
     else:
         x_in = Input(shape=(h_lr, w_lr, n_channels))
-    x = b = Conv2D(n_filters, (3, 3), padding='same')(x_in)
-    
-    #---------------------------------------------------------------------------
-    # N conv blocks
-    for i in range(n_blocks):
-        if backbone_block == 'convnet':
-            b = ConvBlock(
-                n_filters, activation=activation, dropout_rate=dropout_rate, 
-                dropout_variant=dropout_variant, normalization=normalization, 
-                attention=attention)(b)
-        elif backbone_block == 'resnet':
-            b = ResidualBlock(
-                n_filters, activation=activation, dropout_rate=dropout_rate, 
-                dropout_variant=dropout_variant, normalization=normalization, 
-                attention=attention)(b)
-        elif backbone_block == 'densenet':
-            b = DenseBlock(
-                n_filters, activation=activation, dropout_rate=dropout_rate, 
-                dropout_variant=dropout_variant, normalization=normalization, 
-                attention=attention)(b)
-            b = TransitionBlock(n_filters // 2)(b)  # another option: half of the DenseBlock channels
-    b = Conv2D(n_filters, (3, 3), padding='same', activation=activation)(b)
-    
-    b = choose_dropout_layer(b, dropout_rate, dropout_variant)
 
-    if backbone_block == 'convnet':
-        x = b
-    elif backbone_block == 'resnet':
-        x = Add()([x, b])
-    elif backbone_block == 'densenet':
-        x = Concatenate()([x, b])
+    init_n_filters = n_filters
+    #---------------------------------------------------------------------------
+    # Backbone section    
+    if backbone_block == 'convnext':
+        ks = (7, 7)      
+        x = Conv2D(n_filters, ks, padding='same')(x_in)
+        # N convnext blocks
+        for i in range(n_blocks):
+            n_filters = init_n_filters * (i + 1)
+            x = ConvNextBlock(
+                filters=n_filters, drop_path=0, normalization=normalization, 
+                use_1x1conv=False if i == 0 else True, activation=activation,
+                name='ConvNextBlock' + str(i+1))(x)
+    else:
+        ks = (3, 3)
+        x = b = Conv2D(n_filters, ks, padding='same')(x_in)
+        # N conv blocks
+        for i in range(n_blocks):
+            n_filters = init_n_filters * (i + 1)
+            if backbone_block == 'convnet':
+                b = ConvBlock(
+                    n_filters, activation=activation, dropout_rate=dropout_rate, 
+                    dropout_variant=dropout_variant, normalization=normalization,
+                    attention=attention, name='ConvBlock' + str(i+1))(b)
+            elif backbone_block == 'resnet':
+                b = ResidualBlock(
+                    n_filters, activation=activation, dropout_rate=dropout_rate, 
+                    dropout_variant=dropout_variant, normalization=normalization, 
+                    use_1x1conv=False if i == 0 else True, attention=attention, 
+                    name='ResidualBlock' + str(i+1))(b)
+            elif backbone_block == 'densenet':
+                b = DenseBlock(
+                    n_filters, activation=activation, dropout_rate=dropout_rate, 
+                    dropout_variant=dropout_variant, normalization=normalization, 
+                    attention=attention, name='DenseBlock' + str(i+1))(b)
+                b = TransitionBlock(b.get_shape()[-1] // 2, 
+                                    name='Transition' + str(i+1))(b)  
+        b = Conv2D(n_filters, ks, padding='same', activation=activation)(b)
+        
+        b = choose_dropout_layer(b, dropout_rate, dropout_variant)
+
+        if backbone_block == 'convnet':
+            x = b
+        elif backbone_block == 'resnet':
+            x = TransitionBlock(n_filters, activation=activation)(x)
+            x = Add()([x, b])
+        elif backbone_block == 'densenet':
+            x = Concatenate()([x, b])
+            x = TransitionBlock(n_filters, activation=activation)(x)
     
     #---------------------------------------------------------------------------
     # Upsampling
     model_name = backbone_block + '_' + upsampling
     if upsampling == 'spc':
         x = SubpixelConvolutionBlock(scale, n_filters)(x)
-        x = Conv2D(n_filters, (3, 3), padding='same', activation=activation)(x)
+        x = TransitionBlock(init_n_filters, activation=activation, 
+                            name='TransitionSPC')(x)
     elif upsampling == 'rc':
         x = UpSampling2D(scale, interpolation='bilinear')(x)
-        x = Conv2D(n_filters, (3, 3), padding='same', activation=activation)(x)
+        x = Conv2D(n_filters, ks, padding='same', activation=activation)(x)
     elif upsampling == 'dc':
         x = DeconvolutionBlock(scale, n_filters, activation)(x)
     
@@ -119,19 +139,31 @@ def net_postupsampling(
     #---------------------------------------------------------------------------
     # HR aux channels are processed
     if auxvar_array_is_given:
-        s = ConvBlock(n_filters, activation=activation, dropout_rate=0, 
-            normalization=normalization, attention=False)(s_in) 
+        if backbone_block == 'convnext':
+            s = ConvNextBlock(
+                filters=n_filters, drop_path=0, normalization=normalization, 
+                use_1x1conv=True, activation=activation, 
+                name='ConvNextBlock_aux')(s_in)
+        else:
+            s = ConvBlock(
+                filters=n_filters, activation=activation, dropout_rate=0, 
+                normalization=normalization, attention=False,
+                name='ConvBlock_aux')(s_in) 
         x = Concatenate()([x, s])   
     
     #---------------------------------------------------------------------------
     # Last conv layers
-    x = ConvBlock(n_filters, activation=None, dropout_rate=dropout_rate, 
-        normalization=normalization, attention=True)(x)  
+    x = TransitionBlock(init_n_filters, name='TransitionLast')(x)
+    x = ConvBlock(
+        init_n_filters, ks_cl1=ks, ks_cl2=ks, activation=None, 
+        dropout_rate=dropout_rate, normalization=normalization, attention=True)(x)  
 
-    x = ConvBlock(n_channels_out, activation=output_activation, dropout_rate=0, 
-        normalization=normalization, attention=False)(x) 
+    x = ConvBlock(
+        n_channels_out, ks_cl1=ks, ks_cl2=ks, activation=output_activation, 
+        dropout_rate=0, normalization=normalization, attention=False)(x) 
 
     if auxvar_array_is_given:
         return Model(inputs=[x_in, s_in], outputs=x, name=model_name)  
     else:
         return Model(inputs=[x_in], outputs=x, name=model_name)  
+
