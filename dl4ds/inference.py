@@ -5,7 +5,7 @@ import xarray as xr
 import tensorflow as tf
 
 from .utils import Timing, checkarray_ndim, resize_array
-from . import SPATIAL_MODELS, SPATIOTEMP_MODELS, POSTUPSAMPLING_METHODS
+from . import SPATIOTEMP_MODELS
 from .dataloader import create_batch_hr_lr
 from .training import CGANTrainer, SupervisedTrainer
 
@@ -21,6 +21,7 @@ def predict(
     time_window=None,
     time_metadata=None,
     interpolation='inter_area', 
+    batch_size=64,
     save_path=None,
     save_fname='y_hat.npy',
     return_lr=False,
@@ -142,8 +143,9 @@ def predict(
     
     ### Inference --------------------------------------------------------------
     with tf.device('/' + device + ':0'):
-        x_test_pred = model(inputs, training=False)
-        x_test_pred = x_test_pred.numpy()
+        # https://www.tensorflow.org/api_docs/python/tf/keras/Model#predict
+        x_test_pred = model.predict(inputs, batch_size=batch_size, verbose=1)
+        x_test_pred = x_test_pred
     
     if save_path is not None and save_fname is not None:
         name = os.path.join(save_path, save_fname)
