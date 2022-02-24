@@ -200,8 +200,8 @@ def compute_metrics(
     nmeanbias /= np.mean(y_test) * 100
     mask_nan = mask.astype('float').copy()
     mask_nan[mask == 0] = np.nan
-    meanbias *= mask_nan
-    mean_nmeanbias = np.nanmean(meanbias)
+    nmeanbias *= mask_nan
+    mean_nmeanbias = np.nanmean(nmeanbias)
     subpti = f'NMBias map ($\mu$ = {mean_nmeanbias:.6f})'
     if save_path is not None:
         savepath = os.path.join(save_path, 'metrics_nmeanbias_map.png')
