@@ -1,15 +1,15 @@
-import cv2
 import tensorflow as tf
 import numpy as np
+import xarray as xr
 from joblib import Parallel, delayed
-from matplotlib import interactive, pyplot as plt
+from matplotlib import pyplot as plt
 from sklearn.metrics import mean_squared_error
 from scipy.stats import spearmanr, pearsonr
 import os
 import seaborn as sns
 import ecubevis as ecv
 
-from .utils import resize_array
+from .utils import checkarray_ndim, Timing
 
 
 def compute_rmse(y, y_hat, over='time', squared=False, n_jobs=40):
@@ -32,6 +32,7 @@ def compute_rmse(y, y_hat, over='time', squared=False, n_jobs=40):
     #---------------------------------------------------------------------------
     if over == 'time':
         rmse_map = np.zeros_like(y[0,:,:,0]) 
+        rmse_map *= np.nan
         yy, xx = np.where(y[0,:,:,0])
         coords = zip(yy, xx)
         out = Parallel(n_jobs=n_jobs, verbose=False)(delayed(rmse_per_px)(i) for i in coords) 
@@ -71,6 +72,7 @@ def compute_correlation(y, y_hat, over='time', mode='spearman', n_jobs=40):
     #---------------------------------------------------------------------------
     if over == 'time':
         corrmap = np.zeros_like(y[0,:,:,0]) 
+        corrmap *= np.nan
         yy, xx = np.where(y[0,:,:,0])
         coords = zip(yy, xx)
         out = Parallel(n_jobs=n_jobs, verbose=False)(delayed(corr_per_px)(i) for i in coords) 
@@ -99,6 +101,7 @@ def compute_metrics(
     y_test, 
     y_test_hat, 
     dpi=150, 
+    plot_size_px=1000,
     n_jobs=40, 
     scaler=None, 
     mask=None,
@@ -120,20 +123,28 @@ def compute_metrics(
     scaler : scaler object
         Scaler object from preprocessing module. 
     mask : np.ndarray or None
-        Mask with valid grid points.
+        Binary mask with valid (ones) and non-valid (zeroes) grid points.
     save_path : str or None, optional
         Path to save results to disk. 
         
     """
+    timing = Timing()
+
     if y_test.ndim == 5:
         y_test = np.squeeze(y_test, -1)
         y_test_hat = np.squeeze(y_test_hat, -1)
+
+    y_test = checkarray_ndim(y_test, 4, -1)
+    y_test_hat = checkarray_ndim(y_test_hat, 4, -1)
 
     # backward transformation with the provided scaler
     if scaler is not None:
         if hasattr(scaler, 'inverse_transform'):
             y_test = scaler.inverse_transform(y_test)
             y_test_hat = scaler.inverse_transform(y_test_hat)
+
+    if mask is not None and isinstance(mask, xr.DataArray):
+        mask = mask.values
 
     # applying valid grid points mask
     if mask is not None:
@@ -170,26 +181,42 @@ def compute_metrics(
     temp_rmse_map = compute_rmse(y_test, y_test_hat, n_jobs=n_jobs, over='time')
     spatial_rmse = compute_rmse(y_test, y_test_hat, n_jobs=n_jobs, over='space')
     if save_path is not None:
-        np.save(os.path.join(save_path, 'mse_pergridpair.npy'), spatial_rmse)
+        np.save(os.path.join(save_path, 'metrics_mse_pergridpair.npy'), spatial_rmse)
     mean_spatial_rmse = np.mean(spatial_rmse)
     std_spatial_rmse = np.std(spatial_rmse)
-    mean_temp_rmse = np.mean(temp_rmse_map)
-    std_temp_rmse = np.std(temp_rmse_map)
-
+    mean_temp_rmse = np.nanmean(temp_rmse_map)
+    std_temp_rmse = np.nanstd(temp_rmse_map)
     subpti = f'RMSE map ($\mu$ = {mean_temp_rmse:.6f})'
     if save_path is not None:
-        savepath = os.path.join(save_path, 'rmse.png')
+        savepath = os.path.join(save_path, 'metrics_temprmse_map.png')
     else:
         savepath = None
     ecv.plot_ndarray(temp_rmse_map, dpi=dpi, subplot_titles=(subpti), cmap='viridis', 
-                     plot_size_px=800, interactive=False, save=savepath)
+                     plot_size_px=plot_size_px, interactive=False, save=savepath)
+    np.save(os.path.join(save_path, 'metrics_temprmse_map.npy'), temp_rmse_map)
+
+    # Normalized mean bias
+    nmeanbias = np.mean(y_test_hat - y_test, axis=0)
+    nmeanbias /= np.mean(y_test) * 100
+    mask_nan = mask.astype('float').copy()
+    mask_nan[mask == 0] = np.nan
+    meanbias *= mask_nan
+    mean_nmeanbias = np.nanmean(meanbias)
+    subpti = f'NMBias map ($\mu$ = {mean_nmeanbias:.6f})'
+    if save_path is not None:
+        savepath = os.path.join(save_path, 'metrics_nmeanbias_map.png')
+    else:
+        savepath = None
+    ecv.plot_ndarray(nmeanbias, dpi=dpi, subplot_titles=(subpti), cmap='viridis', 
+                     plot_size_px=plot_size_px, interactive=False, save=savepath)
+    np.save(os.path.join(save_path, 'metrics_nmeanbias_map.npy'), nmeanbias)
 
     ### Spearman correlation coefficient
     spatial_spearman_corr = compute_correlation(y_test, y_test_hat, n_jobs=n_jobs, over='space')
     mean_spatial_spearman_corr = np.mean(spatial_spearman_corr)
     std_spatial_spearman_corr = np.std(spatial_spearman_corr)
     if save_path is not None:
-        np.save(os.path.join(save_path, 'spearcorr_pergridpair.npy'), spatial_spearman_corr)
+        np.save(os.path.join(save_path, 'metrics_spearcorr_pergridpair.npy'), spatial_spearman_corr)
     temp_spearman_corrmap = compute_correlation(y_test, y_test_hat, n_jobs=n_jobs)
     mean_temp_spcorr = np.mean(temp_spearman_corrmap)
     subpti = f'Spearman correlation map ($\mu$ = {mean_temp_spcorr:.6f})'
@@ -199,16 +226,18 @@ def compute_metrics(
     mean_spatial_pearson_corr = np.mean(spatial_pearson_corr)
     std_spatial_pearson_corr = np.std(spatial_pearson_corr)
     if save_path is not None:
-        np.save(os.path.join(save_path, 'pearcorr_pergridpair.npy'), spatial_pearson_corr)
-    pearson_corrmap = compute_correlation(y_test, y_test_hat, mode='pearson', n_jobs=n_jobs)
-    mean_pecorr = np.mean(pearson_corrmap)
-    subpti = f'Pearson correlation map ($\mu$ = {mean_pecorr:.6f})'
+        np.save(os.path.join(save_path, 'metrics_pearcorr_pergridpair.npy'), spatial_pearson_corr)
+    temp_pearson_corrmap = compute_correlation(y_test, y_test_hat, mode='pearson', n_jobs=n_jobs)
+    mean_temp_pearson_corr = np.nanmean(temp_pearson_corrmap)
+    std_temp_pearson_corr = np.nanstd(temp_pearson_corrmap)
+    subpti = f'Pearson correlation map ($\mu$ = {mean_temp_pearson_corr:.6f})'
     if save_path is not None:
-        savepath = os.path.join(save_path, 'corr_pears.png')
+        savepath = os.path.join(save_path, 'metrics_tempcorrpears_map.png')
     else:
         savepath = None
-    ecv.plot_ndarray(pearson_corrmap, dpi=dpi, subplot_titles=(subpti), cmap='magma', 
-                     plot_size_px=800, interactive=False, save=savepath)
+    ecv.plot_ndarray(temp_pearson_corrmap, dpi=dpi, subplot_titles=(subpti), cmap='magma', 
+                     plot_size_px=plot_size_px, interactive=False, save=savepath)
+    np.save(os.path.join(save_path, 'metrics_tempcorrpears_map.npy'), temp_pearson_corrmap)
     
     ### Plotting violin plots: http://seaborn.pydata.org/tutorial/aesthetics.html
     sns.set_style("whitegrid") #{"axes.facecolor": ".9"}
@@ -244,7 +273,7 @@ def compute_metrics(
 
     f.tight_layout()
     if save_path is not None: 
-        plt.savefig(os.path.join(save_path, 'violin_plots.png'))
+        plt.savefig(os.path.join(save_path, 'metrics_violin_plots.png'))
         plt.close()
     else:
         plt.show()
@@ -252,7 +281,7 @@ def compute_metrics(
     sns.set_style("white")
 
     if save_path is not None: 
-        f = open(os.path.join(save_path, 'metrics.txt'), "a")
+        f = open(os.path.join(save_path, 'metrics_summary.txt'), "a")
     else:
         f = None
 
@@ -261,8 +290,8 @@ def compute_metrics(
     print(f'SSIM \tmu = {mean_ssim} \tsigma = {std_ssim}', file=f)
     print(f'MAE \tmu = {mean_mae} \tsigma = {std_mae}', file=f)
     print(f'Temporal RMSE \tmu = {mean_temp_rmse} \tsigma = {std_temp_rmse}', file=f)
-    print(f'Temporal Spearman correlation \tmu = {mean_spatial_spearman_corr}', file=f)
-    print(f'Temporal Pearson correlation \tmu = {mean_spatial_pearson_corr}', file=f)
+    print(f'Temporal Spearman correlation \tmu = {mean_spatial_spearman_corr} \tsigma = {std_spatial_spearman_corr}', file=f)
+    print(f'Temporal Pearson correlation \tmu = {mean_temp_pearson_corr} \tsigma = {std_temp_pearson_corr}', file=f)
     print(file=f)
     print(f'Spatial MSE \tmu = {mean_spatial_rmse} \tsigma = {std_spatial_rmse}', file=f)
     print(f'Spatial Spearman correlation \tmu = {mean_spatial_spearman_corr} \tsigma = {std_spatial_spearman_corr}', file=f)
@@ -271,103 +300,6 @@ def compute_metrics(
     if save_path is not None:
         f.close()
 
-    return (temp_rmse_map, pearson_corrmap), (spatial_rmse, spatial_pearson_corr)
-
-
-def plot_sample(model, lr_image, topography=None, landocean=None, 
-                predictors=None, dpi=150, scale=None, save_path=None, plot=True):
-    """
-    Check the model prediction for a single LR image/grid. 
-    """
-    def check_image_dims_for_inference(image):
-        """ Output is a 4d array, where first and last are unitary """
-        image = np.squeeze(image)
-        image = np.expand_dims(np.asarray(image, "float32"), axis=-1)
-        image = np.expand_dims(image, 0)
-        return image
-    
-    model_architecture = model.name
-    if model_architecture  in ['resnet_spc', 'resnet_rc']:
-        input_image = check_image_dims_for_inference(lr_image)
-        
-        # expecting a 3d ndarray, [lat, lon, variables]
-        if predictors is not None:
-            predictors = np.expand_dims(predictors, 0)
-            input_image = np.concatenate([input_image, predictors], axis=3)
-        if topography is not None: 
-            topography = cv2.resize(topography, (input_image.shape[2], 
-                                    input_image.shape[1]), 
-                                    interpolation=cv2.INTER_CUBIC)
-            topography = check_image_dims_for_inference(topography)
-            input_image = np.concatenate([input_image, topography], axis=3)
-        if landocean is not None: 
-            landocean = cv2.resize(landocean, (input_image.shape[2], 
-                                  input_image.shape[1]), 
-                                  interpolation=cv2.INTER_NEAREST)
-            landocean = check_image_dims_for_inference(landocean)
-            input_image = np.concatenate([input_image, landocean], axis=3)
-        
-        pred_image = model.predict(input_image)
-    
-    elif model_architecture == 'resnet_bi':
-        if scale is None:
-            raise ValueError('`scale` must be set for `rint` model')
-        lr_y, lr_x = np.squeeze(lr_image).shape    
-        hr_x = int(lr_x * scale)
-        hr_y = int(lr_y * scale) 
-        # upscaling the lr image via interpolation
-        input_image = cv2.resize(np.squeeze(lr_image), (hr_x, hr_y), interpolation=cv2.INTER_CUBIC)
-        input_image = check_image_dims_for_inference(input_image)
-        if predictors is not None:
-            predictors = np.expand_dims(predictors, 0)
-            predictors = cv2.resize(np.squeeze(predictors), (hr_x, hr_y), interpolation=cv2.INTER_CUBIC)
-            predictors = np.expand_dims(predictors, 0)
-            input_image = np.concatenate([input_image, predictors], axis=3)
-        if topography is not None: 
-            topography = check_image_dims_for_inference(topography)
-            input_image = np.concatenate([input_image, topography], axis=3)
-        if landocean is not None:
-            landocean = check_image_dims_for_inference(landocean)
-            input_image = np.concatenate([input_image, landocean], axis=3)
-        pred_image = model.predict(input_image)
-
-    if plot:
-        if save_path is not None:
-            savepath = os.path.join(save_path, 'sample_nogt.png')
-        else:
-            savepath = None
-
-        ecv.plot_ndarray((np.squeeze(lr_image), np.squeeze(pred_image)), interactive=False, 
-                        subplot_titles=('LR image', 'SR image'), dpi=dpi, plot_size_px=800,
-                        horizontal_padding=0.2, save=savepath)
-    return pred_image
-
-
-def plot_sample_with_gt(model, hr_image, scale, topography=None, landocean=None,
-                        predictors=None, dpi=150, interpolation='bicubic', 
-                        save_path=None):
-    """ """
-    hr_image = np.squeeze(hr_image)
-    hr_y, hr_x = hr_image.shape
-    lr_x = int(hr_x / scale)
-    lr_y = int(hr_y / scale)
-    lr_image = resize_array(hr_image, (lr_x, lr_y), interpolation)
-    pred_image = plot_sample(model, lr_image, topography=topography, 
-                            predictors=predictors, landocean=landocean, 
-                            scale=scale, plot=False)
-    residuals = hr_image - np.squeeze(pred_image)
-    half_range = (hr_image.max() - hr_image.min()) / 2
-
-    if save_path is not None:
-        savepath = os.path.join(save_path, 'sample_gt.png')
-    else:
-        savepath = None
-    ecv.plot_ndarray((np.squeeze(lr_image), np.squeeze(pred_image), hr_image, residuals), 
-                     interactive=False, dpi=dpi, show_axis=False, 
-                     subplot_titles=('LR image', 'SR image (Yhat)', 
-                                     'Ground truth (GT)', 'Residuals (GT - Yhat)'), 
-                     save=savepath, horizontal_padding=0.1, plot_size_px=800)
-    return pred_image
-
-
+    timing.runtime()
+    return temp_rmse_map, temp_pearson_corrmap, nmeanbias
 
