@@ -127,7 +127,7 @@ class MinMaxScaler(TransformerMixin, BaseEstimator):
         """
         check_is_fitted(self)
 
-        if self.copy():
+        if self.copy:
             X = X.copy()
 
         ### restoring nan mask
@@ -263,7 +263,7 @@ class StandardScaler(TransformerMixin, BaseEstimator):
         """
         check_is_fitted(self)
 
-        if self.copy():
+        if self.copy:
             X = X.copy()
 
         ### restoring nan mask
@@ -274,7 +274,7 @@ class StandardScaler(TransformerMixin, BaseEstimator):
                 X.values[self.nan_mask] = np.nan
 
         if self.with_std:
-            X *= self.scale_
+            X *= self.std_
         if self.with_mean:
             X += self.mean_
         return X
