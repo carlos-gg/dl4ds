@@ -42,10 +42,10 @@ def recnet_pin(
     else:
         x_in = Input(shape=(None, h_hr, w_hr, n_channels))
    
-    x = b = RecurrentConvBlock(
-        n_filters, 
-        activation=activation, 
-        normalization=normalization)(x_in)
+    init_n_filters = n_filters
+
+    x = b = RecurrentConvBlock(n_filters, activation=activation, 
+                               normalization=normalization)(x_in)
 
     for i in range(n_blocks):
         if backbone_block == 'convnet':
@@ -94,7 +94,8 @@ def recnet_pin(
 
     #---------------------------------------------------------------------------
     # Last conv layers
-    x = ConvBlock(n_filters, activation=None, dropout_rate=dropout_rate, 
+    x = TransitionBlock(init_n_filters, name='TransitionLast')(x)
+    x = ConvBlock(init_n_filters, activation=None, dropout_rate=dropout_rate, 
         normalization=normalization, attention=True)(x)  
 
     x = ConvBlock(n_channels_out, activation=output_activation, dropout_rate=0, 

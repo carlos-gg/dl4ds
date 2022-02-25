@@ -5,7 +5,7 @@ from tensorflow.keras.models import Model
 
 from .blocks import (RecurrentConvBlock, ConvBlock, SubpixelConvolutionBlock, 
                      DeconvolutionBlock, LocalizedConvBlock, 
-                     choose_dropout_layer)
+                     choose_dropout_layer, TransitionBlock)
 from ..utils import (checkarg_backbone, checkarg_upsampling, 
                     checkarg_dropout_variant)
 
@@ -100,6 +100,7 @@ def recnet_postupsampling(
 
     #---------------------------------------------------------------------------
     # Last conv layers
+    x = TransitionBlock(x.get_shape()[-1] // 2, name='TransitionLast')(x)
     x = ConvBlock(n_filters, activation=None, dropout_rate=dropout_rate, 
         normalization=normalization, attention=True)(x)  
 
