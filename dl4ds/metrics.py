@@ -188,12 +188,25 @@ def compute_metrics(
     std_temp_rmse = np.nanstd(temp_rmse_map)
     subpti = f'RMSE map ($\mu$ = {mean_temp_rmse:.6f})'
     if save_path is not None:
-        savepath = os.path.join(save_path, 'metrics_temprmse_map.png')
+        savepath = os.path.join(save_path, 'metrics_pergridpoint_rmse_map.png')
     else:
         savepath = None
     ecv.plot_ndarray(temp_rmse_map, dpi=dpi, subplot_titles=(subpti), cmap='viridis', 
                      plot_size_px=plot_size_px, interactive=False, save=savepath)
-    np.save(os.path.join(save_path, 'metrics_temprmse_map.npy'), temp_rmse_map)
+    np.save(os.path.join(save_path, 'metrics_pergridpoint_rmse_map.npy'), temp_rmse_map)
+
+    ### Normalized per grid point RMSE 
+    norm_temp_rmse_map = temp_rmse_map / (np.mean(y_test) * 100)
+    norm_mean_temp_rmse = np.nanmean(norm_temp_rmse_map)
+    norm_std_temp_rmse = np.nanstd(norm_temp_rmse_map)
+    subpti = f'nRMSE map ($\mu$ = {norm_mean_temp_rmse:.6f})'
+    if save_path is not None:
+        savepath = os.path.join(save_path, 'metrics_pergridpoint_nrmse_map.png')
+    else:
+        savepath = None
+    ecv.plot_ndarray(norm_temp_rmse_map, dpi=dpi, subplot_titles=(subpti), cmap='viridis', 
+                     plot_size_px=plot_size_px, interactive=False, save=savepath)
+    np.save(os.path.join(save_path, 'metrics_pergridpoint_nrmse_map.npy'), norm_temp_rmse_map)
 
     # Normalized mean bias
     nmeanbias = np.mean(y_test_hat - y_test, axis=0)
@@ -232,12 +245,12 @@ def compute_metrics(
     std_temp_pearson_corr = np.nanstd(temp_pearson_corrmap)
     subpti = f'Pearson correlation map ($\mu$ = {mean_temp_pearson_corr:.6f})'
     if save_path is not None:
-        savepath = os.path.join(save_path, 'metrics_tempcorrpears_map.png')
+        savepath = os.path.join(save_path, 'metrics_pergridpoint_corrpears_map.png')
     else:
         savepath = None
     ecv.plot_ndarray(temp_pearson_corrmap, dpi=dpi, subplot_titles=(subpti), cmap='magma', 
                      plot_size_px=plot_size_px, interactive=False, save=savepath)
-    np.save(os.path.join(save_path, 'metrics_tempcorrpears_map.npy'), temp_pearson_corrmap)
+    np.save(os.path.join(save_path, 'metrics_pergridpoint_corrpears_map.npy'), temp_pearson_corrmap)
     
     ### Plotting violin plots: http://seaborn.pydata.org/tutorial/aesthetics.html
     sns.set_style("whitegrid") #{"axes.facecolor": ".9"}
@@ -289,9 +302,10 @@ def compute_metrics(
     print(f'PSNR \tmu = {mean_psnr} \tsigma = {std_psnr}', file=f)
     print(f'SSIM \tmu = {mean_ssim} \tsigma = {std_ssim}', file=f)
     print(f'MAE \tmu = {mean_mae} \tsigma = {std_mae}', file=f)
-    print(f'Temporal RMSE \tmu = {mean_temp_rmse} \tsigma = {std_temp_rmse}', file=f)
-    print(f'Temporal Spearman correlation \tmu = {mean_spatial_spearman_corr} \tsigma = {std_spatial_spearman_corr}', file=f)
-    print(f'Temporal Pearson correlation \tmu = {mean_temp_pearson_corr} \tsigma = {std_temp_pearson_corr}', file=f)
+    print(f'Per-grid-point RMSE \tmu = {mean_temp_rmse} \tsigma = {std_temp_rmse}', file=f)
+    print(f'Per-grid-point nRMSE \tmu = {norm_mean_temp_rmse} \tsigma = {norm_std_temp_rmse}', file=f)
+    print(f'Per-grid-point Spearman correlation \tmu = {mean_spatial_spearman_corr} \tsigma = {std_spatial_spearman_corr}', file=f)
+    print(f'Per-grid-point Pearson correlation \tmu = {mean_temp_pearson_corr} \tsigma = {std_temp_pearson_corr}', file=f)
     print(file=f)
     print(f'Spatial MSE \tmu = {mean_spatial_rmse} \tsigma = {std_spatial_rmse}', file=f)
     print(f'Spatial Spearman correlation \tmu = {mean_spatial_spearman_corr} \tsigma = {std_spatial_spearman_corr}', file=f)
