@@ -40,7 +40,7 @@ def checkarg_model(model, model_list=MODELS):
     """ """
     if not isinstance(model, str) or model not in model_list:
         msg = f'`model` not recognized. Must be one of the '
-        msg += 'following: {model_list}. Got {model}'
+        msg += f'following: {model_list}. Got {model}'
         raise ValueError(msg)
     else:
         return model

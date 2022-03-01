@@ -26,8 +26,8 @@ def predict(
     save_fname='y_hat.npy',
     return_lr=False,
     device='GPU'):
-    """Inference with ``model`` on ``array``, which is super-resolved/downscaled 
-    using the trained super-resolution network. 
+    """Inference with ``model`` on a data ``array``. The data is 
+    super-resolved/downscaled using the trained super-resolution network. 
 
     Parameters
     ----------
