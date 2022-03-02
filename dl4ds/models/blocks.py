@@ -6,7 +6,7 @@ from tensorflow.keras.layers import (Add, Conv2D, ConvLSTM2D, Concatenate,
                                      SpatialDropout2D, Conv2DTranspose, 
                                      SpatialDropout3D, LocallyConnected2D,
                                      ZeroPadding2D, MaxPooling2D, 
-                                     DepthwiseConv2D, Dense)
+                                     DepthwiseConv2D, Dense, Lambda)
 from ..utils import checkarg_dropout_variant
 
 
@@ -76,27 +76,11 @@ class ConvBlock(tf.keras.layers.Layer):
         
         self.apply_dropout = False
         if self.dropout_rate > 0:
-            self.dropout_variant = checkarg_dropout_variant(self.dropout_variant)
+            self.dropout1 = get_dropout_layer(
+                self.dropout_rate, self.dropout_variant, dim=2)
+            self.dropout2 = get_dropout_layer(
+                self.dropout_rate, self.dropout_variant, dim=2)
             self.apply_dropout = True
-
-            if self.dropout_variant is None:
-                self.dropout1 = Dropout(self.dropout_rate)
-                self.dropout2 = Dropout(self.dropout_rate)
-            elif self.dropout_variant == 'spatial':
-                self.dropout1 = SpatialDropout2D(self.dropout_rate)
-                self.dropout2 = SpatialDropout2D(self.dropout_rate)
-            elif self.dropout_variant == 'gaussian':
-                self.dropout1 = GaussianDropout(self.dropout_rate)
-                self.dropout2 = GaussianDropout(self.dropout_rate)
-            elif self.dropout_variant == 'mcdrop':
-                self.dropout1 = MCDropout(self.dropout_rate)
-                self.dropout2 = MCDropout(self.dropout_rate)
-            elif self.dropout_variant == 'mcgaussiandrop':
-                self.dropout1 = MCGaussianDropout(self.dropout_rate)
-                self.dropout2 = MCGaussianDropout(self.dropout_rate)
-            elif self.dropout_variant == 'mcspatialdrop':
-                self.dropout1 = MCSpatialDropout2D(self.dropout_rate)
-                self.dropout2 = MCSpatialDropout2D(self.dropout_rate)
         else:
             self.apply_dropout = False
 
@@ -382,27 +366,11 @@ class RecurrentConvBlock(tf.keras.layers.Layer):
 
         self.apply_dropout = False
         if self.dropout_rate > 0:
-            self.dropout_variant = checkarg_dropout_variant(self.dropout_variant)
+            self.dropout1 = get_dropout_layer(
+                self.dropout_rate, self.dropout_variant, dim=3)
+            self.dropout2 = get_dropout_layer(
+                self.dropout_rate, self.dropout_variant, dim=3)            
             self.apply_dropout = True
-
-            if self.dropout_variant is None:
-                self.dropout1 = Dropout(self.dropout_rate)
-                self.dropout2 = Dropout(self.dropout_rate)
-            elif self.dropout_variant == 'spatial':
-                self.dropout1 = SpatialDropout2D(self.dropout_rate)
-                self.dropout2 = SpatialDropout2D(self.dropout_rate)
-            elif self.dropout_variant == 'gaussian':
-                self.dropout1 = GaussianDropout(self.dropout_rate)
-                self.dropout2 = GaussianDropout(self.dropout_rate)
-            elif self.dropout_variant == 'mcdrop':
-                self.dropout1 = MCDropout(self.dropout_rate)
-                self.dropout2 = MCDropout(self.dropout_rate)
-            elif self.dropout_variant == 'mcgaussiandrop':
-                self.dropout1 = MCGaussianDropout(self.dropout_rate)
-                self.dropout2 = MCGaussianDropout(self.dropout_rate)
-            elif self.dropout_variant == 'mcspatialdrop':
-                self.dropout1 = MCSpatialDropout3D(self.dropout_rate)
-                self.dropout2 = MCSpatialDropout3D(self.dropout_rate)
         else:
             self.apply_dropout = False
 
@@ -659,24 +627,31 @@ class MCSpatialDropout3D(SpatialDropout3D):
     return super().call(inputs, training=True)
 
 
-def choose_dropout_layer(x, dropout_rate, dropout_variant, dim=2):
+def get_dropout_layer(dropout_rate, dropout_variant, dim=2):
+    """Choose an return a dropout layer depending on the input arguments. If
+    ``dropout_rate=0`` then an identity layer is returned (the input tensor 
+    is returned without any modification). 
+    """
+    dropout_variant = checkarg_dropout_variant(dropout_variant)
     if dropout_rate > 0:
         if dropout_variant is None:
-            x = Dropout(dropout_rate)(x)
+            layer = Dropout(dropout_rate)
         elif dropout_variant == 'gaussian':
-            x = GaussianDropout(dropout_rate)(x)
+            layer = GaussianDropout(dropout_rate)
         elif dropout_variant == 'spatial':
             if dim == 2:
-                x = SpatialDropout2D(dropout_rate)(x)
+                layer = SpatialDropout2D(dropout_rate)
             elif dim == 3:
-                x = SpatialDropout3D(dropout_rate)(x)
+                layer = SpatialDropout3D(dropout_rate)
         elif dropout_variant == 'mcdrop':
-            x = MCDropout(dropout_rate)(x)
+            layer = MCDropout(dropout_rate)
         elif dropout_variant == 'mcgaussiandrop':
-            x = MCGaussianDropout(dropout_rate)(x)
+            layer = MCGaussianDropout(dropout_rate)
         elif dropout_variant == 'mcspatialdrop':
             if dim == 2:
-                x = MCSpatialDropout2D(dropout_rate)(x)
+                layer = MCSpatialDropout2D(dropout_rate)
             if dim == 3:
-                x = MCSpatialDropout3D(dropout_rate)(x)
-    return x
+                layer = MCSpatialDropout3D(dropout_rate)
+    else:
+        layer = Lambda(lambda x: tf.identity(x))
+    return layer
