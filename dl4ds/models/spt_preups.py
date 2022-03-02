@@ -5,7 +5,7 @@ from tensorflow.keras.models import Model
 
 from .blocks import (RecurrentConvBlock, ResidualBlock, ConvBlock, 
                      DenseBlock, TransitionBlock, LocalizedConvBlock,
-                     choose_dropout_layer)
+                     get_dropout_layer)
 from ..utils import checkarg_backbone, checkarg_dropout_variant
 
 
@@ -66,7 +66,7 @@ def recnet_pin(
             b = TransitionBlock(n_filters // 2)(b)  # another option: half of the DenseBlock channels
     b = Conv2D(n_filters, (3, 3), padding='same')(b)
 
-    b = choose_dropout_layer(b, dropout_rate, dropout_variant, dim=3)
+    b = get_dropout_layer(dropout_rate, dropout_variant, dim=3)(b)
 
     if backbone_block == 'convnet':
         x = b

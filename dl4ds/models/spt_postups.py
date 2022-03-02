@@ -5,7 +5,7 @@ from tensorflow.keras.models import Model
 
 from .blocks import (RecurrentConvBlock, ConvBlock, SubpixelConvolutionBlock, 
                      DeconvolutionBlock, LocalizedConvBlock, 
-                     choose_dropout_layer, TransitionBlock)
+                     get_dropout_layer, TransitionBlock)
 from ..utils import (checkarg_backbone, checkarg_upsampling, 
                     checkarg_dropout_variant)
 
@@ -61,7 +61,7 @@ def recnet_postupsampling(
         dropout_rate=dropout_rate,
         dropout_variant=dropout_variant)(b)
     
-    b = choose_dropout_layer(b, dropout_rate, dropout_variant, dim=3)
+    b = get_dropout_layer(dropout_rate, dropout_variant, dim=3)(b)
     
     if backbone_block == 'convnet':
         x = b
