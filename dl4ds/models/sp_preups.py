@@ -6,7 +6,7 @@ from tensorflow.keras.models import Model
 from .blocks import (ResidualBlock, ConvBlock, DenseBlock, TransitionBlock,
                      LocalizedConvBlock, SubpixelConvolutionBlock, 
                      DeconvolutionBlock, EncoderBlock, PadConcat, 
-                     choose_dropout_layer, ConvNextBlock)
+                     get_dropout_layer, ConvNextBlock)
 from ..utils import checkarg_backbone, checkarg_dropout_variant
  
 
@@ -89,7 +89,7 @@ def net_pin(
                                     name='Transition' + str(i+1))(b)  
         b = Conv2D(n_filters, ks, padding='same', activation=activation)(b)
         
-        b = choose_dropout_layer(b, dropout_rate, dropout_variant)
+        b = get_dropout_layer(dropout_rate, dropout_variant)(b)
 
         if backbone_block == 'convnet':
             x = b
@@ -220,7 +220,7 @@ def unet_pin(
             dropout_variant=dropout_variant, normalization=normalization, 
             attention=attention, name='DecoderConvBlock' + str(j+1))(x)
 
-    x = choose_dropout_layer(x, dropout_rate, dropout_variant)
+    x = get_dropout_layer(dropout_rate, dropout_variant)(x)
 
     #---------------------------------------------------------------------------
     # Localized convolutional layer

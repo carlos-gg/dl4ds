@@ -5,7 +5,7 @@ from tensorflow.keras.models import Model
 
 from .blocks import (ResidualBlock, ConvBlock, DeconvolutionBlock,
                      DenseBlock, TransitionBlock, SubpixelConvolutionBlock,
-                     LocalizedConvBlock, choose_dropout_layer, ConvNextBlock)
+                     LocalizedConvBlock, get_dropout_layer, ConvNextBlock)
 from ..utils import (checkarg_backbone, checkarg_upsampling, 
                     checkarg_dropout_variant)
 
@@ -106,7 +106,7 @@ def net_postupsampling(
                                     name='Transition' + str(i+1))(b)  
         b = Conv2D(n_filters, ks, padding='same', activation=activation)(b)
         
-        b = choose_dropout_layer(b, dropout_rate, dropout_variant)
+        b = get_dropout_layer(dropout_rate, dropout_variant)(b)
 
         if backbone_block == 'convnet':
             x = b
