@@ -72,14 +72,16 @@ def net_postupsampling(
     # Backbone section    
     if backbone_block == 'convnext':
         ks = (7, 7)      
-        x = Conv2D(n_filters, ks, padding='same')(x_in)
+        x = b = Conv2D(n_filters, ks, padding='same')(x_in)
         # N convnext blocks
         for i in range(n_blocks):
             n_filters = init_n_filters * (i + 1)
-            x = ConvNextBlock(
+            b = ConvNextBlock(
                 filters=n_filters, drop_path=0, normalization=normalization, 
                 use_1x1conv=False if i == 0 else True, activation=activation,
-                name='ConvNextBlock' + str(i+1))(x)
+                name='ConvNextBlock' + str(i+1))(b)
+        x = TransitionBlock(n_filters, activation=activation)(x)
+        x = Add()([x, b])
     else:
         ks = (3, 3)
         x = b = Conv2D(n_filters, ks, padding='same')(x_in)
