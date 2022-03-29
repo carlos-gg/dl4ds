@@ -47,12 +47,14 @@ setup(
         'xarray',
         'ecubevis',
         'tensorflow',
-        'horovod',
         'sklearn',
         'opencv-python',
         'joblib',
         'seaborn'
         ],
+    extras_require={
+        'horovod':['horovod'] 
+    },
     classifiers=[
         'Intended Audience :: Science/Research',
         'Operating System :: POSIX :: Linux',
