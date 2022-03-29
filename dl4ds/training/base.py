@@ -8,9 +8,14 @@ import numpy as np
 import tensorflow as tf
 from abc import ABC, abstractmethod
 from matplotlib.pyplot import show, close
-import horovod.tensorflow.keras as hvd
 import logging
 tf.get_logger().setLevel(logging.ERROR)
+
+try:
+    import horovod.tensorflow.keras as hvd
+    has_horovod = True
+except ImportError:
+    has_horovod = False
 
 from .. import MODELS
 from ..utils import (list_devices, set_gpu_memory_growth, plot_history,
@@ -100,33 +105,40 @@ class Trainer(ABC):
         else:
             self.model_is_spatiotemp = False
        
-        ### Initializing Horovod
-        hvd.init()
+        if has_horovod:
+            ### Initializing Horovod
+            hvd.init()
 
         ### Setting up devices
-        if self.verbose in [1 ,2]:
-            print('List of devices:')
         if self.device == 'GPU':
             if self.gpu_memory_growth:
-                set_gpu_memory_growth(verbose=False)
-            # pin GPU to be used to process local rank (one GPU per process)       
-            set_visible_gpus(hvd.local_rank())
+                set_gpu_memory_growth()
+            if has_horovod:
+                # pin GPU to be used to process local rank (one GPU per process)       
+                set_visible_gpus(hvd.local_rank())
             devices = list_devices('physical', gpu=True, verbose=verbose) 
         elif device == 'CPU':
             devices = list_devices('physical', gpu=False, verbose=verbose)
         else:
             raise ValueError('device not recognized')
 
-        n_devices = len(devices)
-        if self.verbose in [1 ,2]:
-            print ('Number of devices: {}'.format(n_devices))
+        n_devices = len(devices)            
         batch_size_per_replica = self.batch_size
         self.global_batch_size = batch_size_per_replica * n_devices
         if self.verbose in [1 ,2]:
-            print(f'Global batch size: {self.global_batch_size}, per replica: {batch_size_per_replica}')
+            print ('Number of devices: {}'.format(n_devices))
+            if n_devices > 1:
+                print(f'Global batch size: {self.global_batch_size}, per replica: {batch_size_per_replica}')
+            else:
+                print(f'Global batch size: {self.global_batch_size}')
 
-        # identifying the first Horovod worker (for distributed training with GPUs), or CPU training
-        if (self.device == 'GPU' and hvd.rank() == 0) or self.device == 'CPU':
+        # distributed training with GPUs first Horovod worker
+        cond1 = self.device == 'GPU' and has_horovod and hvd.rank() == 0
+        # single GPU training without horovod
+        cond2 = self.device == 'GPU' and not has_horovod
+        # CPU training
+        cond3 = self.device == 'CPU'
+        if cond1 or cond2 or cond3:
             self.running_on_first_worker = True
         else:
             self.running_on_first_worker = False
