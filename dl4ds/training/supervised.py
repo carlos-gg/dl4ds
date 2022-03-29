@@ -8,9 +8,14 @@ import tensorflow as tf
 from tensorflow.keras.optimizers import Adam
 from tensorflow.keras.optimizers.schedules import PiecewiseConstantDecay
 from tensorflow.keras.callbacks import EarlyStopping
-import horovod.tensorflow.keras as hvd
 import logging
 tf.get_logger().setLevel(logging.ERROR)
+
+try:
+    import horovod.tensorflow.keras as hvd
+    has_horovod = True
+except ImportError:
+    has_horovod = False
 
 from .. import POSTUPSAMPLING_METHODS, SPATIAL_MODELS, SPATIOTEMP_MODELS
 from ..utils import Timing
@@ -339,7 +344,7 @@ class SupervisedTrainer(Trainer):
             self.learning_rate = PiecewiseConstantDecay(boundaries=[self.lr_decay_after], 
                                                         values=[self.learning_rate[0], 
                                                                 self.learning_rate[1]])
-        elif isinstance(self.learning_rate, float):
+        elif isinstance(self.learning_rate, float) and has_horovod:
             # as in Goyan et al 2018 (https://arxiv.org/abs/1706.02677)
             self.learning_rate *= hvd.size()
         self.optimizer = Adam(learning_rate=self.learning_rate)
@@ -352,12 +357,13 @@ class SupervisedTrainer(Trainer):
                                       min_delta=self.min_delta, verbose=self.verbose)
             callbacks.append(earlystop)
 
-        # Horovod: add Horovod DistributedOptimizer.
-        self.optimizer = hvd.DistributedOptimizer(self.optimizer)
-        # Horovod: broadcast initial variable states from rank 0 to all other processes.
-        # This is necessary to ensure consistent initialization of all workers when
-        # training is started with random weights or restored from a checkpoint.
-        callbacks.append(hvd.callbacks.BroadcastGlobalVariablesCallback(0))
+        if has_horovod:
+            # Horovod: add Horovod DistributedOptimizer.
+            self.optimizer = hvd.DistributedOptimizer(self.optimizer)
+            # Horovod: broadcast initial variable states from rank 0 to all other processes.
+            # This is necessary to ensure consistent initialization of all workers when
+            # training is started with random weights or restored from a checkpoint.
+            callbacks.append(hvd.callbacks.BroadcastGlobalVariablesCallback(0))
         
         # verbosity for model.fit
         if self.verbose == 1 and self.running_on_first_worker:
@@ -381,7 +387,7 @@ class SupervisedTrainer(Trainer):
                 callbacks.append(model_checkpoint_callback)
 
         ### Compiling and training the model
-        if self.steps_per_epoch is not None:
+        if self.steps_per_epoch is not None and has_horovod:
             self.steps_per_epoch = self.steps_per_epoch // hvd.size()
 
         self.model.compile(optimizer=self.optimizer, loss=self.lossf)
