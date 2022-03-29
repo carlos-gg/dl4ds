@@ -82,11 +82,10 @@ def checkarg_dropout_variant(dropout_variant):
             return dropout_variant
 
 
-def set_gpu_memory_growth(verbose=True):
-    physical_devices = list_devices(verbose=verbose) 
+def set_gpu_memory_growth():
+    physical_devices = list_devices(verbose=False) 
     for gpu in physical_devices:
         tf.config.experimental.set_memory_growth(gpu, True)
-    print(physical_devices)
 
 
 def list_devices(which='physical', gpu=True, verbose=True):
@@ -99,12 +98,13 @@ def list_devices(which='physical', gpu=True, verbose=True):
     elif which == 'logical':
         devices = tf.config.list_logical_devices(dev)
     if verbose:
+        print('List of devices:')
         print(devices)
     return devices
 
 
 def set_visible_gpus(*gpu_indices):
-    gpus = list_devices('physical', gpu=True)
+    gpus = list_devices('physical', gpu=True, verbose=False)
     wanted_gpus = [gpus[i] for i in gpu_indices]
     tf.config.set_visible_devices(wanted_gpus, 'GPU') 
     print(list_devices('logical'))
