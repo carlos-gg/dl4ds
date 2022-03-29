@@ -8,9 +8,14 @@ import numpy as np
 import xarray as xr
 import tensorflow as tf
 from tensorflow.keras.utils import Progbar
-import horovod.tensorflow as hvd
 import logging
 tf.get_logger().setLevel(logging.ERROR)
+
+try:
+    import horovod.tensorflow as hvd
+    has_horovod = True
+except ImportError:
+    has_horovod = False
 
 from ..utils import Timing, checkarg_model
 from ..dataloader import create_batch_hr_lr
@@ -592,9 +597,10 @@ def train_step(lr_array, hr_array, generator, discriminator, generator_optimizer
                                                                    gen_pxloss_function)
         disc_loss = discriminator_loss(disc_real_output, disc_generated_output)
 
-    # Horovod: add Horovod Distributed GradientTape.
-    gen_tape = hvd.DistributedGradientTape(gen_tape)
-    disc_tape = hvd.DistributedGradientTape(disc_tape)
+    if has_horovod:
+        # Horovod: add Horovod Distributed GradientTape.
+        gen_tape = hvd.DistributedGradientTape(gen_tape)
+        disc_tape = hvd.DistributedGradientTape(disc_tape)
 
     generator_gradients = gen_tape.gradient(gen_total_loss, generator.trainable_variables)
     discriminator_gradients = disc_tape.gradient(disc_loss, discriminator.trainable_variables)
@@ -609,16 +615,17 @@ def train_step(lr_array, hr_array, generator, discriminator, generator_optimizer
             tf.summary.scalar('gen_px_loss', gen_px_loss, step=epoch)
             tf.summary.scalar('disc_loss', disc_loss, step=epoch)
     
-    # Horovod: broadcast initial variable states from rank 0 to all other processes.
-    # This is necessary to ensure consistent initialization of all workers when
-    # training is started with random weights or restored from a checkpoint.
-    #
-    # Note: broadcast should be done after the first gradient step to ensure optimizer
-    # initialization.
-    if first_batch:
-        hvd.broadcast_variables(generator.variables, root_rank=0)
-        hvd.broadcast_variables(generator_optimizer.variables(), root_rank=0)
-        hvd.broadcast_variables(discriminator.variables, root_rank=0)
-        hvd.broadcast_variables(discriminator_optimizer.variables(), root_rank=0)
+    if has_horovod:
+        # Horovod: broadcast initial variable states from rank 0 to all other processes.
+        # This is necessary to ensure consistent initialization of all workers when
+        # training is started with random weights or restored from a checkpoint.
+        #
+        # Note: broadcast should be done after the first gradient step to ensure optimizer
+        # initialization.
+        if first_batch:
+            hvd.broadcast_variables(generator.variables, root_rank=0)
+            hvd.broadcast_variables(generator_optimizer.variables(), root_rank=0)
+            hvd.broadcast_variables(discriminator.variables, root_rank=0)
+            hvd.broadcast_variables(discriminator_optimizer.variables(), root_rank=0)
 
     return gen_total_loss, gen_gan_loss, gen_px_loss, disc_loss 
