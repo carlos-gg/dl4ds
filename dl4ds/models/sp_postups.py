@@ -109,7 +109,7 @@ def net_postupsampling(
         b = Conv2D(n_filters, ks, padding='same', activation=activation)(b)
         
         b = get_dropout_layer(dropout_rate, dropout_variant)(b)
-
+        
         if backbone_block == 'convnet':
             x = b
         elif backbone_block == 'resnet':
@@ -117,19 +117,20 @@ def net_postupsampling(
             x = Add()([x, b])
         elif backbone_block == 'densenet':
             x = Concatenate()([x, b])
-            x = TransitionBlock(n_filters, activation=activation)(x)
+            x = TransitionBlock(n_filters, activation=activation, 
+                                name='TransitionBackboneLast')(x)
     
     #---------------------------------------------------------------------------
     # Upsampling
     model_name = backbone_block + '_' + upsampling
     if upsampling == 'spc':
         x = SubpixelConvolutionBlock(scale, n_filters)(x)
-        x = TransitionBlock(init_n_filters, activation=activation, 
-                            name='TransitionSPC')(x)
     elif upsampling == 'rc':
         x = UpSampling2D(scale, interpolation='bilinear')(x)
         x = Conv2D(n_filters, ks, padding='same', activation=activation)(x)
     elif upsampling == 'dc':
+        x = TransitionBlock(init_n_filters, activation=activation, 
+                            name='TransitionDC')(x)
         x = DeconvolutionBlock(scale, n_filters, activation)(x)
     
     #---------------------------------------------------------------------------
