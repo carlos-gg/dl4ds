@@ -359,6 +359,10 @@ def create_batch_hr_lr(
 
 class DataGenerator(tf.keras.utils.Sequence):
     """
+    DataGenerator creates batches of paired training samples according to the
+    upsampling and other parameters. This class is used within the 
+    ``dl4ds.SupervisedTrainer``.
+
     A sequence structure guarantees that the network will only train once on 
     each sample per epoch which is not the case with generators. 
     Every Sequence must implement the __getitem__ and the __len__ methods. If 

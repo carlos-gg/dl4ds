@@ -193,15 +193,15 @@ def predict(
         predictors = np.concatenate(predictors, axis=-1)
 
     # when array is in LR, it gets upsampled according to scale
-    if not array_in_hr:
+    if array_in_hr:
+        array_hr = array
+        array_lr = None
+    else:
         array = checkarray_ndim(array, 4, -1)
         hr_x = array.shape[2] * scale
         hr_y = array.shape[1] * scale
         array_hr = resize_array(array, (hr_x, hr_y), interpolation, squeezed=False) 
         array_lr = array
-    else:
-        array_hr = array
-        array_lr = None
 
     batch = create_batch_hr_lr(       
         np.arange(n_samples),
@@ -223,7 +223,7 @@ def predict(
     else:
         [batch_lr], _ = batch
 
-    x_test_lr = batch_lr            
+    x_test_lr = batch_lr  
 
     ### Casting as TF tensors, creating inputs ---------------------------------
     x_test_lr = tf.cast(x_test_lr, tf.float32)   
@@ -236,16 +236,15 @@ def predict(
     ### Inference --------------------------------------------------------------
     with tf.device('/' + device + ':0'):
         # https://www.tensorflow.org/api_docs/python/tf/keras/Model#predict
-        x_test_pred = model.predict(inputs, batch_size=batch_size, verbose=1)
-        x_test_pred = x_test_pred
+        x_test_hat = model.predict(inputs, batch_size=batch_size, verbose=1)
     
     if save_path is not None and save_fname is not None:
         name = os.path.join(save_path, save_fname)
-        np.save(name, x_test_pred.astype('float32'))
+        np.save(name, x_test_hat.astype('float32'))
     
     timing.runtime()
     if return_lr:
-        return x_test_pred, np.array(x_test_lr)
+        return x_test_hat, np.array(x_test_lr)
     else:
-        return x_test_pred        
+        return x_test_hat        
     
