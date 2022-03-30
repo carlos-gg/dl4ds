@@ -10,8 +10,100 @@ from .dataloader import create_batch_hr_lr
 from .training import CGANTrainer, SupervisedTrainer
 
 
+class Predictor():
+    """     
+    Predictor class for performing inference on unseen HR or LR data. The data 
+    (``array``) is super-resolved or downscaled using the trained 
+    super-resolution network (contained in ``trainer``).    
+    """
+    def __init__(
+        self,
+        trainer, 
+        array,
+        scale, 
+        array_in_hr=False,
+        static_vars=None,
+        predictors=None,
+        use_season=False,
+        time_window=None,
+        time_metadata=None,
+        interpolation='inter_area', 
+        batch_size=64,
+        save_path=None,
+        save_fname='y_hat.npy',
+        return_lr=False,
+        device='GPU'):
+        """ 
+        Parameters
+        ----------
+        trainer : dl4ds.SupervisedTrainer or dl4ds.CGANTrainer
+            Trainer containing a keras model (``model`` or ``generator``).
+        array : ndarray
+            Batch of HR grids. 
+        scale : int
+            Scaling factor. 
+        array_in_hr : bool, optional
+            If True, the data is assumed to be a HR groundtruth to be downsampled. 
+            Otherwise, data is a LR gridded dataset to be downscaled.
+        static_vars : None or list of 2D ndarrays, optional
+                Static variables such as elevation data or binary masks.
+        predictors : list of ndarray, optional
+            Predictor variables for trianing. Given as list of 4D ndarrays with 
+            dims [nsamples, lat, lon, 1] or 5D ndarrays with dims 
+            [nsamples, time, lat, lon, 1]. 
+        time_window : int or None, optional
+            If None, then the function assumes the ``model`` is spatial only. If 
+            an integer is given, then the ``model`` should be spatio-temporal 
+            and the samples are pre-processed accordingly.
+        interpolation : str, optional
+            Interpolation used when upsampling/downsampling the training samples.
+            By default 'bicubic'. 
+        save_path : str or None, optional
+            If not None, the prediction (gridded variable at HR) is saved to disk.
+        save_fname : str, optional
+            Filename to complete the path were the prediciton is saved.     
+        return_lr : bool, optional
+            If True, the LR array is returned along with the downscaled one.                                                                
+        """
+        self.trainer = trainer 
+        self.array_in_hr = array_in_hr
+        self.array = array
+        self.scale = scale
+        self.static_vars = static_vars
+        self.predictors = predictors
+        self.use_season = use_season 
+        self.time_window = time_window
+        self.time_metadata = time_metadata
+        self.interpolation = interpolation 
+        self.batch_size = batch_size
+        self.save_path = save_path
+        self.save_fname = save_fname
+        self.return_lr = return_lr
+        self.device = device
+
+    def run(self): 
+        """ 
+        """
+        return predict(
+            trainer=self.trainer, 
+            array=self.array, 
+            scale=self.scale, 
+            array_in_hr=self.array_in_hr, 
+            use_season=self.use_season,
+            static_vars=self.static_vars, 
+            predictors=self.predictors,
+            time_window=self.time_window, 
+            time_metadata=self.time_metadata, 
+            interpolation=self.interpolation, 
+            batch_size=self.batch_size, 
+            save_path=self.save_path,
+            save_fname=self.save_fname, 
+            return_lr=self.return_lr,
+            device=self.device) 
+
+
 def predict(
-    model, 
+    trainer, 
     array, 
     scale, 
     array_in_hr=True,
@@ -26,13 +118,13 @@ def predict(
     save_fname='y_hat.npy',
     return_lr=False,
     device='GPU'):
-    """Inference with ``model`` on a data ``array``. The data is 
-    super-resolved/downscaled using the trained super-resolution network. 
+    """Inference on unseen HR or LR data. The data (``array``) is super-resolved 
+    or downscaled using the trained super-resolution network (``model``). 
 
     Parameters
     ----------
-    model : tf.keras model
-        Trained model.
+    trainer : dl4ds.SupervisedTrainer or dl4ds.CGANTrainer
+        Trainer containing a keras model (``model`` or ``generator``).
     array : ndarray
         Batch of HR grids. 
     scale : int
@@ -62,10 +154,10 @@ def predict(
     """         
     timing = Timing()
 
-    if isinstance(model, SupervisedTrainer):
-        model = model.model
-    elif isinstance(model, CGANTrainer):
-        model = model.generator
+    if isinstance(trainer, SupervisedTrainer):
+        model = trainer.model
+    elif isinstance(trainer, CGANTrainer):
+        model = trainer.generator
 
     model_architecture = model.name
     if model_architecture in SPATIOTEMP_MODELS and time_window is None:
@@ -127,11 +219,11 @@ def predict(
         time_metadata=time_metadata)
 
     if static_vars is not None or use_season:
-        [batch_lr, batch_aux_hr], [batch_hr] = batch
+        [batch_lr, batch_aux_hr], _ = batch
     else:
-        [batch_lr], [batch_hr] = batch
+        [batch_lr], _ = batch
 
-    x_test_lr = batch_lr
+    x_test_lr = batch_lr            
 
     ### Casting as TF tensors, creating inputs ---------------------------------
     x_test_lr = tf.cast(x_test_lr, tf.float32)   
@@ -153,7 +245,7 @@ def predict(
     
     timing.runtime()
     if return_lr:
-        return x_test_pred,  np.array(x_test_lr)
+        return x_test_pred, np.array(x_test_lr)
     else:
         return x_test_pred        
     
