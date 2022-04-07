@@ -17,11 +17,10 @@ try:
 except ImportError:
     has_horovod = False
 
-from .. import MODELS
 from ..utils import (list_devices, set_gpu_memory_growth, plot_history,
-                    set_visible_gpus, checkarg_model)
+                     set_visible_gpus, check_compatibility_upsbackb)
 from ..losses import (mae, mse, dssim, dssim_mae, dssim_mae_mse, dssim_mse,
-                     msdssim, msdssim_mae)
+                      msdssim, msdssim_mae)
 
 
 class Trainer(ABC):
@@ -29,9 +28,11 @@ class Trainer(ABC):
     """
     def __init__(
         self,
-        model_name, 
+        backbone,
+        upsampling, 
         data_train,
         data_train_lr=None,
+        time_window=None,
         use_season=True,
         loss='mae',
         batch_size=64, 
@@ -49,7 +50,6 @@ class Trainer(ABC):
         ):
         """
         """
-        self.model_name = model_name
         self.use_season = use_season
         if self.use_season:
             if not hasattr(data_train, 'time'):
@@ -77,6 +77,14 @@ class Trainer(ABC):
                 msg = '`data_train_lr` must be at least 4D [samples, lat, lon, variables]'
                 raise ValueError(msg)
 
+        self.backbone, self.upsampling = check_compatibility_upsbackb(backbone,
+                                                                      upsampling, 
+                                                                      time_window)
+        self.time_window = time_window
+        if self.time_window is not None and self.time_window > 1:
+            self.model_is_spatiotemporal = True
+        else:
+            self.model_is_spatiotemporal = False
         self.batch_size = batch_size
         self.patch_size = patch_size
         self.loss = loss
@@ -97,13 +105,6 @@ class Trainer(ABC):
         if self.savecheckpoint_path is None and self.save:
             self.savecheckpoint_path = self.save_path
         self.show_plot = show_plot
-        self.upsampling = model_name.split('_')[-1]
-        self.backbone = self.model_name.split('_')[0]
-        if self.backbone.startswith('rec'):
-            self.backbone = self.backbone[3:]
-            self.model_is_spatiotemp = True
-        else:
-            self.model_is_spatiotemp = False
        
         if has_horovod:
             ### Initializing Horovod
@@ -142,11 +143,6 @@ class Trainer(ABC):
             self.running_on_first_worker = True
         else:
             self.running_on_first_worker = False
-
-        ### Checking the model argument
-        if self.model_list is None:
-            self.model_list = MODELS
-        self.model_name = checkarg_model(self.model_name, self.model_list)
         
         ### Checking scale wrt image size
         if self.patch_size is not None: 
