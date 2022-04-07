@@ -5,7 +5,6 @@ import xarray as xr
 import tensorflow as tf
 
 from .utils import Timing, checkarray_ndim, resize_array
-from . import SPATIOTEMP_MODELS
 from .dataloader import create_batch_hr_lr
 from .training import CGANTrainer, SupervisedTrainer
 
@@ -159,9 +158,9 @@ def predict(
     elif isinstance(trainer, CGANTrainer):
         model = trainer.generator
 
-    model_architecture = model.name
-    if model_architecture in SPATIOTEMP_MODELS and time_window is None:
-        raise ValueError('`time_window` must be provided')
+    upsampling = model.name.split('_')[-1]
+    # if (check input dimensionality) and time_window is None:
+    #    raise ValueError('`time_window` must be provided')
 
     if use_season:
         if isinstance(array, xr.DataArray):
@@ -185,7 +184,7 @@ def predict(
                 static_vars[i] = static_vars[i].values
 
     n_samples = array.shape[0]
-    if model_architecture in SPATIOTEMP_MODELS:
+    if time_window is not None:
         n_samples -= time_window - 1
 
     # concatenating list of ndarray variables along the last dimension  
@@ -208,13 +207,13 @@ def predict(
         0,
         array=array_hr, 
         array_lr=array_lr,
+        upsampling=upsampling,
         scale=scale, 
         batch_size=n_samples, 
         patch_size=None,
         time_window=time_window,
         static_vars=static_vars, 
         predictors=predictors,
-        model=model_architecture, 
         interpolation=interpolation,
         time_metadata=time_metadata)
 
