@@ -13,7 +13,7 @@ from matplotlib.axes import Axes
 from matplotlib.figure import Figure
 from tensorflow.keras.callbacks import History
 
-from . import MODELS, BACKBONE_BLOCKS, UPSAMPLING_METHODS
+from . import BACKBONE_BLOCKS, UPSAMPLING_METHODS
 
 
 def spatial_to_temporal_samples(array, time_window):
@@ -36,32 +36,43 @@ def checkarray_ndim(array, ndim=3, add_axis_position=-1):
         return array
 
 
-def checkarg_model(model, model_list=MODELS):
-    """ """
-    if not isinstance(model, str) or model not in model_list:
-        msg = f'`model` not recognized. Must be one of the '
-        msg += f'following: {model_list}. Got {model}'
-        raise ValueError(msg)
-    else:
-        return model
+def check_compatibility_upsbackb(backbone, upsampling, time_window):
+    """Check that the upsampling and backbone arguments are compatible. 
 
-
-def checkarg_backbone(backbone_block):
-    """ """ 
-    if not isinstance(backbone_block, str):
-        raise TypeError('`backbone_block` must be a string')
-    
-    if backbone_block not in BACKBONE_BLOCKS + ['unet']:
-        msg = f"`backbone_block` not recognized. Must be one of the "
-        msg += f"following: {BACKBONE_BLOCKS + ['unet']}. Got {backbone_block}"
+    Parameters
+    ----------
+    backbone : str
+        Backbone block.
+    upsampling : str
+        Upsampling method. 
+    time_window : int
+        Time window for spatio-temporal samples.
+    """
+    upsampling = checkarg_upsampling(upsampling)
+    backbone = checkarg_backbone(backbone)
+    # encoder decoder (unet) backbone only with pre-upsampling
+    if backbone == 'unet' and upsampling != 'pin':
+        raise ValueError('`unet` backbone only works with `pin` pre-upsampling')
+    # unet and convnext work only with spatial samples
+    if backbone in ['convnext', 'unet'] and time_window is not None:
+        msg = '`unet` and `convnext` backbones only work with spatial samples '
+        msg += '(`time_window` must be None)'
         raise ValueError(msg)
-    else:
-        return backbone_block
+    return backbone, upsampling
 
 
 def checkarg_upsampling(upsampling):
-    """ """ 
-    if not isinstance(upsampling, str) or upsampling not in UPSAMPLING_METHODS:
+    """Check the argument ``upsampling``.
+
+    Parameters
+    ----------
+    upsampling : str
+        Upsampling method. 
+    """ 
+    if not isinstance(upsampling, str):
+        raise TypeError('`upsampling` must be a string')
+
+    if upsampling not in UPSAMPLING_METHODS:
         msg = f'`upsampling` not recognized. Must be one of the '
         msg += f'following: {UPSAMPLING_METHODS}. Got {upsampling}'
         raise ValueError(msg)
@@ -69,8 +80,33 @@ def checkarg_upsampling(upsampling):
         return upsampling
 
 
+def checkarg_backbone(backbone):
+    """Check the argument ``backbone``.
+
+    Parameters
+    ----------
+    backbone : str
+        Backbone block. 
+    """ 
+    if not isinstance(backbone, str):
+        raise TypeError('`backbone` must be a string')
+
+    if backbone not in BACKBONE_BLOCKS:
+        msg = f'`backbone` not recognized. Must be one of the '
+        msg += f'following: {BACKBONE_BLOCKS}. Got {backbone}'
+        raise ValueError(msg)
+    else:
+        return backbone
+
+
 def checkarg_dropout_variant(dropout_variant):
-    """ """
+    """Check the argument ``dropout_variant``.
+
+    Parameters
+    ----------
+    dropout_variant : str
+        Desired dropout variant.  
+    """
     if dropout_variant is None:
         return dropout_variant
     elif isinstance(dropout_variant, str):
