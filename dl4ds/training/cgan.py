@@ -17,13 +17,13 @@ try:
 except ImportError:
     has_horovod = False
 
-from ..utils import Timing, checkarg_model
+from ..utils import Timing
 from ..dataloader import create_batch_hr_lr
 from ..models import (net_pin, recnet_pin, net_postupsampling, 
                      recnet_postupsampling, residual_discriminator)
 from ..models import (net_postupsampling, recnet_postupsampling, net_pin, 
                      recnet_pin, unet_pin)
-from .. import POSTUPSAMPLING_METHODS, SPATIAL_MODELS, SPATIOTEMP_MODELS
+from .. import POSTUPSAMPLING_METHODS
 from .base import Trainer
 
 
@@ -32,7 +32,8 @@ class CGANTrainer(Trainer):
     """
     def __init__(
         self,
-        model_name,
+        backbone,
+        upsampling,
         data_train,
         data_test,
         data_train_lr=None,
@@ -67,9 +68,12 @@ class CGANTrainer(Trainer):
     
         Parameters
         ----------
-        model_name : str
-            String with the name of the model architecture, either 'resnet_spc', 
-            'resnet_bi' or 'resnet_rc'. Used as a the CGAN generator.
+        backbone : str
+            String with the name of the backbone block used for the CGAN 
+            generator.
+        upsampling : str
+            String with the name of the upsampling method used for the CGAN 
+            generator.
         data_train : 4D ndarray or xr.DataArray
             Training dataset with dims [nsamples, lat, lon, 1]. These grids must 
             correspond to the observational reference at HR, from which a 
@@ -116,9 +120,11 @@ class CGANTrainer(Trainer):
             information is printed out. When equal 2, then less info is shown.
         """
         super().__init__(
-            model_name=model_name, 
+            backbone=backbone,
+            upsampling=upsampling, 
             data_train=data_train, 
             data_train_lr=data_train_lr,
+            time_window=time_window,
             use_season=use_season,
             loss=loss, 
             batch_size=batch_size, 
@@ -137,7 +143,6 @@ class CGANTrainer(Trainer):
         self.data_test_lr = data_test_lr
         self.scale = scale
         self.patch_size = patch_size
-        self.time_window = time_window
         self.predictors_train = predictors_train
         if self.predictors_train is not None and not isinstance(self.predictors_train, list):
             raise TypeError('`predictors_train` must be a list of ndarrays')
@@ -197,16 +202,7 @@ class CGANTrainer(Trainer):
 
         # Generator
         if self.upsampling in POSTUPSAMPLING_METHODS:
-            if not self.model_is_spatiotemp:
-                self.generator = net_postupsampling(
-                    backbone_block=self.backbone,
-                    upsampling=self.upsampling,
-                    scale=self.scale, 
-                    n_channels=n_channels,
-                    n_aux_channels=n_aux_channels,
-                    lr_size=(lr_height, lr_width),
-                    **self.generator_params)
-            else:
+            if self.model_is_spatiotemporal:
                 self.generator = recnet_postupsampling(
                     backbone_block=self.backbone,
                     upsampling=self.upsampling, 
@@ -216,8 +212,26 @@ class CGANTrainer(Trainer):
                     lr_size=(lr_height, lr_width),
                     time_window=self.time_window, 
                     **self.generator_params)
+            else:
+                self.generator = net_postupsampling(
+                    backbone_block=self.backbone,
+                    upsampling=self.upsampling,
+                    scale=self.scale, 
+                    n_channels=n_channels,
+                    n_aux_channels=n_aux_channels,
+                    lr_size=(lr_height, lr_width),
+                    **self.generator_params)
+            
         elif self.upsampling == 'pin':
-            if not self.model_is_spatiotemp:
+            if self.model_is_spatiotemporal:
+                self.generator = recnet_pin(
+                    backbone_block=self.backbone,
+                    n_channels=n_channels, 
+                    n_aux_channels=n_aux_channels,
+                    hr_size=(hr_height, hr_width),
+                    time_window=self.time_window, 
+                    **self.generator_params)
+            else:
                 if self.backbone == 'unet':
                     self.generator = unet_pin(
                         backbone_block=self.backbone,
@@ -232,14 +246,6 @@ class CGANTrainer(Trainer):
                         n_aux_channels=n_aux_channels,
                         hr_size=(hr_height, hr_width),
                         **self.generator_params)            
-            else:
-                self.generator = recnet_pin(
-                    backbone_block=self.backbone,
-                    n_channels=n_channels, 
-                    n_aux_channels=n_aux_channels,
-                    hr_size=(hr_height, hr_width),
-                    time_window=self.time_window, 
-                    **self.generator_params)
 
         # Discriminator
         n_channels_disc = n_channels[0] if isinstance(n_channels, tuple) else n_channels
@@ -318,13 +324,13 @@ class CGANTrainer(Trainer):
                     i,
                     self.data_train, 
                     self.data_train_lr,
+                    upsampling=self.upsampling,
                     scale=self.scale, 
                     batch_size=self.batch_size, 
                     patch_size=self.patch_size,
                     time_window=self.time_window,
                     static_vars=self.static_vars, 
                     predictors=self.predictors_train,
-                    model=self.model_name, 
                     interpolation=self.interpolation,
                     time_metadata=self.time_metadata)
                
@@ -406,13 +412,13 @@ class CGANTrainer(Trainer):
                 0,
                 self.data_test, 
                 self.data_test_lr,
+                upsampling=self.upsampling,
                 scale=self.scale, 
                 batch_size=self.n_test, 
                 patch_size=self.patch_size,
                 time_window=self.time_window,
                 static_vars=self.static_vars, 
                 predictors=self.predictors_test,
-                model=self.model_name, 
                 interpolation=self.interpolation,
                 time_metadata=self.time_metadata_test)
             
@@ -439,6 +445,8 @@ class CGANTrainer(Trainer):
 def load_checkpoint(
     checkpoint_dir, 
     checkpoint_number, 
+    backbone,
+    upsampling, 
     scale, 
     input_size_hw, 
     model='resnet_spc', 
@@ -462,39 +470,39 @@ def load_checkpoint(
     if n_predictors > 0:
         n_channels += n_predictors
 
-    # generator
-    model = checkarg_model(model)
-    upsampling = model.split('_')[-1]
-    backbone = model.split('_')[0]
-    if backbone.startswith('rec'):
-        backbone = backbone[3:]
+    if time_window is not None and time_window > 1:
+        model_is_spatiotemporal = True
+    else:
+        model_is_spatiotemporal = False
 
+    # generator
     if upsampling in POSTUPSAMPLING_METHODS:
-        if model in SPATIAL_MODELS:
-            generator = net_postupsampling(
-                backbone_block=backbone, upsampling=upsampling, scale=scale, 
-                n_channels=n_channels, n_aux_channels=n_aux_channels, 
-                n_filters=n_filters, n_blocks=n_blocks[0], lr_size=input_size_hw,
-                n_channels_out=1, attention=attention)
-        elif model in SPATIOTEMP_MODELS:
+        if model_is_spatiotemporal:
             generator = recnet_postupsampling(
                 backbone_block=backbone, upsampling=upsampling, scale=scale, 
                 n_channels=n_channels, n_aux_channels=n_aux_channels, 
                 n_filters=n_filters, n_blocks=n_blocks[0], lr_size=input_size_hw,
                 n_channels_out=1, time_window=time_window, attention=attention)
-    elif upsampling == 'pin':
-        if model in SPATIAL_MODELS: 
-            generator = net_pin(
-                backbone_block=backbone, n_channels=n_channels, 
-                n_aux_channels=n_aux_channels, hr_size=input_size_hw,
-                n_filters=n_filters, n_blocks=n_blocks[0], 
+        else:
+            generator = net_postupsampling(
+                backbone_block=backbone, upsampling=upsampling, scale=scale, 
+                n_channels=n_channels, n_aux_channels=n_aux_channels, 
+                n_filters=n_filters, n_blocks=n_blocks[0], lr_size=input_size_hw,
                 n_channels_out=1, attention=attention)
-        elif model in SPATIOTEMP_MODELS:
+        
+    elif upsampling == 'pin':
+        if model_is_spatiotemporal:
             generator = recnet_pin(
                 backbone_block=backbone, n_channels=n_channels, 
                 n_aux_channels=n_aux_channels, hr_size=input_size_hw,
                 n_filters=n_filters, n_blocks=n_blocks[0], 
                 n_channels_out=1, time_window=time_window, attention=attention)
+        else: 
+            generator = net_pin(
+                backbone_block=backbone, n_channels=n_channels, 
+                n_aux_channels=n_aux_channels, hr_size=input_size_hw,
+                n_filters=n_filters, n_blocks=n_blocks[0], 
+                n_channels_out=1, attention=attention)
         
     # discriminator
     discriminator = residual_discriminator(
