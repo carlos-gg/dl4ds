@@ -5,18 +5,18 @@ import xarray as xr
 import ecubevis as ecv
 
 from . import POSTUPSAMPLING_METHODS
-from .utils import crop_array, resize_array, checkarg_model, checkarray_ndim
+from .utils import crop_array, resize_array, checkarray_ndim
 
 
 def create_pair_hr_lr(
     array, 
     array_lr,
+    upsampling,
     scale, 
     patch_size, 
     static_vars=None, 
     predictors=None, 
     season=None,
-    model='resnet_spc',
     debug=False, 
     interpolation='inter_area'):
     """
@@ -31,6 +31,8 @@ def create_pair_hr_lr(
     array_lr : np.ndarray
         LR gridded data. If not provided, then implicit/coarsened pairs are
         created from ``array``.
+    upsampling : str
+            String with the name of the upsampling method. 
     scale : int
         Scaling factor.
     patch_size : int or None
@@ -40,8 +42,6 @@ def create_pair_hr_lr(
     predictors : np.ndarray, optional
         Predictor variables in HR. To be concatenated to the LR version of 
         `array`.
-    model : str, optional
-        String with the name of the model architecture.
     interpolation : str, optional
         Interpolation used when upsampling/downsampling the training samples.
         By default 'bicubic'. 
@@ -53,13 +53,13 @@ def create_pair_hr_lr(
         if patch_size is not None:
             var_hr = crop_array(np.squeeze(var), patch_size, yx=(crop_y, crop_x))
             var_hr = checkarray_ndim(var_hr, 3, -1)
-            if upsampling_method in POSTUPSAMPLING_METHODS:  
+            if upsampling in POSTUPSAMPLING_METHODS:  
                 var_lr = resize_array(var_hr, (patch_size_lr, patch_size_lr), interpolation) 
             else:
                 var_lr = var_hr
         else:
             var_hr = checkarray_ndim(var, 3, -1)
-            if upsampling_method in POSTUPSAMPLING_METHODS: 
+            if upsampling in POSTUPSAMPLING_METHODS: 
                 var_lr = resize_array(var, (lr_x, lr_y), interpolation)
             else:
                 var_lr = var_hr 
@@ -67,9 +67,7 @@ def create_pair_hr_lr(
 
         return var_hr, var_lr
     
-    # --------------------------------------------------------------------------
-    upsampling_method = model.split('_')[-1]
-
+    # --------------------------------------------------------------------------    
     hr_array = array
     if array_lr is not None:
         lr_array = array_lr
@@ -88,7 +86,7 @@ def create_pair_hr_lr(
 
     # --------------------------------------------------------------------------
     # Cropping/resizing the arrays        
-    if upsampling_method == 'pin': 
+    if upsampling == 'pin': 
         if lr_is_given:
             if is_spatiotemp:
                 lr_y = array_lr.shape[1]
@@ -139,7 +137,7 @@ def create_pair_hr_lr(
             # concatenating the predictors to the lr image   
             lr_array = np.concatenate([lr_array, lr_array_predictors], axis=-1)
 
-    elif upsampling_method in POSTUPSAMPLING_METHODS:
+    elif upsampling in POSTUPSAMPLING_METHODS:
         if patch_size is not None:
             patch_size_lr = int(patch_size / scale)
 
@@ -222,7 +220,7 @@ def create_pair_hr_lr(
         if patch_size is not None:
             season_array_hr = _get_season_array_(season, patch_size, patch_size) 
             static_array_hr = np.concatenate([static_array_hr, season_array_hr], axis=-1)
-            if upsampling_method in POSTUPSAMPLING_METHODS:
+            if upsampling in POSTUPSAMPLING_METHODS:
                 season_array_lr = _get_season_array_(season, patch_size_lr, patch_size_lr) 
             else:
                 season_array_lr = season_array_hr
@@ -230,7 +228,7 @@ def create_pair_hr_lr(
         else:
             season_array_hr = _get_season_array_(season, hr_y, hr_x) 
             static_array_hr = np.concatenate([static_array_hr, season_array_hr], axis=-1)
-            if upsampling_method in POSTUPSAMPLING_METHODS:
+            if upsampling in POSTUPSAMPLING_METHODS:
                 season_array_lr = _get_season_array_(season, lr_y, lr_x) 
             else:
                 season_array_lr = season_array_hr
@@ -296,13 +294,13 @@ def create_batch_hr_lr(
     index,
     array, 
     array_lr,
+    upsampling,
     scale=4, 
     batch_size=32, 
     patch_size=None,
     time_window=None,
     static_vars=None, 
     predictors=None,
-    model='resnet_spc', 
     interpolation='inter_area',
     time_metadata=None
     ):
@@ -333,11 +331,11 @@ def create_batch_hr_lr(
         res = create_pair_hr_lr(
             array=data_i,
             array_lr=data_lr_i,
+            upsampling=upsampling,
             scale=scale, 
             patch_size=patch_size, 
             static_vars=static_vars, 
             season=season_i,
-            model=model,
             interpolation=interpolation,
             predictors=predictors_i)
 
@@ -374,6 +372,8 @@ class DataGenerator(tf.keras.utils.Sequence):
         self, 
         array, 
         array_lr,
+        backbone,
+        upsampling,
         scale, 
         batch_size=32, 
         patch_size=None,
@@ -381,7 +381,6 @@ class DataGenerator(tf.keras.utils.Sequence):
         static_vars=None, 
         predictors=None,
         use_season=False,
-        model='resnet_spc', 
         interpolation='inter_area',
         repeat=None
         ):
@@ -393,6 +392,10 @@ class DataGenerator(tf.keras.utils.Sequence):
         array_lr : np.ndarray
             LR gridded data. If not provided, then implicit/coarsened pairs are
             created from ``array``.
+        backbone : str
+            String with the name of the backbone block.
+        upsampling : str
+            String with the name of the upsampling method.
         scale : int
             Scaling factor.
         batch_size : int, optional
@@ -405,9 +408,7 @@ class DataGenerator(tf.keras.utils.Sequence):
         static_vars : None or list of 2D ndarrays, optional
             Static variables such as elevation data or a binary land-ocean mask.
         predictors : list of ndarray 
-            List of predictor ndarrays.
-        model : str, optional
-            Name of the model architecture. eg, 'resnet_spc', 'convnet_pin'
+            List of predictor ndarrays. 
         interpolation : str, optional
             Interpolation used when upsampling/downsampling the training samples.
         repeat : int or None, optional
@@ -438,6 +439,8 @@ class DataGenerator(tf.keras.utils.Sequence):
         
         self.batch_size = batch_size
         self.scale = scale
+        self.upsampling = upsampling
+        self.backbone = backbone
         self.patch_size = patch_size
         self.time_window = time_window
         self.static_vars = static_vars
@@ -449,8 +452,6 @@ class DataGenerator(tf.keras.utils.Sequence):
         # concatenating list of ndarray variables along the last dimension  
         if self.predictors is not None:
             self.predictors = np.concatenate(self.predictors, axis=-1)
-        self.model = checkarg_model(model)
-        self.upsampling = self.model.split('_')[-1]
         self.interpolation = interpolation
         self.repeat = repeat
         
@@ -491,13 +492,13 @@ class DataGenerator(tf.keras.utils.Sequence):
             index,
             self.array, 
             self.array_lr,
+            upsampling=self.upsampling,
             scale=self.scale, 
             batch_size=self.batch_size, 
             patch_size=self.patch_size,
             time_window=self.time_window,
             static_vars=self.static_vars, 
             predictors=self.predictors,
-            model=self.model, 
             interpolation=self.interpolation,
             time_metadata=self.time_metadata)
 
