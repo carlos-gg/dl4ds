@@ -17,7 +17,7 @@ try:
 except ImportError:
     has_horovod = False
 
-from .. import POSTUPSAMPLING_METHODS, SPATIAL_MODELS, SPATIOTEMP_MODELS
+from .. import POSTUPSAMPLING_METHODS
 from ..utils import Timing
 from ..dataloader import DataGenerator
 from ..models import (net_pin, recnet_pin, unet_pin, net_postupsampling, 
@@ -30,7 +30,8 @@ class SupervisedTrainer(Trainer):
     """
     def __init__(
         self,
-        model_name, 
+        backbone,
+        upsampling,
         data_train, 
         data_val, 
         data_test,  
@@ -74,9 +75,10 @@ class SupervisedTrainer(Trainer):
 
         Parameters
         ----------
-        model : str
-            String with the name of the model architecture, either 'resnet_spc', 
-            'resnet_bi' or 'resnet_rc'.
+        backbone : str
+            String with the name of the backbone block.
+        upsampling : str
+            String with the name of the upsampling method. 
         data_train : 4D ndarray or xr.DataArray
             Training dataset with dims [nsamples, lat, lon, 1]. These grids must 
             correspond to the observational reference at HR, from which a 
@@ -162,9 +164,11 @@ class SupervisedTrainer(Trainer):
             model.
         """
         super().__init__(
-            model_name=model_name, 
+            backbone=backbone,
+            upsampling=upsampling, 
             data_train=data_train,
             data_train_lr=data_train_lr,
+            time_window=time_window,
             use_season=use_season,
             loss=loss,
             batch_size=batch_size, 
@@ -210,12 +214,6 @@ class SupervisedTrainer(Trainer):
         self.min_delta = min_delta
         self.show_plot = show_plot
         self.architecture_params = architecture_params
-        self.time_window = time_window
-        if self.time_window is not None and not self.model_is_spatiotemp:
-            self.time_window = None
-        if self.model_is_spatiotemp and self.time_window is None:
-            msg = f'``model={self.model_name}``, the argument ``time_window`` must be a postive integer'
-            raise ValueError(msg)
         self.trained_model = trained_model
         self.trained_epochs = trained_epochs
 
@@ -223,11 +221,12 @@ class SupervisedTrainer(Trainer):
         """Setting up the data generators
         """
         datagen_params = dict(
+            backbone=self.backbone,
+            upsampling=self.upsampling,
             scale=self.scale, 
             batch_size=self.global_batch_size,
             static_vars=self.static_vars, 
             patch_size=self.patch_size, 
-            model=self.model_name, 
             interpolation=self.interpolation,
             time_window=self.time_window,
             use_season=self.use_season)
@@ -245,7 +244,16 @@ class SupervisedTrainer(Trainer):
         """Setting up the model
         """
         ### number of channels
-        if self.model_name in SPATIAL_MODELS:
+        if self.model_is_spatiotemporal:
+            n_channels = self.data_train.shape[-1]
+            n_aux_channels = 0
+            if self.predictors_train is not None:
+                n_channels += len(self.predictors_train)
+            if self.static_vars is not None:
+                n_aux_channels += len(self.static_vars)
+            if self.use_season:
+                n_aux_channels += 4
+        else:
             n_channels = self.data_train.shape[-1]
             n_aux_channels = 0
             if self.static_vars is not None:
@@ -256,15 +264,6 @@ class SupervisedTrainer(Trainer):
                 n_aux_channels += 4
             if self.predictors_train is not None:
                 n_channels += len(self.predictors_train)
-        elif self.model_name in SPATIOTEMP_MODELS:
-            n_channels = self.data_train.shape[-1]
-            n_aux_channels = 0
-            if self.predictors_train is not None:
-                n_channels += len(self.predictors_train)
-            if self.static_vars is not None:
-                n_aux_channels += len(self.static_vars)
-            if self.use_season:
-                n_aux_channels += 4
 
         if self.patch_size is None:
             lr_height = int(self.data_train.shape[1] / self.scale)
@@ -278,16 +277,7 @@ class SupervisedTrainer(Trainer):
         ### instantiating the model
         if self.trained_model is None:
             if self.upsampling in POSTUPSAMPLING_METHODS:
-                if not self.model_is_spatiotemp:
-                    self.model = net_postupsampling(
-                        backbone_block=self.backbone,
-                        upsampling=self.upsampling, 
-                        scale=self.scale, 
-                        lr_size=(lr_height, lr_width),
-                        n_channels=n_channels, 
-                        n_aux_channels=n_aux_channels,
-                        **self.architecture_params)
-                else:
+                if self.model_is_spatiotemporal:
                     self.model = recnet_postupsampling(
                         backbone_block=self.backbone,
                         upsampling=self.upsampling, 
@@ -297,8 +287,26 @@ class SupervisedTrainer(Trainer):
                         lr_size=(lr_height, lr_width),
                         time_window=self.time_window, 
                         **self.architecture_params)
+                else:
+                    self.model = net_postupsampling(
+                        backbone_block=self.backbone,
+                        upsampling=self.upsampling, 
+                        scale=self.scale, 
+                        lr_size=(lr_height, lr_width),
+                        n_channels=n_channels, 
+                        n_aux_channels=n_aux_channels,
+                        **self.architecture_params)
+                    
             elif self.upsampling == 'pin':
-                if not self.model_is_spatiotemp:
+                if self.model_is_spatiotemporal:
+                    self.model = recnet_pin(
+                        backbone_block=self.backbone,
+                        n_channels=n_channels,
+                        n_aux_channels=n_aux_channels,
+                        hr_size=(hr_height, hr_width),
+                        time_window=self.time_window, 
+                        **self.architecture_params)
+                else:
                     if self.backbone == 'unet':
                         self.model = unet_pin(
                             backbone_block=self.backbone,
@@ -313,14 +321,6 @@ class SupervisedTrainer(Trainer):
                             n_aux_channels=n_aux_channels,
                             hr_size=(hr_height, hr_width),
                             **self.architecture_params)        
-                else:
-                    self.model = recnet_pin(
-                        backbone_block=self.backbone,
-                        n_channels=n_channels,
-                        n_aux_channels=n_aux_channels,
-                        hr_size=(hr_height, hr_width),
-                        time_window=self.time_window, 
-                        **self.architecture_params)
 
             if self.verbose == 1 and self.running_on_first_worker:
                 self.model.summary(line_length=150)
