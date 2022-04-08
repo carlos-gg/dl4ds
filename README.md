@@ -6,14 +6,15 @@
 
 Python package implementing state-of-the-art and novel deep learning algorithms for empirical downscaling of gridded data. DL4DS is built on top of Tensorflow/Keras and supports distributed GPU training (data parallelism) thanks to Horovod. The training can be done from explicit pairs of HR and LR samples (e.g., HR observations and LR numerical weather prediction model output) or only with a HR dataset (e.g., HR observations or HR model output). All the models are able to handle multiple predictors and an arbitrary number of static variables (e.g., elevation or land-ocean mask).
 
-A wide variety of network architectures have been implemented. The main modelling approahces can be combined into many different architectures:
+A wide variety of network architectures have been implemented. The main modelling approaches can be combined into many different architectures:
 
-|Downscaling type      |Training (loss type)         |Sample type     |Backbone section     |Upsampling strategy   |
-|---                   |---                          |---             |---                  |---|
-|MOS (explicit pairs)  |Supervised (non-adversarial) |Spatial         |Plain convolutional  |Pre-upsampling: interpolation  |
-|PP (implicit pairs)   |Adversarial (conditional)    |Spatio-temporal |Residual             |Post-upsampling: sub-pixel convolution (SPC)|
-|                      |                             |                |Dense                |Post-upsampling: resize convolution (RC) |
-|                      |                             |                |Unet (only pre-ups)  |Post-upsampling: deconvolution (DC)   |
+|Downscaling type               |Training (loss type)         |Sample type     |Backbone module              |Upsampling method   |
+|---                            |---                          |---             |---                          |---|
+|MOS (explicit pairs)           |Supervised (non-adversarial) |Spatial         |Plain convolutional          |Pre-upsampling: interpolation (PIN) |
+|PerfectProg (implicit pairs)   |Adversarial (conditional)    |Spatio-temporal |Residual                     |Post-upsampling: sub-pixel convolution (SPC)|
+|                               |                             |                |Dense                        |Post-upsampling: resize convolution (RC) |
+|                               |                             |                |Unet (PIN, Spatial samples)  |Post-upsampling: deconvolution (DC)   |
+|                               |                             |                |Convnext (Spatial samples)   |                                      |
 
 ## Extended documentation 
 
@@ -23,9 +24,9 @@ Work in progress.
 
 Colab notebooks are being prepared. Stay tuned!
 
-Examples: 
-* choosing spatial samples (proving both HR and LR data), a residual backbone, pre-upsampling strategy and supervised training, we end up with the _resnet_pin_ model 
-* choosing spatio-temporal samples (with only HR data), a dense backbone, post-upsampligng strategy (DC) and adversarial training, we end up with the _cgan_recdensenet_dc_ model. 
+Examples of possible combinations: 
+* spatial samples (proving both HR and LR data, MOS-style), a residual backbone, pre-upsampling strategy and supervised training
+* spatio-temporal samples (with only HR data, PerfectProg-style), a dense backbone, post-upsampligng strategy (DC) and adversarial training
 
 
 
