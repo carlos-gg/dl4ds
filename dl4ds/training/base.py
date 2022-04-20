@@ -193,9 +193,9 @@ class Trainer(ABC):
                 model_to_save = self.model
 
             if folder_prefix is not None:
-                self.model_save_path = self.save_path + folder_prefix + self.model_name + '/'
+                self.model_save_path = self.save_path + folder_prefix + self.backbone + '_' + self.upsampling + '/'
             else:
-                self.model_save_path = self.save_path + self.model_name + '/'
+                self.model_save_path = self.save_path + self.backbone + '_' + self.upsampling + '/'
 
             if self.running_on_first_worker:
                 os.makedirs(self.model_save_path, exist_ok=True)
