@@ -54,7 +54,7 @@ class SupervisedTrainer(Trainer):
         validation_steps=None,
         device='GPU', 
         gpu_memory_growth=True,
-        use_multiprocessing=True, 
+        use_multiprocessing=False, 
         model_list=None,
         use_season=True, 
         learning_rate=(1e-3, 1e-4), 

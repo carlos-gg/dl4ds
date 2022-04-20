@@ -585,7 +585,7 @@ class PadConcat(tf.keras.layers.Layer):
         x2 = t2.get_shape().as_list()[2]
 
         if self.debug:
-            print(f'inp t1 ({y1},{x1}) t2 ({y2},{x2})')
+            print(f'input1 ({y1},{x1}) input2 ({y2},{x2})')
 
         if y2 < y1:
             t2 = ZeroPadding2D(padding=((0, y1 - y2), (0, 0)))(t2)
@@ -602,7 +602,7 @@ class PadConcat(tf.keras.layers.Layer):
             x1 = t1.get_shape().as_list()[2]
             y2 = t2.get_shape().as_list()[1]
             x2 = t2.get_shape().as_list()[2]
-            print(f'out t1 ({y1},{x1}) t2 ({y2},{x2})')
+            print(f'output1 ({y1},{x1}) output2 ({y2},{x2})')
 
         return Concatenate()([t1, t2])
 
