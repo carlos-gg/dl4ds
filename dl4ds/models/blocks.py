@@ -5,7 +5,7 @@ from tensorflow.keras.layers import (Add, Conv2D, ConvLSTM2D, Concatenate,
                                      Dropout, GaussianDropout,
                                      SpatialDropout2D, Conv2DTranspose, 
                                      SpatialDropout3D, LocallyConnected2D,
-                                     ZeroPadding2D, MaxPooling2D, 
+                                     ZeroPadding2D, MaxPooling2D, Resizing,
                                      DepthwiseConv2D, Dense, Lambda)
 from ..utils import checkarg_dropout_variant
 
@@ -401,14 +401,13 @@ class SubpixelConvolutionBlock(tf.keras.layers.Layer):
     [1] Real-Time Single Image and Video Super-Resolution Using an Efficient 
     Sub-Pixel Convolutional Neural Network: https://arxiv.org/abs/1609.05158
     """
-    def __init__(self, scale, n_filters, name_suffix='', **kwargs):
+    def __init__(self, scale, n_filters, name_suffix='', **kwargs) -> None:
         super().__init__(name='SubpixelConvolution' + name_suffix)
         self.scale = scale
         self.n_filters = n_filters
         self.conv = Conv2D(self.n_filters * (self.scale ** 2), 3, padding='same', **kwargs)
         self.conv2x = Conv2D(self.n_filters * (2 ** 2), 3, padding='same', **kwargs)
         self.conv5x = Conv2D(self.n_filters * (5 ** 2), 3, padding='same', **kwargs)
-
 
     def upsample_conv(self, x, factor):
         """Sub-pixel convolution (pixel shuffle)
@@ -449,6 +448,36 @@ class SubpixelConvolutionBlock(tf.keras.layers.Layer):
         return x
 
 
+class ResizeConvolutionBlock(tf.keras.layers.Layer):
+    """
+    Upsampling via bilinear interpolation followed by a 2D Convolution. 
+
+    References
+    ----------
+    [1] Deconvolution and Checkerboard Artifacts: 
+    https://distill.pub/2016/deconv-checkerboard/
+    """
+    def __init__(self, scale, n_filters, interpolation='bilinear', 
+                 name_suffix='', **kwargs) -> None:
+        super().__init__(name='ResizeConvolution' + name_suffix)
+        self.scale = scale
+        self.n_filters = n_filters
+        self.interpolation = interpolation
+        self.conv = Conv2D(self.n_filters, 3, padding='same', **kwargs)
+
+    def compute_output_shape(self, input_shape):
+        return (input_shape[0], int(input_shape[1] * self.scale), 
+                int(input_shape[2] * self.scale), input_shape[3])
+
+    def call(self, x):
+        input_shape = x.shape
+        height = int(input_shape[1] * self.scale)
+        width = int(input_shape[2] * self.scale)
+        y = Resizing(height, width, interpolation=self.interpolation)(x)
+        y = self.conv(y)
+        return y
+
+
 class DeconvolutionBlock(tf.keras.layers.Layer):
     """
     Deconvolution or transposed convolution block.
@@ -459,7 +488,7 @@ class DeconvolutionBlock(tf.keras.layers.Layer):
     https://arxiv.org/abs/1608.00367
     """
     def __init__(self, scale, n_filters, output_activation=None, 
-                 name_suffix=''):
+                 name_suffix='') -> None:
         super().__init__(name='Deconvolution' + name_suffix)
         self.scale = scale
         self.output_activation = output_activation
@@ -482,6 +511,10 @@ class DeconvolutionBlock(tf.keras.layers.Layer):
         """
         if self.scale == 4:
             x = self.conv2dtranspose1(x)
+            x = self.conv2dtranspose2(x)
+        if self.scale == 8:
+            x = self.conv2dtranspose1(x)
+            x = self.conv2dtranspose2(x)
             x = self.conv2dtranspose2(x)
         else:
             x = self.conv2dtranspose(x)
