@@ -5,7 +5,8 @@ from tensorflow.keras.models import Model
 
 from .blocks import (ResidualBlock, ConvBlock, DeconvolutionBlock,
                      DenseBlock, TransitionBlock, SubpixelConvolutionBlock,
-                     LocalizedConvBlock, get_dropout_layer, ConvNextBlock)
+                     LocalizedConvBlock, get_dropout_layer, ConvNextBlock,
+                     ResizeConvolutionBlock)
 from ..utils import (checkarg_backbone, checkarg_upsampling, 
                     checkarg_dropout_variant)
 
@@ -25,6 +26,7 @@ def net_postupsampling(
     dropout_variant=None,
     attention=False,
     activation='relu',
+    rc_interpolation='bilinear',
     output_activation=None,
     localcon_layer=False):
     """
@@ -126,8 +128,7 @@ def net_postupsampling(
     if upsampling == 'spc':
         x = SubpixelConvolutionBlock(scale, n_filters)(x)
     elif upsampling == 'rc':
-        x = UpSampling2D(scale, interpolation='bilinear')(x)
-        x = Conv2D(n_filters, ks, padding='same', activation=activation)(x)
+        x = ResizeConvolutionBlock(scale, n_filters, interpolation=rc_interpolation)(x)
     elif upsampling == 'dc':
         x = TransitionBlock(init_n_filters, activation=activation, 
                             name='TransitionDC')(x)
