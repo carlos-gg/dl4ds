@@ -6,7 +6,7 @@ from tensorflow.keras.models import Model
 from .blocks import (ResidualBlock, ConvBlock, DenseBlock, TransitionBlock,
                      LocalizedConvBlock, SubpixelConvolutionBlock, 
                      DeconvolutionBlock, EncoderBlock, PadConcat, 
-                     get_dropout_layer, ConvNextBlock)
+                     get_dropout_layer, ConvNextBlock, ResizeConvolutionBlock)
 from ..utils import checkarg_backbone, checkarg_dropout_variant
  
 
@@ -155,6 +155,7 @@ def unet_pin(
     normalization=None,
     attention=False,
     decoder_upsampling='rc',
+    rc_interpolation='bilinear',
     output_activation=None,
     width_cap=256,
     localcon_layer=False):
@@ -212,7 +213,7 @@ def unet_pin(
         if decoder_upsampling == 'spc':
             x = SubpixelConvolutionBlock(2, n_filters, name_suffix=str(j+1))(x)
         elif decoder_upsampling == 'rc':
-            x = UpSampling2D(2, interpolation='bilinear', name='BilinearUpsampling'+str(j+1))(x)
+            x = ResizeConvolutionBlock(2, n_filters, interpolation=rc_interpolation, name_suffix=str(j+1))(x)
         elif decoder_upsampling == 'dc':
             x = DeconvolutionBlock(2, n_filters, activation, name_suffix=str(j+1))(x)
 
