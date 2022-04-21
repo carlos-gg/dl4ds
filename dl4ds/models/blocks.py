@@ -452,6 +452,13 @@ class ResizeConvolutionBlock(tf.keras.layers.Layer):
     """
     Upsampling via bilinear interpolation followed by a 2D Convolution. 
 
+    Parameters
+    ----------
+    interpolation : str
+        The interpolation method. Defaults to "bilinear". Supports "bilinear", 
+        "nearest", "bicubic", "area", "lanczos3", "lanczos5", "gaussian", 
+        "mitchellcubic".
+
     References
     ----------
     [1] Deconvolution and Checkerboard Artifacts: 
@@ -641,23 +648,23 @@ class PadConcat(tf.keras.layers.Layer):
 
 
 class MCDropout(Dropout):
-  def call(self, inputs):
-    return super().call(inputs, training=True)
+    def call(self, inputs):
+        return super().call(inputs, training=True)
 
 
 class MCGaussianDropout(GaussianDropout):
-  def call(self, inputs):
-    return super().call(inputs, training=True)
+    def call(self, inputs):
+        return super().call(inputs, training=True)
 
 
 class MCSpatialDropout2D(SpatialDropout2D):
-  def call(self, inputs):
-    return super().call(inputs, training=True)
+    def call(self, inputs):
+        return super().call(inputs, training=True)
 
 
 class MCSpatialDropout3D(SpatialDropout3D):
-  def call(self, inputs):
-    return super().call(inputs, training=True)
+    def call(self, inputs):
+        return super().call(inputs, training=True)
 
 
 def get_dropout_layer(dropout_rate, dropout_variant, dim=2):

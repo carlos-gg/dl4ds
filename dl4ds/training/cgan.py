@@ -481,7 +481,7 @@ def load_checkpoint(
             generator = recnet_postupsampling(
                 backbone_block=backbone, upsampling=upsampling, scale=scale, 
                 n_channels=n_channels, n_aux_channels=n_aux_channels, 
-                n_filters=n_filters, n_blocks=n_blocks[0], lr_size=input_size_hw,
+                n_filters=n_filters, lr_size=input_size_hw,
                 n_channels_out=1, time_window=time_window, attention=attention)
         else:
             generator = net_postupsampling(
