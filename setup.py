@@ -50,7 +50,8 @@ setup(
         'sklearn',
         'opencv-python',
         'joblib',
-        'seaborn'
+        'seaborn',
+        'absl-py'
         ],
     extras_require={
         'horovod':['horovod'] 
