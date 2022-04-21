@@ -1,11 +1,10 @@
 import tensorflow as tf
-from tensorflow.keras.layers import (Add, Input, UpSampling2D, Concatenate, 
-                                     TimeDistributed)
+from tensorflow.keras.layers import (Add, Input, Concatenate, TimeDistributed)
 from tensorflow.keras.models import Model
 
 from .blocks import (RecurrentConvBlock, ConvBlock, SubpixelConvolutionBlock, 
                      DeconvolutionBlock, LocalizedConvBlock, 
-                     get_dropout_layer, TransitionBlock)
+                     get_dropout_layer, TransitionBlock, ResizeConvolutionBlock)
 from ..utils import (checkarg_backbone, checkarg_upsampling, 
                     checkarg_dropout_variant)
 
@@ -17,7 +16,6 @@ def recnet_postupsampling(
     n_channels, 
     n_aux_channels,
     n_filters, 
-    n_blocks,   # not used, here for compatibility with the signature of other models
     lr_size,
     time_window, 
     n_channels_out=1, 
@@ -26,6 +24,7 @@ def recnet_postupsampling(
     dropout_variant=None,
     normalization=None,
     attention=False,
+    rc_interpolation='bilinear',
     output_activation=None,
     localcon_layer=False):
     """
@@ -76,7 +75,7 @@ def recnet_postupsampling(
     if upsampling == 'spc':
         upsampling_layer = SubpixelConvolutionBlock(scale, n_filters_)
     elif upsampling == 'rc':
-        upsampling_layer = UpSampling2D(scale, interpolation='bilinear')
+        upsampling_layer = ResizeConvolutionBlock(scale, n_filters, interpolation=rc_interpolation)
     elif upsampling == 'dc':
         upsampling_layer = DeconvolutionBlock(scale, n_filters_)
     x = TimeDistributed(upsampling_layer, name='upsampling_' + upsampling)(x)
