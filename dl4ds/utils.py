@@ -13,7 +13,7 @@ from matplotlib.axes import Axes
 from matplotlib.figure import Figure
 from tensorflow.keras.callbacks import History
 
-from . import BACKBONE_BLOCKS, UPSAMPLING_METHODS
+from . import BACKBONE_BLOCKS, UPSAMPLING_METHODS, INTERPOLATION_METHODS
 
 
 def spatial_to_temporal_samples(array, time_window):
@@ -308,6 +308,8 @@ def resize_array(array, newsize, interpolation='inter_area', squeezed=True,
     resized_arr : numpy ndarray
         Interpolated array with size ``newsize``.
     """
+    if interpolation not in INTERPOLATION_METHODS:
+        raise ValueError(f'`interpolation` must be one of {INTERPOLATION_METHODS}. Received {interpolation}')
     if array.dtype in ['bool', 'int', 'int64']:
         array = array.astype('int')
         interpolation = 'nearest'  # only nearest is supported in opencv for int

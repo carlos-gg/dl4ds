@@ -152,6 +152,8 @@ class SupervisedTrainer(Trainer):
             By default, TensorFlow maps nearly all of the GPU memory of all GPUs.
             If True, we request to only grow the memory usage as is needed by 
             the process.
+        use_multiprocessing : bool, optional
+            Used for data generator. If True, use process-based threading.
         show_plot : bool, optional
             If True the static plot is shown after training. 
         save_plot : bool, optional
