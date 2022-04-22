@@ -14,10 +14,11 @@ def net_pin(
     backbone_block,
     n_channels, 
     n_aux_channels,
-    n_filters, 
-    n_blocks, 
     hr_size,
+    # ----- below are parameters that shall be tweaked by the user -----
     n_channels_out=1, 
+    n_filters=8, 
+    n_blocks=6, 
     activation='relu',
     dropout_rate=0,
     dropout_variant=None,

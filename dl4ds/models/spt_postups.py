@@ -15,10 +15,11 @@ def recnet_postupsampling(
     scale, 
     n_channels, 
     n_aux_channels,
-    n_filters, 
     lr_size,
     time_window, 
+    # ----- below are parameters that shall be tweaked by the user -----
     n_channels_out=1, 
+    n_filters=8,
     activation='relu',
     dropout_rate=0,
     dropout_variant=None,
