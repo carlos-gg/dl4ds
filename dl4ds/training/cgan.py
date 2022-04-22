@@ -169,27 +169,36 @@ class CGANTrainer(Trainer):
         self.disc = []
 
         self.time_window = time_window
-        if self.time_window is not None and not self.model_is_spatiotemp:
+        if self.time_window is not None and not self.model_is_spatiotemporal:
             self.time_window = None
-        if self.model_is_spatiotemp and self.time_window is None:
-            msg = f'``model={self.model_name}``, the argument ``time_window`` must be a postive integer'
-            raise ValueError(msg)
+        if self.model_is_spatiotemporal and self.time_window is None:
+            raise ValueError('The argument `time_window` must be a postive integer for spatio-temporal models')
 
     def setup_model(self):
         """
         """
         n_channels = self.data_train.shape[-1]
         n_aux_channels = 0
-        if self.static_vars is not None:
-            if not self.model_is_spatiotemp:
+        if self.model_is_spatiotemporal:
+            n_channels = self.data_train.shape[-1]
+            n_aux_channels = 0
+            if self.predictors_train is not None:
+                n_channels += len(self.predictors_train)
+            if self.static_vars is not None:
+                n_aux_channels += len(self.static_vars)
+            if self.use_season:
+                n_aux_channels += 4
+        else:
+            n_channels = self.data_train.shape[-1]
+            n_aux_channels = 0
+            if self.static_vars is not None:
                 n_channels += len(self.static_vars)
-            n_aux_channels += len(self.static_vars)
-        if isinstance(self.data_train, xr.DataArray):
-            if not self.model_is_spatiotemp:
+                n_aux_channels = len(self.static_vars)
+            if self.use_season:
                 n_channels += 4
-            n_aux_channels += 4
-        if self.predictors_train is not None:
-            n_channels += len(self.predictors_train)
+                n_aux_channels += 4
+            if self.predictors_train is not None:
+                n_channels += len(self.predictors_train)
         
         if self.patch_size is None:
             lr_height = int(self.data_train.shape[1] / self.scale)
@@ -251,7 +260,8 @@ class CGANTrainer(Trainer):
         n_channels_disc = n_channels[0] if isinstance(n_channels, tuple) else n_channels
         self.discriminator = residual_discriminator(n_channels=n_channels_disc, 
                                                     scale=self.scale, 
-                                                    model=self.model_name,
+                                                    upsampling=self.upsampling,
+                                                    is_spatiotemporal=self.model_is_spatiotemporal,
                                                     lr_size=(lr_height, lr_width),
                                                     **self.discriminator_params)
         
@@ -394,8 +404,10 @@ class CGANTrainer(Trainer):
             if self.use_season:
                 self.time_metadata_test = self.data_test.time.copy()
             else:
-                self.time_metadata = None
+                self.time_metadata_test = None
             self.data_test = self.data_test.values
+        else:
+            self.time_metadata_test = None
         if isinstance(self.data_test_lr, xr.DataArray):
             self.data_test_lr = self.data_test_lr.values
 
