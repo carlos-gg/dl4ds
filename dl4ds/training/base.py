@@ -155,6 +155,10 @@ class Trainer(ABC):
                 msg = 'The image size must be divisible by `scale` (remainder must be zero). '
                 msg += 'Crop the images or set `patch_size` accordingly'
                 raise ValueError(msg)  
+            if self.data_train_lr is not None:
+                scale_from_data = self.data_train.shape[1] / self.data_train_lr.shape[1]
+                if not int(scale_from_data) == int(self.scale):
+                    raise ValueError('Wrong `scale` value, check `data_train` and `data_train_lr` grid sizes')
 
         ### Choosing the loss function
         if loss == 'mae':  
