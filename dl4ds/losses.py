@@ -105,7 +105,15 @@ def msdssim(y_true, y_pred):
     maxv = tfk.maximum(tfk.max(y_true), tfk.max(y_pred))
     minv = tfk.minimum(tfk.min(y_true), tfk.min(y_pred))
     drange = maxv - minv
-    msssim = tf.image.ssim_multiscale(y_true, y_pred, max_val=drange, 
+    if tfk.min(y_true) < 0:
+        y_true_pos = y_true - tfk.min(y_true)
+    else:
+        y_true_pos = y_true
+    if tfk.min(y_pred) < 0:
+        y_pred_pos = y_pred - tfk.min(y_pred)
+    else:
+        y_pred_pos = y_pred
+    msssim = tf.image.ssim_multiscale(y_true_pos, y_pred_pos, max_val=drange, 
         filter_size=11, filter_sigma=1.5, k1=0.01, k2=0.03,
         power_factors=(0.0448, 0.2856, 0.3001, 0.2363))
     msssim = tf.reduce_mean((1 - msssim) / 2.0)
