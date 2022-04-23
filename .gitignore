@@ -2,3 +2,4 @@
 /dl4ds/__pycache__/
 /dl4ds/.ipynb_checkpoints/
 *.pyc
+*.DS_Store

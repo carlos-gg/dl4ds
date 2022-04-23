@@ -1,4 +1,4 @@
-__version__ = "1.4.0"
+__version__ = "1.5.0"
 
 BACKBONE_BLOCKS = ['convnet',       # plain convolutional block w/o skip connections
                    'resnet',        # residual convolutional blocks
@@ -12,6 +12,10 @@ UPSAMPLING_METHODS = ['spc',        # pixel shuffle or subpixel convolution in p
                       'pin']        # pre-upsampling via (bicubic) interpolation
 POSTUPSAMPLING_METHODS = ['spc', 'rc', 'dc']
 
+INTERPOLATION_METHODS = ['inter_area', 'nearest', 'bicubic', 'bilinear', 'lanczos']
+
+LOSS_FUNCTIONS = ['mae', 'mse', 'dssim', 'dssim_mae', 'dssim_mse', 
+                  'dssim_mae_mse', 'msdssim', 'msdssim_mae', 'msdssim_mae_mse']
 
 from .metrics import *
 from .inference import *
