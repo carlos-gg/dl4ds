@@ -126,9 +126,9 @@ class SupervisedTrainer(Trainer):
             Steps using at the end of each epoch for drawing validation samples. 
         test_steps : int, optional
             Steps using after training for drawing testing samples.
-        learning_rate : float or tuple of floats, optional
-            Learning rate. If a tuple is given, it corresponds to the min and max
-            LR used for a PiecewiseConstantDecay scheduler.
+        learning_rate : float or tuple of floats or list of floats, optional
+            Learning rate. If a tuple/list is given, it corresponds to the min 
+            and max LR used for a PiecewiseConstantDecay scheduler.
         lr_decay_after : float or None, optional
             Used for the PiecewiseConstantDecay scheduler.
         early_stopping : bool, optional
@@ -341,14 +341,23 @@ class SupervisedTrainer(Trainer):
         self.setup_model()
 
         ### Setting up the optimizer
-        if isinstance(self.learning_rate, tuple):
-            ### Adam optimizer with a scheduler 
-            self.learning_rate = PiecewiseConstantDecay(boundaries=[self.lr_decay_after], 
-                                                        values=[self.learning_rate[0], 
-                                                                self.learning_rate[1]])
-        elif isinstance(self.learning_rate, float) and has_horovod:
-            # as in Goyan et al 2018 (https://arxiv.org/abs/1706.02677)
-            self.learning_rate *= hvd.size()
+        if isinstance(self.learning_rate, (tuple, list)) and len(self.learning_rate) > 1:
+            ### Adam optimizer with a scheduler
+            if has_horovod:   
+                # as in Goyan et al 2018 (https://arxiv.org/abs/1706.02677)
+                self.learning_rate = PiecewiseConstantDecay(boundaries=[self.lr_decay_after], 
+                                                            values=[self.learning_rate[0] * hvd.size(), 
+                                                                    self.learning_rate[1] * hvd.size()])
+            else:   
+                self.learning_rate = PiecewiseConstantDecay(boundaries=[self.lr_decay_after], 
+                                                            values=[self.learning_rate[0], 
+                                                                    self.learning_rate[1]])
+        elif isinstance(self.learning_rate, float) or (isinstance(self.learning_rate, (tuple, list)) and len(self.learning_rate) == 1):
+            if isinstance(self.learning_rate, (tuple, list)) and len(self.learning_rate) == 1:
+                self.learning_rate = self.learning_rate[0]
+            if has_horovod:
+                # as in Goyan et al 2018 (https://arxiv.org/abs/1706.02677)
+                self.learning_rate *= hvd.size()
         self.optimizer = Adam(learning_rate=self.learning_rate)
 
         ### Callbacks

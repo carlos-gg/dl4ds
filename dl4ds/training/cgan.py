@@ -101,6 +101,10 @@ class CGANTrainer(Trainer):
             Size of the square patches used to grab training samples.
         batch_size : int, optional
             Batch size per replica.
+        learning_rates : float or tuple of floats or list of floats, optional
+            Learning rate for both the generator and discriminator. If a 
+            tuple/list is given, it corresponds to the learning rates of the
+            generator and the discriminator (in that order).
         static_vars : None or list of 2D ndarrays, optional
             Static variables such as elevation data or a binary land-ocean mask.
         checkpoints_frequency : int, optional
@@ -276,9 +280,11 @@ class CGANTrainer(Trainer):
         self.setup_model()
 
         # Optimizers
-        if isinstance(self.learning_rates, tuple):
+        if isinstance(self.learning_rates, (tuple, list)) and len(self.learning_rates) > 1:
             genlr, dislr = self.learning_rates
-        elif isinstance(self.learning_rates, float):
+        elif isinstance(self.learning_rates, float) or (isinstance(self.learning_rates, (tuple, list)) and len(self.learning_rates) == 1):
+            if isinstance(self.learning_rates, (tuple, list)) and len(self.learning_rates) == 1:
+                self.learning_rates = self.learning_rates[0]
             genlr = dislr = self.learning_rates
         generator_optimizer = tf.keras.optimizers.Adam(genlr, beta_1=0.5)
         discriminator_optimizer = tf.keras.optimizers.Adam(dislr, beta_1=0.5)
