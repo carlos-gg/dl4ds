@@ -1,4 +1,4 @@
-__version__ = "1.5.0"
+__version__ = "1.6.0"
 
 BACKBONE_BLOCKS = ['convnet',       # plain convolutional block w/o skip connections
                    'resnet',        # residual convolutional blocks
