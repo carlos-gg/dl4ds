@@ -25,7 +25,7 @@ flags.DEFINE_bool('test', True, 'Testing the trained model on holdout data')
 flags.DEFINE_enum('paired_samples', 'implicit', ['implicit', 'explicit'], 'Type of learning: implicit (PerfectProg) or explicit (MOS)')
 flags.DEFINE_bool('compute_metrics', True, 'Running vaerification metrics on the downscaled arrays')
 flags.DEFINE_string('data_module', None, 'Python module where the data pre-processing is done')
-flags.DEFINE_enum('run', 'full', ['full', 'test'], 'Type of training run: test or full') 
+flags.DEFINE_enum('run', 'full', ['full', 'debug'], 'Type of training run: full or debug') 
 flags.DEFINE_enum('backbone', 'resnet', BACKBONE_BLOCKS, 'Backbone section', short_name='bbo')
 flags.DEFINE_enum('upsampling', 'spc', UPSAMPLING_METHODS, 'Upsampling method', short_name='ups')
 flags.DEFINE_enum('device', 'GPU', ['GPU', 'CPU'], 'Device to be used: GPU or CPU', short_name='dev')
@@ -67,7 +67,7 @@ def dl4ds(argv):
     print('<<<<<<<<<<<<<<<<<<<<<<<<<<<<< DL4DS >>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>\n')
 
     # Run mode
-    if FLAGS.run == 'test':
+    if FLAGS.run == 'debug':
         epochs = 2
         steps_per_epoch = test_steps = validation_steps = 6
     elif FLAGS.run == 'full':
@@ -163,7 +163,6 @@ def dl4ds(argv):
                 device=FLAGS.device, 
                 gpu_memory_growth=FLAGS.gpu_memory_growth, 
                 use_multiprocessing=FLAGS.use_multiprocessing, 
-                use_season=False, 
                 learning_rate=FLAGS.learning_rate, 
                 lr_decay_after=FLAGS.lr_decay_after, 
                 early_stopping=FLAGS.early_stopping, 
@@ -197,7 +196,6 @@ def dl4ds(argv):
                 scale=FLAGS.scale, 
                 patch_size=FLAGS.patch_size, 
                 time_window=FLAGS.time_window,
-                use_season=False,
                 loss=FLAGS.loss,
                 epochs=epochs, 
                 batch_size=FLAGS.batch_size,
