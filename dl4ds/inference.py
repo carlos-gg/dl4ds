@@ -28,6 +28,7 @@ class Predictor():
         time_metadata=None,
         interpolation='inter_area', 
         batch_size=64,
+        scaler=None,
         save_path=None,
         save_fname='y_hat.npy',
         return_lr=False,
@@ -57,6 +58,10 @@ class Predictor():
         interpolation : str, optional
             Interpolation used when upsampling/downsampling the training samples.
             By default 'bicubic'. 
+        batch_size : int, optional
+            Batch size for feeding samples for inference.
+        scaler : None or dl4ds scaler object, optional
+            Scaler for backward scaling and restoring original distribution.
         save_path : str or None, optional
             If not None, the prediction (gridded variable at HR) is saved to disk.
         save_fname : str, optional
@@ -75,6 +80,7 @@ class Predictor():
         self.time_metadata = time_metadata
         self.interpolation = interpolation 
         self.batch_size = batch_size
+        self.scaler = scaler
         self.save_path = save_path
         self.save_fname = save_fname
         self.return_lr = return_lr
@@ -95,6 +101,7 @@ class Predictor():
             time_metadata=self.time_metadata, 
             interpolation=self.interpolation, 
             batch_size=self.batch_size, 
+            scaler=self.scaler,
             save_path=self.save_path,
             save_fname=self.save_fname, 
             return_lr=self.return_lr,
@@ -113,6 +120,7 @@ def predict(
     time_metadata=None,
     interpolation='inter_area', 
     batch_size=64,
+    scaler=None,
     save_path=None,
     save_fname='y_hat.npy',
     return_lr=False,
@@ -132,11 +140,10 @@ def predict(
         If True, the data is assumed to be a HR groundtruth to be downsampled. 
         Otherwise, data is a LR gridded dataset to be downscaled.
     static_vars : None or list of 2D ndarrays, optional
-            Static variables such as elevation data or a binary land-ocean mask.
+        Static variables such as elevation data or a binary land-ocean mask.
     predictors : list of ndarray, optional
-        Predictor variables for trianing. Given as list of 4D ndarrays with 
-        dims [nsamples, lat, lon, 1] or 5D ndarrays with dims 
-        [nsamples, time, lat, lon, 1]. 
+        Predictor variables for trianing. Given as list of 4D ndarrays with dims 
+        [nsamples, lat, lon, 1] or 5D ndarrays with dims [nsamples, time, lat, lon, 1]. 
     time_window : int or None, optional
         If None, then the function assumes the ``model`` is spatial only. If an 
         integer is given, then the ``model`` should be spatio-temporal and the 
@@ -144,6 +151,10 @@ def predict(
     interpolation : str, optional
         Interpolation used when upsampling/downsampling the training samples.
         By default 'bicubic'. 
+    batch_size : int, optional
+        Batch size for feeding samples for inference.
+    scaler : None or dl4ds scaler object, optional
+        Scaler for backward scaling and restoring original distribution.
     save_path : str or None, optional
         If not None, the prediction (gridded variable at HR) is saved to disk.
     save_fname : str, optional
@@ -159,8 +170,9 @@ def predict(
         model = trainer.generator
 
     upsampling = model.name.split('_')[-1]
-    # if (check input dimensionality) and time_window is None:
-    #    raise ValueError('`time_window` must be provided')
+    dim = len(model.input[0].shape)
+    if dim == 5 and time_window is None:
+       raise ValueError('`time_window` must be provided for spatiotemporal model')
 
     if use_season:
         if isinstance(array, xr.DataArray):
@@ -237,6 +249,9 @@ def predict(
         # https://www.tensorflow.org/api_docs/python/tf/keras/Model#predict
         x_test_hat = model.predict(inputs, batch_size=batch_size, verbose=1)
     
+    if scaler is not None:
+        x_test_hat = scaler.inverse_transform(x_test_hat)
+
     if save_path is not None and save_fname is not None:
         name = os.path.join(save_path, save_fname)
         np.save(name, x_test_hat.astype('float32'))
