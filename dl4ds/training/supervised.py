@@ -56,7 +56,6 @@ class SupervisedTrainer(Trainer):
         gpu_memory_growth=True,
         use_multiprocessing=False, 
         model_list=None,
-        use_season=True, 
         learning_rate=(1e-3, 1e-4), 
         lr_decay_after=1e5,
         early_stopping=False, 
@@ -171,7 +170,6 @@ class SupervisedTrainer(Trainer):
             data_train=data_train,
             data_train_lr=data_train_lr,
             time_window=time_window,
-            use_season=use_season,
             loss=loss,
             batch_size=batch_size, 
             patch_size=patch_size,
@@ -230,8 +228,7 @@ class SupervisedTrainer(Trainer):
             static_vars=self.static_vars, 
             patch_size=self.patch_size, 
             interpolation=self.interpolation,
-            time_window=self.time_window,
-            use_season=self.use_season)
+            time_window=self.time_window)
         self.ds_train = DataGenerator(
             self.data_train, self.data_train_lr, 
             predictors=self.predictors_train, **datagen_params)
@@ -253,17 +250,12 @@ class SupervisedTrainer(Trainer):
                 n_channels += len(self.predictors_train)
             if self.static_vars is not None:
                 n_aux_channels += len(self.static_vars)
-            if self.use_season:
-                n_aux_channels += 4
         else:
             n_channels = self.data_train.shape[-1]
             n_aux_channels = 0
             if self.static_vars is not None:
                 n_channels += len(self.static_vars)
                 n_aux_channels = len(self.static_vars)
-            if self.use_season:
-                n_channels += 4
-                n_aux_channels += 4
             if self.predictors_train is not None:
                 n_channels += len(self.predictors_train)
 

@@ -33,7 +33,6 @@ class Trainer(ABC):
         data_train,
         data_train_lr=None,
         time_window=None,
-        use_season=True,
         loss='mae',
         batch_size=64, 
         patch_size=None,
@@ -50,16 +49,10 @@ class Trainer(ABC):
         ):
         """
         """
-        self.use_season = use_season
-        if self.use_season:
-            if not hasattr(data_train, 'time'):
-                raise TypeError('input data must be a xr.DataArray and have' 
-                                'time metadata when use_season=True')
-        
         # checking training data split (both hr and lr)
         self.data_train = data_train
         if not isinstance(self.data_train, (xr.DataArray, np.ndarray)):
-            msg = '`data_train` must be a np.ndarray or xr.DataArray object'
+            msg = '`data_train` object must be of np.ndarray or xr.DataArray type'
             raise TypeError(msg)
         if not self.data_train.ndim > 3:
             msg = '`data_train` must be at least 4D [samples, lat, lon, variables]'

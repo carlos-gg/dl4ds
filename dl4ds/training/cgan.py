@@ -43,7 +43,6 @@ class CGANTrainer(Trainer):
         scale=5, 
         patch_size=None, 
         time_window=True,
-        use_season=True,
         loss='mae',
         epochs=60, 
         batch_size=16,
@@ -129,7 +128,6 @@ class CGANTrainer(Trainer):
             data_train=data_train, 
             data_train_lr=data_train_lr,
             time_window=time_window,
-            use_season=use_season,
             loss=loss, 
             batch_size=batch_size, 
             patch_size=patch_size, 
@@ -190,17 +188,12 @@ class CGANTrainer(Trainer):
                 n_channels += len(self.predictors_train)
             if self.static_vars is not None:
                 n_aux_channels += len(self.static_vars)
-            if self.use_season:
-                n_aux_channels += 4
         else:
             n_channels = self.data_train.shape[-1]
             n_aux_channels = 0
             if self.static_vars is not None:
                 n_channels += len(self.static_vars)
                 n_aux_channels = len(self.static_vars)
-            if self.use_season:
-                n_channels += 4
-                n_aux_channels += 4
             if self.predictors_train is not None:
                 n_channels += len(self.predictors_train)
         
@@ -320,10 +313,7 @@ class CGANTrainer(Trainer):
             self.steps_per_epoch = int(self.n / self.batch_size)
 
         if isinstance(self.data_train, xr.DataArray):
-            if self.use_season:
-                self.time_metadata = self.data_train.time.copy()
-            else:
-                self.time_metadata = None
+            # self.time_metadata = self.data_train.time.copy()  # get time metadata
             self.data_train = self.data_train.values
         if isinstance(self.data_train_lr, xr.DataArray):
             self.data_train_lr = self.data_train_lr.values
@@ -348,9 +338,9 @@ class CGANTrainer(Trainer):
                     static_vars=self.static_vars, 
                     predictors=self.predictors_train,
                     interpolation=self.interpolation,
-                    time_metadata=self.time_metadata)
+                    time_metadata=None)
                
-                if self.static_vars is not None or self.use_season:
+                if self.static_vars is not None:
                     [lr_array, aux_hr], [hr_array] = res
                 else:
                     [lr_array], [hr_array] = res
@@ -407,10 +397,7 @@ class CGANTrainer(Trainer):
             self.predictors_test = None
 
         if isinstance(self.data_test, xr.DataArray):
-            if self.use_season:
-                self.time_metadata_test = self.data_test.time.copy()
-            else:
-                self.time_metadata_test = None
+            # self.time_metadata_test = self.data_test.time.copy()  # time metadata
             self.data_test = self.data_test.values
         else:
             self.time_metadata_test = None
@@ -438,9 +425,9 @@ class CGANTrainer(Trainer):
                 static_vars=self.static_vars, 
                 predictors=self.predictors_test,
                 interpolation=self.interpolation,
-                time_metadata=self.time_metadata_test)
+                time_metadata=None)
             
-            if self.static_vars is not None or self.use_season:
+            if self.static_vars is not None:
                 [lr_array, aux_hr], [hr_array] = res
                 hr_arrtest = tf.cast(hr_array, tf.float32)
                 lr_arrtest = tf.cast(lr_array, tf.float32)
@@ -473,8 +460,7 @@ def load_checkpoint(
     time_window=None, 
     n_blocks=(20, 4), 
     n_filters=64, 
-    attention=False, 
-    use_season=False):
+    attention=False):
     """
     """
     n_channels = 1
@@ -482,9 +468,6 @@ def load_checkpoint(
     if n_static_vars > 0:
         n_channels += n_static_vars
         n_aux_channels += n_static_vars
-    if use_season:
-        n_aux_channels += 4
-        n_channels += 4
     if n_predictors > 0:
         n_channels += n_predictors
 
