@@ -1,40 +1,49 @@
 #!/usr/bin/env python
 
-# Usign Agg MLP backend to prevent errors related to X11 unable to connect to display "localhost:10.0"
-import matplotlib
-
-from dl4ds import inference
-matplotlib.use('Agg')
-import importlib.util
 import numpy as np
 import xarray as xr
+import importlib.util
 from absl import app, flags  
+
+# Usign Agg MLP backend to prevent errors related to X11 unable to connect to display "localhost:10.0"
+import matplotlib
+matplotlib.use('Agg')
+
+# Attempting to import horovod
 try:
     import horovod.tensorflow.keras as hvd
     has_horovod = True
+    hvd.init()
+    if hvd.rank() == 0:
+        running_on_first_worker = True
+    else:
+        running_on_first_worker = False
 except ImportError:
     has_horovod = False
+    running_on_first_worker = True
+
 import dl4ds as dds
 from dl4ds import BACKBONE_BLOCKS, UPSAMPLING_METHODS, INTERPOLATION_METHODS, LOSS_FUNCTIONS
 
 
 FLAGS = flags.FLAGS
 flags.DEFINE_bool('train', True, 'Training a model')
+flags.DEFINE_bool('debug', False, 'If True a debug training run (2 epochs by default with 6 steps) is executed') 
 flags.DEFINE_enum('trainer', 'SupervisedTrainer', ['SupervisedTrainer', 'CGANTrainer'], 'Tainer')
 flags.DEFINE_bool('test', True, 'Testing the trained model on holdout data')
 flags.DEFINE_enum('paired_samples', 'implicit', ['implicit', 'explicit'], 'Type of learning: implicit (PerfectProg) or explicit (MOS)')
 flags.DEFINE_bool('compute_metrics', True, 'Running vaerification metrics on the downscaled arrays')
 flags.DEFINE_string('data_module', None, 'Python module where the data pre-processing is done')
-flags.DEFINE_enum('run', 'full', ['full', 'debug'], 'Type of training run: full or debug') 
-flags.DEFINE_enum('backbone', 'resnet', BACKBONE_BLOCKS, 'Backbone section', short_name='bbo')
-flags.DEFINE_enum('upsampling', 'spc', UPSAMPLING_METHODS, 'Upsampling method', short_name='ups')
-flags.DEFINE_enum('device', 'GPU', ['GPU', 'CPU'], 'Device to be used: GPU or CPU', short_name='dev')
+flags.DEFINE_enum('backbone', 'resnet', BACKBONE_BLOCKS, 'Backbone section')
+flags.DEFINE_enum('upsampling', 'spc', UPSAMPLING_METHODS, 'Upsampling method')
+flags.DEFINE_enum('device', 'GPU', ['GPU', 'CPU'], 'Device to be used: GPU or CPU')
 flags.DEFINE_bool('save', True, 'Saving to disk the trained model, metrics, run info, etc')
 flags.DEFINE_string('save_path', './', 'Path for saving results to disk')
 flags.DEFINE_integer('scale', 2, 'Scaling factor, positive integer')
 flags.DEFINE_enum('interpolation', 'inter_area', INTERPOLATION_METHODS, 'Interpolation method')
 flags.DEFINE_integer('patch_size', None, 'Patch size in number of px/gridpoints')
 flags.DEFINE_bool('time_window', None, 'Time window for training spatio-temporal models')
+flags.DEFINE_integer('epochs', 100, 'Number of training epochs')
 flags.DEFINE_integer('batch_size', 32, 'Batch size (of samples) used during training')
 flags.DEFINE_enum('loss', 'mae', LOSS_FUNCTIONS, 'Loss function')
 flags.DEFINE_multi_float('learning_rate', 1e-3, 'Learning rate')
@@ -64,16 +73,19 @@ flags.DEFINE_enum('rc_interpolation', 'bilinear', INTERPOLATION_METHODS, 'Interp
 
 
 def dl4ds(argv):
-    print('<<<<<<<<<<<<<<<<<<<<<<<<<<<<< DL4DS >>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>\n')
+    if running_on_first_worker:
+        print('<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<< DL4DS >>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>\n')
 
     # Run mode
-    if FLAGS.run == 'debug':
+    if FLAGS.debug:
         epochs = 2
         steps_per_epoch = test_steps = validation_steps = 6
-    elif FLAGS.run == 'full':
-        epochs = 100
+    else:
+        epochs = FLAGS.epochs
         steps_per_epoch = test_steps = validation_steps = None 
 
+    if running_on_first_worker:
+        print('<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<< Loading data >>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>\n')
     # Training data from Python script/module
     if FLAGS.data_module is not None:
         spec = importlib.util.spec_from_file_location("module.name", FLAGS.data_module)
@@ -135,7 +147,8 @@ def dl4ds(argv):
                 rc_interpolation=FLAGS.rc_interpolation)
 
     if FLAGS.train:
-        print('\n<<<<<<<<<<<<<<<<<<<<<<< DL4DS Training phase >>>>>>>>>>>>>>>>>>>>>>\n')
+        if running_on_first_worker:
+            print('\n<<<<<<<<<<<<<<<<<<<<<<<<<<<<< DL4DS Training phase >>>>>>>>>>>>>>>>>>>>>>>>>>>>>\n')
         if FLAGS.trainer == 'SupervisedTrainer':
             trainer = dds.SupervisedTrainer(
                 backbone=FLAGS.backbone, 
@@ -218,7 +231,8 @@ def dl4ds(argv):
         trainer.run()
 
     if FLAGS.test:
-        print('\n<<<<<<<<<<<<<<<<<<<<<<<< DL4DS Test phase >>>>>>>>>>>>>>>>>>>>>>>>\n')
+        if running_on_first_worker:
+            print('\n<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<< DL4DS Test phase >>>>>>>>>>>>>>>>>>>>>>>>>>>>>\n')
         if FLAGS.paired_samples == 'implicit' and not FLAGS.inference_array_in_hr:
             print('Make sure the inference array has the right resolution')
         if DATA.inference_scaler is None:
@@ -254,7 +268,8 @@ def dl4ds(argv):
                 y_hat_datarray.to_netcdf(f'{FLAGS.save_path}y_hat.nc')
 
     if FLAGS.compute_metrics:
-        print('\n<<<<<<<<<<<<<<<<<<< DL4DS Metrics computation phase >>>>>>>>>>>>>>>>>\n')
+        if running_on_first_worker:
+            print('\n<<<<<<<<<<<<<<<<<<<<<<<<< DL4DS Metrics computation phase >>>>>>>>>>>>>>>>>>>>>>\n')
         if not has_horovod or (has_horovod and hvd.rank() == 0):
             metrics = dds.compute_metrics(
                 y_test=DATA.gt_holdout_dataset, 
