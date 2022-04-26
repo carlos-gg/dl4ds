@@ -13,7 +13,8 @@ from matplotlib.axes import Axes
 from matplotlib.figure import Figure
 from tensorflow.keras.callbacks import History
 
-from . import BACKBONE_BLOCKS, UPSAMPLING_METHODS, INTERPOLATION_METHODS
+from . import BACKBONE_BLOCKS, DROPOUT_VARIANTS, LOSS_FUNCTIONS, UPSAMPLING_METHODS, INTERPOLATION_METHODS
+from .losses import mae, mse, dssim, dssim_mae, dssim_mae_mse, dssim_mse, msdssim, msdssim_mae, msdssim_mae_mse
 
 
 def spatial_to_temporal_samples(array, time_window):
@@ -107,15 +108,49 @@ def checkarg_dropout_variant(dropout_variant):
     dropout_variant : str
         Desired dropout variant.  
     """
-    if dropout_variant is None:
+    if dropout_variant is None or dropout_variant == 'vanilla':
         return dropout_variant
     elif isinstance(dropout_variant, str):
-        if dropout_variant not in ['gaussian', 'spatial', 'mcdrop', 'mcgaussiandrop', 'mcspatialdrop']:
-            msg = f"`dropout_variant` must be one of "
-            msg += f"[None, 'gaussian', 'spatial', 'mcdrop', 'mcgaussiandrop', 'mcspatialdrop'], got {dropout_variant}"
+        if dropout_variant not in DROPOUT_VARIANTS:
+            msg = f"`dropout_variant` must be None or one of {DROPOUT_VARIANTS}, got {dropout_variant}"
             raise ValueError(msg)
         else:
             return dropout_variant
+
+
+def checkarg_loss(loss):
+    """Check the argument ``loss``.
+
+    Parameters
+    ----------
+    loss : str
+        Loss/cost function.  
+    """
+    if isinstance(loss, str):
+        if loss not in LOSS_FUNCTIONS:
+            msg = f"`loss` must be one of {LOSS_FUNCTIONS}, got {loss}"
+            raise ValueError(msg)
+        else:
+            if loss == 'mae':  
+                return mae
+            elif loss == 'mse':  
+                return mse
+            elif loss == 'dssim':
+                return dssim
+            elif loss == 'dssim_mae':
+                return dssim_mae
+            elif loss == 'dssim_mse':
+                return dssim_mse
+            elif loss == 'dssim_mae_mse':
+                return dssim_mae_mse
+            elif loss == 'msdssim':
+                return msdssim
+            elif loss == 'msdssim_mae':
+                return msdssim_mae
+            elif loss == 'msdssim_mae_mse':
+                return msdssim_mae_mse
+    else:
+        raise TypeError('`loss` must be a string, one of {LOSS_FUNCTIONS}')
 
 
 def set_gpu_memory_growth():
