@@ -378,7 +378,10 @@ class RecurrentConvBlock(tf.keras.layers.Layer):
         """
         Forward pass. 
         """
-        Y = self.dropout1(X) if self.apply_dropout else X
+        if self.apply_dropout:
+            Y = self.dropout1(X)  
+        else:
+            Y = X
         Y = self.convlstm1(Y)
         if self.normalization is not None:
             Y = self.norm1(Y)
@@ -674,7 +677,7 @@ def get_dropout_layer(dropout_rate, dropout_variant, dim=2):
     """
     dropout_variant = checkarg_dropout_variant(dropout_variant)
     if dropout_rate > 0:
-        if dropout_variant is None:
+        if dropout_variant is None or dropout_variant == 'vanilla':
             layer = Dropout(dropout_rate)
         elif dropout_variant == 'gaussian':
             layer = GaussianDropout(dropout_rate)
