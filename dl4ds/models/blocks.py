@@ -208,7 +208,10 @@ class ResidualBlock(ConvBlock):
             self.conv1x1 = Conv2D(filters, kernel_size=1, strides=1)
 
     def call(self, X):
-        Y = self.dropout1(X) if self.apply_dropout else X
+        if self.apply_dropout:
+            Y = self.dropout1(X)  
+        else:
+            Y = X
         Y = self.conv1(Y)
         if self.normalization is not None:
             Y = self.norm1(Y)

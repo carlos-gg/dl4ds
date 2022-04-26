@@ -1,4 +1,4 @@
-__version__ = "1.6.2"
+__version__ = "1.6.3"
 
 BACKBONE_BLOCKS = [
     'convnet',          # plain convolutional block w/o skip connections
@@ -36,7 +36,7 @@ DROPOUT_VARIANTS = [
     'vanilla',          # vanilla dropout
     'gaussian',         # gaussian dropout
     'spatial',          # spatial dropout
-    'mcdrop',           # monte carlo dropout
+    'mcdrop',           # monte carlo (vanilla) dropout
     'mcgaussiandrop',   # monte carlo gaussian dropout
     'mcspatialdrop']    # monte carlo spatial dropout
 
