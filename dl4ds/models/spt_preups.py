@@ -48,9 +48,7 @@ def recnet_pin(
     dropout_variant = checkarg_dropout_variant(dropout_variant)
 
     auxvar_array_is_given = True if n_aux_channels > 0 else False
-    h_hr = hr_size[0]
-    w_hr = hr_size[1]
-
+    h_hr, w_hr = hr_size
     if not localcon_layer: 
         x_in = Input(shape=(None, None, None, n_channels))
     else:
@@ -62,23 +60,9 @@ def recnet_pin(
                                normalization=normalization)(x_in)
 
     for i in range(n_blocks):
-        if backbone_block == 'convnet':
-            b = ConvBlock(
-                n_filters, activation=activation, dropout_rate=dropout_rate, 
-                dropout_variant=dropout_variant, normalization=normalization, 
-                attention=attention)(b)
-        elif backbone_block == 'resnet':
-            b = ResidualBlock(
-                n_filters, activation=activation, dropout_rate=dropout_rate, 
-                dropout_variant=dropout_variant, normalization=normalization, 
-                attention=attention)(b)
-        elif backbone_block == 'densenet':
-            b = DenseBlock(
-                n_filters, activation=activation, dropout_rate=dropout_rate, 
-                dropout_variant=dropout_variant, normalization=normalization, 
-                attention=attention)(b)
-            b = TransitionBlock(n_filters // 2)(b)  # another option: half of the DenseBlock channels
-    b = Conv2D(n_filters, (3, 3), padding='same')(b)
+        b = RecurrentConvBlock(n_filters, activation=activation, 
+            normalization=normalization, dropout_rate=dropout_rate,
+            dropout_variant=dropout_variant, name_suffix=str(i + 2))(b)
 
     b = get_dropout_layer(dropout_rate, dropout_variant, dim=3)(b)
 
