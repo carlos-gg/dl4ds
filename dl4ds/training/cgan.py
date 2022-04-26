@@ -544,7 +544,7 @@ def generator_loss(disc_generated_output, gen_output, target, gen_pxloss_functio
     
     where LAMBDA = 100 was decided by the authors of the paper.
     """
-    binary_crossentropy = tf.keras.losses.BinaryCrossentropy(from_logits=True)
+    binary_crossentropy = tf.keras.losses.BinaryCrossentropy(from_logits=False)
     # binary crossentropy
     gan_loss = binary_crossentropy(tf.ones_like(disc_generated_output), 
                                    disc_generated_output)
@@ -565,7 +565,7 @@ def discriminator_loss(disc_real_output, disc_generated_output):
     an array of zeros(since these are the fake images)
     * Then the total_loss is the sum of real_loss and the generated_loss
     """
-    binary_crossentropy = tf.keras.losses.BinaryCrossentropy(from_logits=True)  
+    binary_crossentropy = tf.keras.losses.BinaryCrossentropy(from_logits=False)  
     real_loss = binary_crossentropy(tf.ones_like(disc_real_output), disc_real_output)
     generated_loss = binary_crossentropy(tf.zeros_like(disc_generated_output), 
                                          disc_generated_output)

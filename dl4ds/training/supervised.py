@@ -143,8 +143,9 @@ class SupervisedTrainer(Trainer):
             None, then ``'./'`` is used. The SavedModel format is a 
             directory containing a protobuf binary and a TensorFlow checkpoint.
         savecheckpoint_path : None or str
-            Path for saving the training checkpoints. If None, then no 
-            checkpoints are saved during training.
+            Path for saving the training checkpoints, leaving the model with the
+            min validation loss. If None, then no checkpoints are saved during 
+            training.
         device : str
             Choice of 'GPU' or 'CPU' for the training of the Tensorflow models. 
         gpu_memory_growth : bool, optional
