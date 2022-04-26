@@ -34,6 +34,18 @@ def recnet_postupsampling(
     to ``upsampling``). These models are capable of exploiting spatio-temporal
     samples.
 
+    Parameters
+    ----------
+    normalization : str or None, optional
+        Normalization method in the residual or dense block. Can be either 'bn'
+        for BatchNormalization or 'ln' for LayerNormalization. If None, then no
+        normalization is performed (eg., for the 'resnet' backbone this results 
+        in the EDSR-style residual block).
+    dropout_rate : float, optional
+        Float between 0 and 1. Fraction of the input units to drop. If 0 then no
+        dropout is applied. 
+    dropout_variant : str or None, optional
+        Type of dropout. Defined in dl4ds.DROPOUT_VARIANTS variable. 
     """
     backbone_block = checkarg_backbone(backbone_block)
     upsampling = checkarg_upsampling(upsampling)
