@@ -17,10 +17,8 @@ try:
 except ImportError:
     has_horovod = False
 
-from ..utils import (list_devices, set_gpu_memory_growth, plot_history,
+from ..utils import (list_devices, set_gpu_memory_growth, plot_history, checkarg_loss,
                      set_visible_gpus, check_compatibility_upsbackb)
-from ..losses import (mae, mse, dssim, dssim_mae, dssim_mae_mse, dssim_mse,
-                      msdssim, msdssim_mae)
 
 
 class Trainer(ABC):
@@ -154,24 +152,7 @@ class Trainer(ABC):
                     raise ValueError('Wrong `scale` value, check `data_train` and `data_train_lr` grid sizes')
 
         ### Choosing the loss function
-        if loss == 'mae':  
-            self.lossf = mae
-        elif loss == 'mse':  
-            self.lossf = mse
-        elif loss == 'dssim':
-            self.lossf = dssim
-        elif loss == 'dssim_mae':
-            self.lossf = dssim_mae
-        elif loss == 'dssim_mse':
-            self.lossf = dssim_mse
-        elif loss == 'dssim_mae_mse':
-            self.lossf = dssim_mae_mse
-        elif loss == 'msdssim':
-            self.lossf = msdssim
-        elif loss == 'msdssim_mae':
-            self.lossf = msdssim_mae
-        else:
-            raise ValueError('`loss` not recognized')
+        self.lossf = checkarg_loss(self.loss)
 
     @abstractmethod
     def run(self):
