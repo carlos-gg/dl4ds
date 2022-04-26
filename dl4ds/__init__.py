@@ -1,7 +1,7 @@
 __version__ = "1.6.2"
 
 BACKBONE_BLOCKS = [
-'convnet',              # plain convolutional block w/o skip connections
+    'convnet',          # plain convolutional block w/o skip connections
     'resnet',           # residual convolutional blocks
     'densenet',         # dense convolutional blocks
     'convnext',         # convnext style residual blocks
@@ -14,7 +14,12 @@ UPSAMPLING_METHODS = [
     'pin']              # pre-upsampling via (bicubic) interpolation
 POSTUPSAMPLING_METHODS = ['spc', 'rc', 'dc']
 
-INTERPOLATION_METHODS = ['inter_area', 'nearest', 'bicubic', 'bilinear', 'lanczos']
+INTERPOLATION_METHODS = [
+    'inter_area',       # resampling using pixel area relation (from opencv)
+    'nearest',          # nearest neightbors interpolation (from opencv)
+    'bicubic',          # bicubic interpolation (from opencv)
+    'bilinear',         # bilinear interpolation (from opencv)
+    'lanczos']          # lanczos interpolation over 8x8 neighborhood (from opencv)
 
 LOSS_FUNCTIONS = [
     'mae',              # mean absolute error  
