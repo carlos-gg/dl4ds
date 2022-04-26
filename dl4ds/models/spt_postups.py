@@ -20,6 +20,7 @@ def recnet_postupsampling(
     # ----- below are parameters that shall be tweaked by the user -----
     n_channels_out=1, 
     n_filters=8,
+    n_blocks=4,
     activation='relu',
     dropout_rate=0,
     dropout_variant=None,
@@ -53,44 +54,35 @@ def recnet_postupsampling(
         
     auxvar_array_is_given = True if n_aux_channels > 0 else False
 
-    h_lr = lr_size[0]
-    w_lr = lr_size[1]
-
-    if not localcon_layer: 
-        x_in = Input(shape=(None, None, None, n_channels))
-    else:
-        x_in = Input(shape=(None, h_lr, w_lr, n_channels))
+    h_lr, w_lr = lr_size
+    x_in = Input(shape=(None, h_lr, w_lr, n_channels))
     
-    x = b = RecurrentConvBlock(
-        n_filters, 
-        activation=activation, 
-        normalization=normalization)(x_in)
+    x = b = RecurrentConvBlock(n_filters, activation=activation, 
+        normalization=normalization, name_suffix='1')(x_in)
 
-    b = RecurrentConvBlock(
-        n_filters, 
-        activation=activation, 
-        normalization=normalization,
-        dropout_rate=dropout_rate,
-        dropout_variant=dropout_variant)(b)
+    for i in range(n_blocks):
+        b = RecurrentConvBlock(n_filters, activation=activation, 
+            normalization=normalization, dropout_rate=dropout_rate,
+            dropout_variant=dropout_variant, name_suffix=str(i + 2))(b)
     
     b = get_dropout_layer(dropout_rate, dropout_variant, dim=3)(b)
     
     if backbone_block == 'convnet':
         x = b
-        n_filters_ = n_filters
+        n_filters_ups = n_filters
     elif backbone_block == 'resnet':
         x = Add()([x, b])
-        n_filters_ = n_filters
+        n_filters_ups = n_filters
     elif backbone_block == 'densenet':
         x = Concatenate()([x, b])
-        n_filters_ = x.get_shape()[-1]
+        n_filters_ups = x.get_shape()[-1]
     
     if upsampling == 'spc':
-        upsampling_layer = SubpixelConvolutionBlock(scale, n_filters_)
+        upsampling_layer = SubpixelConvolutionBlock(scale, n_filters_ups)
     elif upsampling == 'rc':
-        upsampling_layer = ResizeConvolutionBlock(scale, n_filters, interpolation=rc_interpolation)
+        upsampling_layer = ResizeConvolutionBlock(scale, n_filters_ups, interpolation=rc_interpolation)
     elif upsampling == 'dc':
-        upsampling_layer = DeconvolutionBlock(scale, n_filters_)
+        upsampling_layer = DeconvolutionBlock(scale, n_filters_ups)
     x = TimeDistributed(upsampling_layer, name='upsampling_' + upsampling)(x)
 
     #---------------------------------------------------------------------------
