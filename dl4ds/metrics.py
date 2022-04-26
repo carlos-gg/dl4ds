@@ -141,13 +141,15 @@ def compute_metrics(
     if scaler is not None:
         if hasattr(scaler, 'inverse_transform'):
             y_test = scaler.inverse_transform(y_test)
-            y_test_hat = scaler.inverse_transform(y_test_hat)
-
-    if mask is not None and isinstance(mask, xr.DataArray):
-        mask = mask.values
+            y_test_hat = scaler.inverse_transform(y_test_hat)        
 
     # applying valid grid points mask
     if mask is not None:
+        if isinstance(mask, xr.DataArray):
+            mask = mask.values.copy()
+        elif isinstance(mask, np.ndarray):
+            mask = mask.copy()
+
         if mask.ndim == 2:
             mask = np.expand_dims(mask, -1)
         y_test = y_test.copy()
@@ -156,6 +158,9 @@ def compute_metrics(
             y_test[i] *= mask
         for i in range(y_test_hat.shape[0]):
             y_test_hat[i] *= mask
+        mask_nan = mask.astype('float').copy()
+        mask_nan[mask == 0] = np.nan
+        mask = np.squeeze(mask)
 
     ### Computing metrics
     drange = max(y_test.max(), y_test_hat.max()) - min(y_test.min(), y_test_hat.min())
@@ -186,43 +191,44 @@ def compute_metrics(
     std_spatial_rmse = np.std(spatial_rmse)
     mean_temp_rmse = np.nanmean(temp_rmse_map)
     std_temp_rmse = np.nanstd(temp_rmse_map)
+    temp_rmse_map[np.where(mask == 0)] = 0
     subpti = f'RMSE map ($\mu$ = {mean_temp_rmse:.6f})'
     if save_path is not None:
         savepath = os.path.join(save_path, 'metrics_pergridpoint_rmse_map.png')
+        np.save(os.path.join(save_path, 'metrics_pergridpoint_rmse_map.npy'), temp_rmse_map)
     else:
         savepath = None
     ecv.plot_ndarray(temp_rmse_map, dpi=dpi, subplot_titles=(subpti), cmap='viridis', 
                      plot_size_px=plot_size_px, interactive=False, save=savepath)
-    np.save(os.path.join(save_path, 'metrics_pergridpoint_rmse_map.npy'), temp_rmse_map)
 
     ### Normalized per grid point RMSE 
     norm_temp_rmse_map = temp_rmse_map / (np.mean(y_test) * 100)
     norm_mean_temp_rmse = np.nanmean(norm_temp_rmse_map)
     norm_std_temp_rmse = np.nanstd(norm_temp_rmse_map)
+    norm_temp_rmse_map[np.where(mask == 0)] = 0
     subpti = f'nRMSE map ($\mu$ = {norm_mean_temp_rmse:.6f})'
     if save_path is not None:
         savepath = os.path.join(save_path, 'metrics_pergridpoint_nrmse_map.png')
+        np.save(os.path.join(save_path, 'metrics_pergridpoint_nrmse_map.npy'), norm_temp_rmse_map)
     else:
         savepath = None
     ecv.plot_ndarray(norm_temp_rmse_map, dpi=dpi, subplot_titles=(subpti), cmap='viridis', 
                      plot_size_px=plot_size_px, interactive=False, save=savepath)
-    np.save(os.path.join(save_path, 'metrics_pergridpoint_nrmse_map.npy'), norm_temp_rmse_map)
 
     # Normalized mean bias
     nmeanbias = np.mean(y_test_hat - y_test, axis=0)
     nmeanbias /= np.mean(y_test) * 100
-    mask_nan = mask.astype('float').copy()
-    mask_nan[mask == 0] = np.nan
     nmeanbias *= mask_nan
     mean_nmeanbias = np.nanmean(nmeanbias)
+    nmeanbias[np.where(mask == 0)] = 0
     subpti = f'NMBias map ($\mu$ = {mean_nmeanbias:.6f})'
     if save_path is not None:
         savepath = os.path.join(save_path, 'metrics_nmeanbias_map.png')
+        np.save(os.path.join(save_path, 'metrics_nmeanbias_map.npy'), nmeanbias)
     else:
         savepath = None
     ecv.plot_ndarray(nmeanbias, dpi=dpi, subplot_titles=(subpti), cmap='viridis', 
                      plot_size_px=plot_size_px, interactive=False, save=savepath)
-    np.save(os.path.join(save_path, 'metrics_nmeanbias_map.npy'), nmeanbias)
 
     ### Spearman correlation coefficient
     spatial_spearman_corr = compute_correlation(y_test, y_test_hat, n_jobs=n_jobs, over='space')
@@ -230,9 +236,6 @@ def compute_metrics(
     std_spatial_spearman_corr = np.std(spatial_spearman_corr)
     if save_path is not None:
         np.save(os.path.join(save_path, 'metrics_spearcorr_pergridpair.npy'), spatial_spearman_corr)
-    temp_spearman_corrmap = compute_correlation(y_test, y_test_hat, n_jobs=n_jobs)
-    mean_temp_spcorr = np.mean(temp_spearman_corrmap)
-    subpti = f'Spearman correlation map ($\mu$ = {mean_temp_spcorr:.6f})'
 
     ### Pearson correlation coefficient
     spatial_pearson_corr = compute_correlation(y_test, y_test_hat, mode='pearson', n_jobs=n_jobs, over='space')
@@ -243,14 +246,15 @@ def compute_metrics(
     temp_pearson_corrmap = compute_correlation(y_test, y_test_hat, mode='pearson', n_jobs=n_jobs)
     mean_temp_pearson_corr = np.nanmean(temp_pearson_corrmap)
     std_temp_pearson_corr = np.nanstd(temp_pearson_corrmap)
+    temp_pearson_corrmap[np.where(mask == 0)] = 0
     subpti = f'Pearson correlation map ($\mu$ = {mean_temp_pearson_corr:.6f})'
     if save_path is not None:
         savepath = os.path.join(save_path, 'metrics_pergridpoint_corrpears_map.png')
+        np.save(os.path.join(save_path, 'metrics_pergridpoint_corrpears_map.npy'), temp_pearson_corrmap)
     else:
         savepath = None
     ecv.plot_ndarray(temp_pearson_corrmap, dpi=dpi, subplot_titles=(subpti), cmap='magma', 
                      plot_size_px=plot_size_px, interactive=False, save=savepath)
-    np.save(os.path.join(save_path, 'metrics_pergridpoint_corrpears_map.npy'), temp_pearson_corrmap)
     
     ### Plotting violin plots: http://seaborn.pydata.org/tutorial/aesthetics.html
     sns.set_style("whitegrid") #{"axes.facecolor": ".9"}
