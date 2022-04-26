@@ -42,7 +42,7 @@ flags.DEFINE_string('data_module', None, 'Python module where the data pre-proce
 ### MODEL
 flags.DEFINE_enum('backbone', 'resnet', BACKBONE_BLOCKS, 'Backbone section')
 flags.DEFINE_enum('upsampling', 'spc', UPSAMPLING_METHODS, 'Upsampling method')
-flags.DEFINE_bool('time_window', None, 'Time window for training spatio-temporal models')
+flags.DEFINE_integer('time_window', None, 'Time window for training spatio-temporal models')
 flags.DEFINE_integer('n_filters', 8, 'Number of convolutional filters per layer')
 flags.DEFINE_integer('n_blocks', 6, 'Number of convolutional blocks')
 flags.DEFINE_integer('n_disc_blocks', 4, 'Number of residual blocks for discriminator network')
@@ -73,7 +73,7 @@ flags.DEFINE_float('lr_decay_after', 1e5, 'Steps to tweak the learning rate usin
 flags.DEFINE_bool('early_stopping', False, 'Early stopping')
 flags.DEFINE_integer('patience', 6, 'Patience in number of epochs w/o improvement for early stopping')
 flags.DEFINE_float('min_delta', 0.0, 'Minimum delta improvement for early stopping')
-flags.DEFINE_bool('show_plot', False, 'Open the learning curve plot')
+flags.DEFINE_bool('show_plot', False, 'Show the learning curve plot on finish')
 flags.DEFINE_string('savecheckpoint_path', './dl4ds_results/', 'Path for saving the training checkpoints')
 flags.DEFINE_bool('verbose', True, 'Verbosity')
 
