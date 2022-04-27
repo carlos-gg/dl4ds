@@ -14,16 +14,32 @@ from matplotlib.figure import Figure
 from tensorflow.keras.callbacks import History
 
 from . import BACKBONE_BLOCKS, DROPOUT_VARIANTS, LOSS_FUNCTIONS, UPSAMPLING_METHODS, INTERPOLATION_METHODS
-from .losses import mae, mse, dssim, dssim_mae, dssim_mae_mse, dssim_mse, msdssim, msdssim_mae, msdssim_mae_mse
+from . import losses
 
 
-def spatial_to_temporal_samples(array, time_window):
-    """ """
+def spatial_to_spatiotemporal_samples(array, time_window):
+    """Add one dimension to spatial array [n_samples or time, lat, lon, vars] 
+    in order to have [n_samples, time_window, lat, lon, vars].
+    """
     n_samples, y, x, n_channels = array.shape
     n_t_samples = n_samples - (time_window - 1)
     array_out = np.zeros((n_t_samples, time_window, y, x, n_channels))
     for i in range(n_t_samples):
         array_out[i] = array[i: i+time_window]
+    return array_out
+
+
+def spatiotemporal_to_spatial_samples(array, time_window):
+    """Remove dimension `time_window` from `array`, resulting in a sequence of
+    spatial samples/grids. `time_window` is a dimension assumed to be in the 
+    second place.
+    """
+    _, timew, _, _, _ = array.shape
+    if timew != time_window:
+        raise ValueError(
+            '`time_window` must be located in the second position [n_samples, time_window, lat, lon, vars]')
+    array_out = array[:, 0, :, :, :]
+    array_out = np.concatenate([array_out, array[-1, 1:, :, :, :]], axis=0)
     return array_out
 
 
@@ -132,23 +148,23 @@ def checkarg_loss(loss):
             raise ValueError(msg)
         else:
             if loss == 'mae':  
-                return mae
+                return losses.mae
             elif loss == 'mse':  
-                return mse
+                return losses.mse
             elif loss == 'dssim':
-                return dssim
+                return losses.dssim
             elif loss == 'dssim_mae':
-                return dssim_mae
+                return losses.dssim_mae
             elif loss == 'dssim_mse':
-                return dssim_mse
+                return losses.dssim_mse
             elif loss == 'dssim_mae_mse':
-                return dssim_mae_mse
+                return losses.dssim_mae_mse
             elif loss == 'msdssim':
-                return msdssim
+                return losses.msdssim
             elif loss == 'msdssim_mae':
-                return msdssim_mae
+                return losses.msdssim_mae
             elif loss == 'msdssim_mae_mse':
-                return msdssim_mae_mse
+                return losses.msdssim_mae_mse
     else:
         raise TypeError('`loss` must be a string, one of {LOSS_FUNCTIONS}')
 
