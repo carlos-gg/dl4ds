@@ -4,7 +4,7 @@ import numpy as np
 import xarray as xr
 import tensorflow as tf
 
-from .utils import Timing, checkarray_ndim, resize_array
+from .utils import Timing, checkarray_ndim, resize_array, spatiotemporal_to_spatial_samples
 from .dataloader import create_batch_hr_lr
 from .training import CGANTrainer, SupervisedTrainer
 
@@ -23,7 +23,6 @@ class Predictor():
         array_in_hr=False,
         static_vars=None,
         predictors=None,
-        use_season=False,
         time_window=None,
         time_metadata=None,
         interpolation='inter_area', 
@@ -75,7 +74,6 @@ class Predictor():
         self.scale = scale
         self.static_vars = static_vars
         self.predictors = predictors
-        self.use_season = use_season 
         self.time_window = time_window
         self.time_metadata = time_metadata
         self.interpolation = interpolation 
@@ -94,7 +92,6 @@ class Predictor():
             array=self.array, 
             scale=self.scale, 
             array_in_hr=self.array_in_hr, 
-            use_season=self.use_season,
             static_vars=self.static_vars, 
             predictors=self.predictors,
             time_window=self.time_window, 
@@ -113,7 +110,6 @@ def predict(
     array, 
     scale, 
     array_in_hr=True,
-    use_season=False,
     static_vars=None, 
     predictors=None, 
     time_window=None,
@@ -170,22 +166,11 @@ def predict(
         model = trainer.generator
 
     upsampling = model.name.split('_')[-1]
-    dim = len(model.input[0].shape)
+    dim = len(model.input.shape)
     if dim == 5 and time_window is None:
        raise ValueError('`time_window` must be provided for spatiotemporal model')
 
-    if use_season:
-        if isinstance(array, xr.DataArray):
-            time_metadata = array.time.copy()
-        else:
-            if time_metadata is None:
-                msg = 'when `use_season` is True, `data` must be a xr.DataArray'
-                msg += ' or `time_metadata` must be provided'
-                raise ValueError(msg)
-            else:
-                time_metadata = time_metadata
-    else:
-        time_metadata = None
+    time_metadata = None
 
     if isinstance(array, xr.DataArray):    
         array = array.values  
@@ -229,7 +214,7 @@ def predict(
         interpolation=interpolation,
         time_metadata=time_metadata)
 
-    if static_vars is not None or use_season:
+    if static_vars is not None:
         [batch_lr, batch_aux_hr], _ = batch
     else:
         [batch_lr], _ = batch
@@ -238,27 +223,30 @@ def predict(
 
     ### Casting as TF tensors, creating inputs ---------------------------------
     x_test_lr = tf.cast(x_test_lr, tf.float32)   
-    if static_vars is not None or use_season: 
+    if static_vars is not None: 
         aux_vars_hr = tf.cast(batch_aux_hr, tf.float32) 
         inputs = [x_test_lr, aux_vars_hr]
     else:
         inputs = [x_test_lr]
     
     ### Inference --------------------------------------------------------------
+    # https://www.tensorflow.org/api_docs/python/tf/keras/Model#predict
     with tf.device('/' + device + ':0'):
-        # https://www.tensorflow.org/api_docs/python/tf/keras/Model#predict
-        x_test_hat = model.predict(inputs, batch_size=batch_size, verbose=1)
+        out = model.predict(inputs, batch_size=batch_size, verbose=1)
     
+    if out.ndim == 5 and time_window is not None:
+        out = spatiotemporal_to_spatial_samples(out, time_window)
+
     if scaler is not None:
-        x_test_hat = scaler.inverse_transform(x_test_hat)
+        out = scaler.inverse_transform(out)
 
     if save_path is not None and save_fname is not None:
         name = os.path.join(save_path, save_fname)
-        np.save(name, x_test_hat.astype('float32'))
+        np.save(name, out.astype('float32'))
     
     timing.runtime()
     if return_lr:
-        return x_test_hat, np.array(x_test_lr)
+        return out, np.array(x_test_lr)
     else:
-        return x_test_hat        
+        return out        
     
