@@ -21,13 +21,13 @@ def recnet_postupsampling(
     n_channels_out=1, 
     n_filters=8,
     n_blocks=4,
-    activation='relu',
     dropout_rate=0,
     dropout_variant=None,
     normalization=None,
     attention=False,
-    rc_interpolation='bilinear',
+    activation='relu',
     output_activation=None,
+    rc_interpolation='bilinear',
     localcon_layer=False):
     """
     Recurrent deep neural network with different backbone architectures 
@@ -62,6 +62,12 @@ def recnet_postupsampling(
         Temporal window or number of time steps in each sample. WARNING: this 
         parameter is not supposed to be set by the user. It's set internallly  
         through dl4ds.Trainers.
+    n_filters : int, optional
+        Number of convolutional filters in RecurrentConvBlock. `n_filters` sets 
+        the number of output filters in the convolution inside the ConvLSTM unit. 
+    n_blocks : int, optional
+        Number of recurrent convolutional blocks (RecurrentConvBlock). 
+        Sets the depth of the network. 
     normalization : str or None, optional
         Normalization method in the residual or dense block. Can be either 'bn'
         for BatchNormalization or 'ln' for LayerNormalization. If None, then no
@@ -72,6 +78,20 @@ def recnet_postupsampling(
         dropout is applied. 
     dropout_variant : str or None, optional
         Type of dropout. Defined in dl4ds.DROPOUT_VARIANTS variable. 
+    attention : bool, optional
+        If True, dl4ds.ChannelAttention2D is used in convolutional blocks. 
+    activation : str, optional
+        Activation function to use, as supported by tf.keras. E.g., 'relu' or 
+        'gelu'.
+    output_activation : str, optional
+        Activation function to use in the last ConvBlock. Useful to constraint 
+        the values distribution of the output grid.
+    rc_interpolation : str, optional
+        Interpolation used in the ResizeConvolutionBlock. Supported methods: 
+        "bilinear", "nearest", "bicubic", "area", "lanczos3", "lanczos5", 
+        "gaussian", "mitchellcubic". 
+    localcon_layer : bool, optional
+        If True, the LocalizedConvBlock is activated in the output module. 
     """
     backbone_block = checkarg_backbone(backbone_block)
     upsampling = checkarg_upsampling(upsampling)

@@ -50,6 +50,15 @@ def net_pin(
     hr_size : tuple
         Height and width of the HR grid. WARNING: this parameter is not supposed 
         to be set by the user. It's set internallly through dl4ds.Trainers.
+    n_filters : int, optional
+        Number of convolutional filters in the first convolutional block. 
+        `n_filters` sets the dimensionality of the output space of the first 
+        convolutional block (i.e. the number of output filters in the 
+        convolution). The number of filters grows in subsequent convolutional 
+        blocks.
+    n_blocks : int, optional
+        Number of convolutional blocks (ConvBlock, ResidualBlock, DenseBlock or
+        ConvNextBlock). Sets the depth of the network. 
     normalization : str or None, optional
         Normalization method in the residual or dense block. Can be either 'bn'
         for BatchNormalization or 'ln' for LayerNormalization. If None, then no
