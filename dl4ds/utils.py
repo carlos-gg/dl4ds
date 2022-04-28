@@ -33,6 +33,8 @@ def spatiotemporal_to_spatial_samples(array, time_window):
     """Remove dimension `time_window` from `array`, resulting in a sequence of
     spatial samples/grids. `time_window` is a dimension assumed to be in the 
     second place.
+
+    ###TO-DO : other ways to collapse the time_window dimension
     """
     _, timew, _, _, _ = array.shape
     if timew != time_window:

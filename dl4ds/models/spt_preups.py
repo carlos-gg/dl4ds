@@ -14,7 +14,7 @@ def recnet_pin(
     n_channels, 
     n_aux_channels,
     hr_size,
-    time_window=None,
+    time_window,
     # ----- below are parameters that shall be tweaked by the user -----
     n_channels_out=1, 
     n_filters=8, 
@@ -28,11 +28,33 @@ def recnet_pin(
     localcon_layer=False):
     """
     Recurrent deep neural network with different backbone architectures 
-    (according to the ``backbone_block``) and pre-upsampling via interpolation. 
-    These models are capable of exploiting spatio-temporal samples.
+    (according to the ``backbone_block``) and pre-upsampling via interpolation
+    (the samples are expected to be interpolated to the HR grid). This model is 
+    capable of exploiting spatio-temporal samples.
+
+    The interpolation method depends on the ``interpolation`` argument used in
+    the training procedure (which is passed to the DataGenerator).
 
     Parameters
     ----------
+    backbone_block : str
+        Backbone type. One of dl4ds.BACKBONE_BLOCKS. WARNING: this parameter is
+        not supposed to be set by the user. It's set internallly through
+        dl4ds.Trainers. 
+    n_channels : int
+        Number of channels/variables in each sample. WARNING: this parameter is
+        not supposed to be set by the user. It's set internallly through
+        dl4ds.Trainers. 
+    n_aux_channels : int
+        Number of auxiliary channels. WARNING: this parameter is not supposed to 
+        be set by the user. It's set internallly through dl4ds.Trainers. 
+    hr_size : tuple
+        Height and width of the HR grid. WARNING: this parameter is not supposed 
+        to be set by the user. It's set internallly through dl4ds.Trainers.
+    time_window : int
+        Temporal window or number of time steps in each sample. WARNING: this 
+        parameter is not supposed to be set by the user. It's set internallly 
+        through dl4ds.Trainers.
     normalization : str or None, optional
         Normalization method in the residual or dense block. Can be either 'bn'
         for BatchNormalization or 'ln' for LayerNormalization. If None, then no

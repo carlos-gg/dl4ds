@@ -19,22 +19,37 @@ def net_pin(
     n_channels_out=1, 
     n_filters=8, 
     n_blocks=6, 
-    activation='relu',
     dropout_rate=0,
     dropout_variant=None,
     normalization=None,
     attention=False,
+    activation='relu',
     output_activation=None,
     localcon_layer=False):
     """
     Deep neural network with different backbone architectures (according to the
-    ``backbone_block``) and pre-upsampling via interpolation.
+    ``backbone_block``) and pre-upsampling via interpolation (the samples are 
+    expected to be interpolated to the HR grid).
 
     The interpolation method depends on the ``interpolation`` argument used in
     the training procedure (which is passed to the DataGenerator).
 
     Parameters
     ----------
+    backbone_block : str
+        Backbone type. One of dl4ds.BACKBONE_BLOCKS. WARNING: this parameter is
+        not supposed to be set by the user. It's set internallly through
+        dl4ds.Trainers. 
+    n_channels : int
+        Number of channels/variables in each sample. WARNING: this parameter is
+        not supposed to be set by the user. It's set internallly through
+        dl4ds.Trainers. 
+    n_aux_channels : int
+        Number of auxiliary channels. WARNING: this parameter is not supposed to 
+        be set by the user. It's set internallly through dl4ds.Trainers. 
+    hr_size : tuple
+        Height and width of the HR grid. WARNING: this parameter is not supposed 
+        to be set by the user. It's set internallly through dl4ds.Trainers.
     normalization : str or None, optional
         Normalization method in the residual or dense block. Can be either 'bn'
         for BatchNormalization or 'ln' for LayerNormalization. If None, then no
@@ -45,6 +60,16 @@ def net_pin(
         dropout is applied. 
     dropout_variant : str or None, optional
         Type of dropout. Defined in dl4ds.DROPOUT_VARIANTS variable. 
+    attention : bool, optional
+        If True, dl4ds.ChannelAttention2D is used in convolutional blocks. 
+    activation : str, optional
+        Activation function to use, as supported by tf.keras. E.g., 'relu' or 
+        'gelu'.
+    output_activation : str, optional
+        Activation function to use in the last ConvBlock. Useful to constraint 
+        the values distribution of the output grid.
+    localcon_layer : bool, optional
+        If True, the LocalizedConvBlock is activated in the output module. 
     """
     backbone_block = checkarg_backbone(backbone_block)
     dropout_variant = checkarg_dropout_variant(dropout_variant)

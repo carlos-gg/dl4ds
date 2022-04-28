@@ -134,7 +134,7 @@ class ConvNextBlock(tf.keras.layers.Layer):
 
     References
     ----------
-    [1] A ConvNext for the 2020s: https://arxiv.org/abs/2201.03545 
+    [1] A ConvNet for the 2020s: https://arxiv.org/abs/2201.03545 
     """
     def __init__(self, filters, drop_path=0., layer_scale_init_value=0, #1e-6 
                  use_1x1conv=False, activation='gelu', normalization='ln', 
@@ -541,6 +541,9 @@ class ChannelAttention2D(tf.keras.layers.Layer):
         1. Average Pooling to create `[1,1,C]` vectors
         2. Conv2D with k=1 for fully connected features and relu ac
         3. Sigmoid activation to create attention maps
+
+    Adapted from visual_attention_tf: 
+    https://github.com/vinayak19th/Visual_attention_tf/blob/main/src/visual_attention/channel_attention.py
     
     Parameters
     ----------
@@ -597,7 +600,7 @@ class ChannelAttention2D(tf.keras.layers.Layer):
 
 
 class EncoderBlock(tf.keras.layers.Layer):
-    """
+    """Encoder block for a decoder-encoder architecture, such as the UNET.
     """
     def __init__(self, n_filters, activation=None, dropout_rate=0,
                  dropout_variant=None, normalization=None, attention=False,
@@ -612,12 +615,12 @@ class EncoderBlock(tf.keras.layers.Layer):
     def call(self, X):
         Y = self.conv(X)
         Y_downsampled = self.maxpool(Y)
-
         return [Y_downsampled, Y]
 
 
 class PadConcat(tf.keras.layers.Layer):
-    """ 
+    """Concatenate layer that takes two tensors, if needed it pads to match 
+    height and width. 
     """
     def __init__(self, debug=False, name_suffix=''):
         super().__init__(name='Concatenate' + name_suffix)

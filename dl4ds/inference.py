@@ -166,7 +166,7 @@ def predict(
         model = trainer.generator
 
     upsampling = model.name.split('_')[-1]
-    dim = len(model.input.shape)
+    dim = len(model.input)
     if dim == 5 and time_window is None:
        raise ValueError('`time_window` must be provided for spatiotemporal model')
 
@@ -184,24 +184,23 @@ def predict(
     if time_window is not None:
         n_samples -= time_window - 1
 
-    # concatenating list of ndarray variables along the last dimension  
+    ### Concatenating list of ndarray variables along the last dimension  
     if predictors is not None:
         predictors = np.concatenate(predictors, axis=-1)
 
-    # when array is in LR, it gets upsampled according to scale
+    ### Array is upsampled according to scale when array is in LR
     if array_in_hr:
         array_hr = array
         array_lr = None
     else:
         array = checkarray_ndim(array, 4, -1)
-        hr_x = array.shape[2] * scale
-        hr_y = array.shape[1] * scale
-        array_hr = resize_array(array, (hr_x, hr_y), interpolation, squeezed=False) 
+        hr_xy = (array.shape[2] * scale, array.shape[1] * scale)
+        array_hr = resize_array(array, hr_xy, interpolation, squeezed=False) 
         array_lr = array
 
     batch = create_batch_hr_lr(       
-        np.arange(n_samples),
-        0,
+        all_indices=np.arange(n_samples),
+        index=0,
         array=array_hr, 
         array_lr=array_lr,
         upsampling=upsampling,
@@ -234,6 +233,7 @@ def predict(
     with tf.device('/' + device + ':0'):
         out = model.predict(inputs, batch_size=batch_size, verbose=1)
     
+    ### 
     if out.ndim == 5 and time_window is not None:
         out = spatiotemporal_to_spatial_samples(out, time_window)
 

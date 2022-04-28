@@ -37,6 +37,31 @@ def recnet_postupsampling(
 
     Parameters
     ----------
+    backbone_block : str
+        Backbone type. One of dl4ds.BACKBONE_BLOCKS. WARNING: this parameter is
+        not supposed to be set by the user. It's set internallly through 
+        dl4ds.Trainers. 
+    upsampling : str
+        Upsampling method. One of dl4ds.UPSAMPLING_METHODS. WARNING: this 
+        parameter is not supposed to be set by the user. It's set internallly 
+        through dl4ds.Trainers. 
+    scale : int
+        Scaling factor, LR wrt HR grid. WARNING: this parameter is not supposed 
+        to be set by the user. It's set internallly through dl4ds.Trainers. 
+    n_channels : int
+        Number of channels/variables in each sample. WARNING: this parameter is
+        not supposed to be set by the user. It's set internallly through
+        dl4ds.Trainers. 
+    n_aux_channels : int
+        Number of auxiliary channels. WARNING: this parameter is not supposed to 
+        be set by the user. It's set internallly through dl4ds.Trainers. 
+    lr_size : tuple
+        Height and width of the LR grid. WARNING: this parameter is not supposed 
+        to be set by the user. It's set internallly through dl4ds.Trainers.
+    time_window : int
+        Temporal window or number of time steps in each sample. WARNING: this 
+        parameter is not supposed to be set by the user. It's set internallly  
+        through dl4ds.Trainers.
     normalization : str or None, optional
         Normalization method in the residual or dense block. Can be either 'bn'
         for BatchNormalization or 'ln' for LayerNormalization. If None, then no

@@ -27,8 +27,8 @@ def net_postupsampling(
     dropout_variant=None,
     attention=False,
     activation='relu',
-    rc_interpolation='bilinear',
     output_activation=None,
+    rc_interpolation='bilinear',
     localcon_layer=False):
     """
     Deep neural network with different backbone architectures (according to the
@@ -37,6 +37,27 @@ def net_postupsampling(
 
     Parameters
     ----------
+    backbone_block : str
+        Backbone type. One of dl4ds.BACKBONE_BLOCKS. WARNING: this parameter is
+        not supposed to be set by the user. It's set internallly through 
+        dl4ds.Trainers. 
+    upsampling : str
+        Upsampling method. One of dl4ds.UPSAMPLING_METHODS. WARNING: this 
+        parameter is not supposed to be set by the user. It's set internallly 
+        through dl4ds.Trainers. 
+    scale : int
+        Scaling factor, LR wrt HR grid. WARNING: this parameter is not supposed 
+        to be set by the user. It's set internallly through dl4ds.Trainers. 
+    n_channels : int
+        Number of channels/variables in each sample. WARNING: this parameter is
+        not supposed to be set by the user. It's set internallly through
+        dl4ds.Trainers. 
+    n_aux_channels : int
+        Number of auxiliary channels. WARNING: this parameter is not supposed to 
+        be set by the user. It's set internallly through dl4ds.Trainers. 
+    lr_size : tuple
+        Height and width of the LR grid. WARNING: this parameter is not supposed 
+        to be set by the user. It's set internallly through dl4ds.Trainers.
     normalization : str or None, optional
         Normalization method in the residual or dense block. Can be either 'bn'
         for BatchNormalization or 'ln' for LayerNormalization. If None, then no
@@ -47,6 +68,20 @@ def net_postupsampling(
         dropout is applied. 
     dropout_variant : str or None, optional
         Type of dropout. Defined in dl4ds.DROPOUT_VARIANTS variable. 
+    attention : bool, optional
+        If True, dl4ds.ChannelAttention2D is used in convolutional blocks. 
+    activation : str, optional
+        Activation function to use, as supported by tf.keras. E.g., 'relu' or 
+        'gelu'.
+    output_activation : str, optional
+        Activation function to use in the last ConvBlock. Useful to constraint 
+        the values distribution of the output grid.
+    rc_interpolation : str, optional
+        Interpolation used in the ResizeConvolutionBlock. Supported methods: 
+        "bilinear", "nearest", "bicubic", "area", "lanczos3", "lanczos5", 
+        "gaussian", "mitchellcubic". 
+    localcon_layer : bool, optional
+        If True, the LocalizedConvBlock is activated in the output module. 
     """
     backbone_block = checkarg_backbone(backbone_block)
     upsampling = checkarg_upsampling(upsampling)
