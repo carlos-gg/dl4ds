@@ -41,7 +41,15 @@ def dssim(y_true, y_pred):
     maxv = tfk.maximum(tfk.max(y_true), tfk.max(y_pred))
     minv = tfk.minimum(tfk.min(y_true), tfk.min(y_pred))
     drange = maxv - minv
-    ssim = tf.image.ssim(y_true, y_pred, max_val=drange, filter_size=11,
+    if tfk.min(y_true) < 0:
+        y_true_pos = y_true - tfk.min(y_true)
+    else:
+        y_true_pos = y_true
+    if tfk.min(y_pred) < 0:
+        y_pred_pos = y_pred - tfk.min(y_pred)
+    else:
+        y_pred_pos = y_pred
+    ssim = tf.image.ssim(y_true_pos, y_pred_pos, max_val=drange, filter_size=11,
         filter_sigma=1.5, k1=0.01, k2=0.03)
     dssim = tf.reduce_mean((1 - ssim) / 2.0)
     return dssim

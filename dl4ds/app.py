@@ -43,8 +43,9 @@ flags.DEFINE_string('data_module', None, 'Python module where the data pre-proce
 flags.DEFINE_enum('backbone', 'resnet', BACKBONE_BLOCKS, 'Backbone section')
 flags.DEFINE_enum('upsampling', 'spc', UPSAMPLING_METHODS, 'Upsampling method')
 flags.DEFINE_integer('time_window', None, 'Time window for training spatio-temporal models')
-flags.DEFINE_integer('n_filters', 8, 'Number of convolutional filters per layer')
+flags.DEFINE_integer('n_filters', 8, 'Number of convolutional filters for the first convolutional block')
 flags.DEFINE_integer('n_blocks', 6, 'Number of convolutional blocks')
+flags.DEFINE_integer('n_disc_filters', 32, 'Number of convolutional filters per convolutional block in the discriminator')
 flags.DEFINE_integer('n_disc_blocks', 4, 'Number of residual blocks for discriminator network')
 flags.DEFINE_enum('normalization', None, ['bn', 'ln'], 'Normalization')
 flags.DEFINE_float('dropout_rate', 0.2, 'Dropout rate')
@@ -201,8 +202,8 @@ def dl4ds(argv):
                 verbose=FLAGS.verbose, 
                 **architecture_params)
         elif FLAGS.trainer == 'CGANTrainer':
-            g_architecture_params = dict(
-                n_filters=FLAGS.n_filters,
+            discriminator_params = dict(
+                n_filters=FLAGS.n_disc_filters,
                 n_res_blocks=FLAGS.n_disc_blocks,
                 normalization=FLAGS.normalization,
                 activation=FLAGS.activation,
@@ -237,7 +238,7 @@ def dl4ds(argv):
                 save_loss_history=FLAGS.save,
                 verbose=FLAGS.verbose,
                 generator_params=architecture_params,
-                discriminator_params=g_architecture_params)
+                discriminator_params=discriminator_params)
 
         trainer.run()
 
