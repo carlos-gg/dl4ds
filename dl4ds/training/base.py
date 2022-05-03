@@ -42,7 +42,6 @@ class Trainer(ABC):
         model_list=None,
         save=True,
         save_path=None,
-        savecheckpoint_path=None,
         show_plot=False,
         ):
         """
@@ -92,9 +91,7 @@ class Trainer(ABC):
         else:
             if not self.save_path.endswith('/'):
                 self.save_path += '/'
-        self.savecheckpoint_path = savecheckpoint_path
-        if self.savecheckpoint_path is None and self.save:
-            self.savecheckpoint_path = self.save_path
+        self.savecheckpoint_path = self.save_path
         self.show_plot = show_plot
        
         if has_horovod:
