@@ -64,7 +64,7 @@ class SupervisedTrainer(Trainer):
         show_plot=True, 
         save=False,
         save_path=None, 
-        savecheckpoint_path=None,
+        save_bestmodel=False,
         trained_model=None,
         trained_epochs=0,
         verbose=True,
@@ -142,9 +142,8 @@ class SupervisedTrainer(Trainer):
             Path for saving the final model, running time and test score. If 
             None, then ``'./'`` is used. The SavedModel format is a 
             directory containing a protobuf binary and a TensorFlow checkpoint.
-        savecheckpoint_path : None or str
-            Path for saving the training checkpoints, leaving the model with the
-            min validation loss. If None, then no checkpoints are saved during 
+        save_bestmodel : None or str
+            If True, the model with the best validation loss is saved during 
             training.
         device : str
             Choice of 'GPU' or 'CPU' for the training of the Tensorflow models. 
@@ -182,7 +181,6 @@ class SupervisedTrainer(Trainer):
             model_list=model_list,
             save=save,
             save_path=save_path,
-            savecheckpoint_path=savecheckpoint_path,
             show_plot=show_plot
             )
         self.data_val = data_val
@@ -217,6 +215,7 @@ class SupervisedTrainer(Trainer):
         self.architecture_params = architecture_params
         self.trained_model = trained_model
         self.trained_epochs = trained_epochs
+        self.save_bestmodel = save_bestmodel
 
     def setup_datagen(self):
         """Setting up the data generators
@@ -378,14 +377,14 @@ class SupervisedTrainer(Trainer):
             verbose = 0
 
         # Model checkopoints are saved at the end of every epoch, if it's the best seen so far.
-        if self.savecheckpoint_path is not None:
+        if self.save_bestmodel:
             os.makedirs(self.savecheckpoint_path, exist_ok=True)
             model_checkpoint_callback = tf.keras.callbacks.ModelCheckpoint(
                 os.path.join(self.savecheckpoint_path, './best_model'), 
                 save_weights_only=False,
                 monitor='val_loss',
                 mode='min',
-                save_best_only=True)
+                save_best_only=False)
             # Horovod: save checkpoints only on worker 0 to prevent other workers from corrupting them.
             if self.running_on_first_worker:
                 callbacks.append(model_checkpoint_callback)
@@ -407,8 +406,7 @@ class SupervisedTrainer(Trainer):
             use_multiprocessing=self.use_multiprocessing)
         
         if self.running_on_first_worker:
-            self.test_loss = self.model.evaluate(self.ds_test, 
-                steps=self.test_steps, verbose=verbose)
+            self.test_loss = self.model.evaluate(self.ds_test, steps=self.test_steps, verbose=verbose)
             
             if self.verbose:
                 print(f'\nScore on the test set: {self.test_loss}')
