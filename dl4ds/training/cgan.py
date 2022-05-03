@@ -134,7 +134,6 @@ class CGANTrainer(Trainer):
             model_list=model_list, 
             save=save, 
             save_path=save_path, 
-            savecheckpoint_path=None,
             show_plot=False
             )
         self.data_test = data_test
@@ -375,7 +374,7 @@ class CGANTrainer(Trainer):
                     if (epoch + 1) % self.checkpoints_frequency == 0:
                         checkpoint.save(file_prefix=checkpoint_prefix)
                         # saving the generator in tf format
-                        self.generator.save(self.savecheckpoint_path + f'/checkpoints/save_epoch{epoch}')
+                        self.generator.save(self.savecheckpoint_path + f'/checkpoints/save_epoch{epoch + 1}')
         
         # Horovod: save last checkpoint only on worker 0 to prevent other 
         # workers from corrupting it
