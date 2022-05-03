@@ -231,7 +231,6 @@ def dl4ds(argv):
                 interpolation=FLAGS.interpolation, 
                 static_vars=DATA.static_vars,
                 checkpoints_frequency=2, 
-                savecheckpoint_path=FLAGS.savecheckpoint_path,
                 save=FLAGS.save,
                 save_path=FLAGS.save_path,
                 save_logs=False,
