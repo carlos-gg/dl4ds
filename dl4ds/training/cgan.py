@@ -53,8 +53,7 @@ class CGANTrainer(Trainer):
         steps_per_epoch=None,
         interpolation='inter_area', 
         static_vars=None,
-        checkpoints_frequency=5, 
-        savecheckpoint_path=None,
+        checkpoints_frequency=0, 
         save=False,
         save_path=None,
         save_logs=False,
@@ -109,9 +108,6 @@ class CGANTrainer(Trainer):
         checkpoints_frequency : int, optional
             The training loop saves a checkpoint every ``checkpoints_frequency`` 
             epochs. If None, then no checkpoints are saved during training. 
-        savecheckpoint_path : None or str
-            Path for saving the training checkpoints. If None, then no 
-            checkpoints are saved during training. 
         device : str
             Choice of 'GPU' or 'CPU' for the training of the Tensorflow models. 
         gpu_memory_growth : bool, optional
@@ -138,7 +134,7 @@ class CGANTrainer(Trainer):
             model_list=model_list, 
             save=save, 
             save_path=save_path, 
-            savecheckpoint_path=savecheckpoint_path,
+            savecheckpoint_path=None,
             show_plot=False
             )
         self.data_test = data_test
@@ -289,9 +285,9 @@ class CGANTrainer(Trainer):
         else:
             summary_writer = None
 
-        # Checkpoint
-        if self.savecheckpoint_path is not None:
-            checkpoint_prefix = os.path.join(self.savecheckpoint_path + 'chkpts/', 'checkpoint_epoch')
+        # Checkpoints
+        if self.checkpoints_frequency > 0:
+            checkpoint_prefix = os.path.join(self.savecheckpoint_path, 'checkpoints/', 'epoch')
             checkpoint = tf.train.Checkpoint(generator_optimizer=generator_optimizer,
                                              discriminator_optimizer=discriminator_optimizer,
                                              generator=self.generator, discriminator=self.discriminator)   
@@ -372,21 +368,23 @@ class CGANTrainer(Trainer):
             self.gen_pxloss.append(gen_px_loss)
             self.disc.append(disc_loss)
             
-            if self.savecheckpoint_path is not None:
+            if self.checkpoints_frequency > 0:
                 # Horovod: save checkpoints only on worker 0 to prevent other 
                 # workers from corrupting it
                 if self.running_on_first_worker:
                     if (epoch + 1) % self.checkpoints_frequency == 0:
                         checkpoint.save(file_prefix=checkpoint_prefix)
+                        # saving the generator in tf format
+                        self.generator.save(self.savecheckpoint_path + f'/checkpoints/save_epoch{epoch}')
         
         # Horovod: save last checkpoint only on worker 0 to prevent other 
         # workers from corrupting it
-        if self.savecheckpoint_path is not None and self.running_on_first_worker:
+        if self.checkpoints_frequency > 0 and self.running_on_first_worker:
             checkpoint.save(file_prefix=checkpoint_prefix)
 
         if self.save_loss_history and self.running_on_first_worker:
             losses_array = np.array((self.gentotal, self.gengan, self.gen_pxloss, self.disc))
-            np.save('./losses.npy', losses_array)
+            np.save(self.save_path + './losses.npy', losses_array)
 
         self.timing.checktime()
 
@@ -453,14 +451,14 @@ def load_checkpoint(
     backbone,
     upsampling, 
     scale, 
-    input_size_hw, 
-    model='resnet_spc', 
+    input_height_width, 
     n_static_vars=0, 
-    n_predictors=None,
+    n_predictors=0,
     time_window=None, 
     n_blocks=(20, 4), 
-    n_filters=64, 
-    attention=False):
+    n_filters=(8, 32), 
+    attention=False,
+    localcon_layer=False):
     """
     """
     n_channels = 1
@@ -482,33 +480,35 @@ def load_checkpoint(
             generator = recnet_postupsampling(
                 backbone_block=backbone, upsampling=upsampling, scale=scale, 
                 n_channels=n_channels, n_aux_channels=n_aux_channels, 
-                n_filters=n_filters, n_blocks=n_blocks[0], lr_size=input_size_hw,
-                n_channels_out=1, time_window=time_window, attention=attention)
+                n_filters=n_filters[0], n_blocks=n_blocks[0], lr_size=input_height_width,
+                n_channels_out=1, time_window=time_window, attention=attention, 
+                localcon_layer=localcon_layer)
         else:
             generator = net_postupsampling(
                 backbone_block=backbone, upsampling=upsampling, scale=scale, 
                 n_channels=n_channels, n_aux_channels=n_aux_channels, 
-                n_filters=n_filters, n_blocks=n_blocks[0], lr_size=input_size_hw,
-                n_channels_out=1, attention=attention)
+                n_filters=n_filters[0], n_blocks=n_blocks[0], lr_size=input_height_width,
+                n_channels_out=1, attention=attention, localcon_layer=localcon_layer)
         
     elif upsampling == 'pin':
         if model_is_spatiotemporal:
             generator = recnet_pin(
                 backbone_block=backbone, n_channels=n_channels, 
-                n_aux_channels=n_aux_channels, hr_size=input_size_hw,
-                n_filters=n_filters, n_blocks=n_blocks[0], 
-                n_channels_out=1, time_window=time_window, attention=attention)
+                n_aux_channels=n_aux_channels, hr_size=input_height_width,
+                n_filters=n_filters[0], n_blocks=n_blocks[0], 
+                n_channels_out=1, time_window=time_window, 
+                attention=attention, localcon_layer=localcon_layer)
         else: 
             generator = net_pin(
                 backbone_block=backbone, n_channels=n_channels, 
-                n_aux_channels=n_aux_channels, hr_size=input_size_hw,
-                n_filters=n_filters, n_blocks=n_blocks[0], 
-                n_channels_out=1, attention=attention)
+                n_aux_channels=n_aux_channels, hr_size=input_height_width,
+                n_filters=n_filters[0], n_blocks=n_blocks[0], 
+                n_channels_out=1, attention=attention, localcon_layer=localcon_layer)
         
     # discriminator
     discriminator = residual_discriminator(
-        n_channels=n_channels, n_filters=n_filters, scale=scale,
-        lr_size=input_size_hw, n_res_blocks=n_blocks[1], model=model, 
+        n_channels=n_channels, upsampling=upsampling, is_spatiotemporal=model_is_spatiotemporal, 
+        scale=scale, lr_size=input_height_width, n_filters=n_filters[1], n_res_blocks=n_blocks[1],
         attention=attention)
     
     # optimizers
