@@ -75,7 +75,7 @@ flags.DEFINE_bool('early_stopping', False, 'Early stopping')
 flags.DEFINE_integer('patience', 6, 'Patience in number of epochs w/o improvement for early stopping')
 flags.DEFINE_float('min_delta', 0.0, 'Minimum delta improvement for early stopping')
 flags.DEFINE_bool('show_plot', False, 'Show the learning curve plot on finish')
-flags.DEFINE_string('savecheckpoint_path', './dl4ds_results/', 'Path for saving the training checkpoints')
+flags.DEFINE_bool('save_bestmodel', True, 'Whether to save the best model')
 flags.DEFINE_bool('verbose', True, 'Verbosity')
 
 ### INFERENCE/TEST
@@ -196,7 +196,7 @@ def dl4ds(argv):
                 show_plot=FLAGS.show_plot, 
                 save=FLAGS.save, 
                 save_path=FLAGS.save_path, 
-                savecheckpoint_path=FLAGS.savecheckpoint_path, 
+                save_bestmodel=FLAGS.save_bestmodel, 
                 trained_model=None, #FLAGS.trained_model, 
                 trained_epochs=0, #FLAGS.trained_epochs, 
                 verbose=FLAGS.verbose, 
