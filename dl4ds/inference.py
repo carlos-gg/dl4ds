@@ -3,6 +3,7 @@ import os
 import numpy as np
 import xarray as xr
 import tensorflow as tf
+import keras
 
 from .utils import Timing, checkarray_ndim, resize_array, spatiotemporal_to_spatial_samples
 from .dataloader import create_batch_hr_lr
@@ -36,7 +37,8 @@ class Predictor():
         Parameters
         ----------
         trainer : dl4ds.SupervisedTrainer or dl4ds.CGANTrainer
-            Trainer containing a keras model (``model`` or ``generator``).
+            Trainer containing a keras model (``model`` or ``generator``). 
+            Optionally, you can direclty pass the tf.keras model.
         array : ndarray
             Batch of HR grids. 
         scale : int
@@ -127,7 +129,8 @@ def predict(
     Parameters
     ----------
     trainer : dl4ds.SupervisedTrainer or dl4ds.CGANTrainer
-        Trainer containing a keras model (``model`` or ``generator``).
+        Trainer containing a keras model (``model`` or ``generator``). 
+        Optionally, you can direclty pass the tf.keras model.
     array : ndarray
         Batch of HR grids. 
     scale : int
@@ -164,6 +167,8 @@ def predict(
         model = trainer.model
     elif isinstance(trainer, CGANTrainer):
         model = trainer.generator
+    elif isinstance(trainer, (tf.keras.Model, keras.engine.functional.Functional)):
+        model = trainer
 
     upsampling = model.name.split('_')[-1]
     dim = len(model.input)
