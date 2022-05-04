@@ -59,7 +59,7 @@ flags.DEFINE_enum('rc_interpolation', 'bilinear', INTERPOLATION_METHODS, 'Interp
 
 ### TRAINING PROCEDURE
 flags.DEFINE_enum('device', 'GPU', ['GPU', 'CPU'], 'Device to be used: GPU or CPU')
-flags.DEFINE_bool('save', True, 'Saving to disk the trained model, metrics, run info, etc')
+flags.DEFINE_bool('save', True, 'Saving to disk the trained model (last epoch), metrics, run info, etc')
 flags.DEFINE_string('save_path', './dl4ds_results/', 'Path for saving results to disk')
 flags.DEFINE_integer('scale', 2, 'Scaling factor, positive integer')
 flags.DEFINE_integer('epochs', 100, 'Number of training epochs')
@@ -75,8 +75,9 @@ flags.DEFINE_bool('early_stopping', False, 'Early stopping')
 flags.DEFINE_integer('patience', 6, 'Patience in number of epochs w/o improvement for early stopping')
 flags.DEFINE_float('min_delta', 0.0, 'Minimum delta improvement for early stopping')
 flags.DEFINE_bool('show_plot', False, 'Show the learning curve plot on finish')
-flags.DEFINE_bool('save_bestmodel', True, 'Whether to save the best model')
+flags.DEFINE_bool('save_bestmodel', True, 'SupervisedTrainer - Whether to save the best model (epoch with the best val_loss)')
 flags.DEFINE_bool('verbose', True, 'Verbosity')
+flags.DEFINE_integer('checkpoints_frequency', 2, 'CGANTrainer - Frequency for saving checkpoints and the generator')
 
 ### INFERENCE/TEST
 flags.DEFINE_bool('inference_array_in_hr', False, 'Whether the inference array is in high resolution')
@@ -230,7 +231,7 @@ def dl4ds(argv):
                 steps_per_epoch=steps_per_epoch,
                 interpolation=FLAGS.interpolation, 
                 static_vars=DATA.static_vars,
-                checkpoints_frequency=2, 
+                checkpoints_frequency=FLAGS.checkpoints_frequency, 
                 save=FLAGS.save,
                 save_path=FLAGS.save_path,
                 save_logs=False,
