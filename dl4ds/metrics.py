@@ -102,7 +102,7 @@ def compute_metrics(
     y_test_hat, 
     dpi=150, 
     plot_size_px=1000,
-    n_jobs=40, 
+    n_jobs=-1, 
     scaler=None, 
     mask=None,
     save_path=None):
@@ -119,7 +119,9 @@ def compute_metrics(
         DPI of the plots.  
     n_jobs : int, optional
         Number of cores for the computation of metrics (parallelizing over
-        grid points).
+        grid points). Passed to joblib.Parallel. If -1 all CPUs are used. If 1 
+        or None is given, no parallel computing code is used at all, which is 
+        useful for debugging.
     scaler : scaler object
         Scaler object from preprocessing module. 
     mask : np.ndarray or None
