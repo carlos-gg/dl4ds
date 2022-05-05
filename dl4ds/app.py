@@ -286,7 +286,8 @@ def dl4ds(argv):
                 y_test_hat=y_hat, 
                 dpi=300, plot_size_px=1200, 
                 mask=DATA.gt_mask, 
-                save_path=FLAGS.save_path)
+                save_path=FLAGS.save_path,
+                n_jobs=-1)
 
 if __name__ == '__main__':
     app.run(dl4ds)
