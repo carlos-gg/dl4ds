@@ -1,3 +1,7 @@
+"""
+.. include:: ../README.md
+"""
+
 __version__ = "1.6.3"
 
 BACKBONE_BLOCKS = [
