@@ -24,7 +24,7 @@ jobs:
       # ADJUST THIS: install all dependencies (including pdoc)
       - run: pip install -e .
       # ADJUST THIS: build your documentation into docs/.
-      - run: docs/make.py  
+      - run: pdoc --docformat=numpy dl4ds -o ./docs
       # We use a custom build script for pdoc itself, ideally you just run `pdoc -o docs/ ...` here.
 
       - run: tar --directory docs/ -hcf artifact.tar .

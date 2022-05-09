@@ -1,5 +1,11 @@
 #!/usr/bin/env python
 
+"""
+absl.FLAGS-based command line app. To be executed run something like this:
+
+python -m dl4ds.app --flagfile=params.cfg
+"""
+
 import numpy as np
 import xarray as xr
 import importlib.util
@@ -86,6 +92,8 @@ flags.DEFINE_string('inference_save_fname', None, 'Filename for saving the infer
 
 
 def dl4ds(argv):
+    """DL4DS absl.FLAGS-based command line app.
+    """
     if running_on_first_worker:
         print('<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<< DL4DS >>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>\n')
 
