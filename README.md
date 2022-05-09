@@ -18,15 +18,12 @@ A wide variety of network architectures have been implemented. The main modellin
 
 ## Extended documentation 
 
-Work in progress. 
+Check out the API documentation [here](https://carlos-gg.github.io/dl4ds/).
 
 ## Examples
 
-Colab notebooks are being prepared. Stay tuned!
+Colab notebooks are WIP. Stay tuned!
 
-Examples of possible combinations: 
-* spatial samples (proving both HR and LR data, MOS-style), a residual backbone, pre-upsampling strategy and supervised training
-* spatio-temporal samples (with only HR data, PerfectProg-style), a dense backbone, post-upsampligng strategy (DC) and adversarial training
 
 
 
