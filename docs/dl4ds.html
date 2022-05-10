@@ -23,11 +23,9 @@
 
         <h2>Contents</h2>
         <ul>
-  <li><a href="#dl4ds-deep-learning-for-empirical-downscaling">DL4DS - Deep Learning for empirical DownScaling</a>
-  <ul>
-    <li><a href="#extended-documentation">Extended documentation</a></li>
-    <li><a href="#examples">Examples</a></li>
-  </ul></li>
+  <li><a href="#deep-learning-for-empirical-downscaling">Deep Learning for empirical DownScaling</a></li>
+  <li><a href="#api-documentation">API documentation</a></li>
+  <li><a href="#example-notebooks">Example notebooks</a></li>
 </ul>
 
 
@@ -61,13 +59,17 @@ dl4ds    </h1>
                         <div class="docstring"><p><a href="https://github.com/carlgogo/dl4ds"><img src="https://img.shields.io/badge/Tensorflow%2FKeras-2.6+-blue&amp;logo=tensorflow" alt="Tensorflow - Version" /></a> 
 <a href="https://github.com/carlgogo/dl4ds"><img src="https://img.shields.io/badge/PYTHON-3.6+-red?style=flat&amp;logo=python&amp;logoColor=white" alt="Python - Version" /></a> </p>
 
-<h1 id="dl4ds-deep-learning-for-empirical-downscaling">DL4DS - Deep Learning for empirical DownScaling</h1>
+<h1 id="deep-learning-for-empirical-downscaling">Deep Learning for empirical DownScaling</h1>
 
-<p>Python package implementing state-of-the-art and novel deep learning algorithms for empirical downscaling of gridded data. DL4DS is built on top of Tensorflow/Keras and supports distributed GPU training (data parallelism) thanks to Horovod. The training can be done from explicit pairs of HR and LR samples (e.g., HR observations and LR numerical weather prediction model output) or only with a HR dataset (e.g., HR observations or HR model output). All the models are able to handle multiple predictors and an arbitrary number of static variables (e.g., elevation or land-ocean mask).</p>
+<p><code>DL4DS</code> (Deep Learning for empirical DownScaling) is a Python package that implements state-of-the-art and novel deep learning algorithms for empirical downscaling of gridded Earth science data. </p>
+
+<p>The general architecture of <code>DL4DS</code> is shown on the image below. A low-resolution gridded dataset can be downscaled, with the help of (an arbitrary number of) auxiliary predictor and static variables, and a high-resolution reference dataset. The mapping between the low- and high-resolution data is learned with either a supervised or a conditional generative adversarial DL model.</p>
 
 <p><img src="https://github.com/carlos-gg/dl4ds/raw/master/docs/img/fig_workflow.png" alt="drawing" width="800"/></p>
 
-<p>A wide variety of network architectures have been implemented. The main modelling approaches can be combined into many different architectures:</p>
+<p>The training can be done from explicit pairs of HR and LR samples (MOS-style, e.g., HR observations and LR numerical weather prediction model output) or only with a HR dataset (PerfectProg-style, e.g., HR observations or HR model output).</p>
+
+<p>A wide variety of network architectures have been implemented in <code>DL4DS</code>. The main modelling approaches can be combined into many different architectures:</p>
 
 <table>
 <thead>
@@ -75,38 +77,38 @@ dl4ds    </h1>
   <th>Downscaling type</th>
   <th>Training (loss type)</th>
   <th>Sample type</th>
-  <th>Backbone module</th>
+  <th>Backbone section</th>
   <th>Upsampling method</th>
 </tr>
 </thead>
 <tbody>
 <tr>
-  <td>MOS (explicit pairs)</td>
+  <td>MOS (explicit pairs of HR and LR data)</td>
   <td>Supervised (non-adversarial)</td>
   <td>Spatial</td>
   <td>Plain convolutional</td>
-  <td>Pre-upsampling: interpolation (PIN)</td>
+  <td>Pre-upsampling via interpolation</td>
 </tr>
 <tr>
-  <td>PerfectProg (implicit pairs)</td>
-  <td>Adversarial (conditional)</td>
+  <td>PerfectProg (implicit pairs, only HR data)</td>
+  <td>Conditional Adversarial</td>
   <td>Spatio-temporal</td>
   <td>Residual</td>
-  <td>Post-upsampling: sub-pixel convolution (SPC)</td>
+  <td>Post-upsampling via sub-pixel convolution</td>
 </tr>
 <tr>
   <td></td>
   <td></td>
   <td></td>
   <td>Dense</td>
-  <td>Post-upsampling: resize convolution (RC)</td>
+  <td>Post-upsampling via resize convolution</td>
 </tr>
 <tr>
   <td></td>
   <td></td>
   <td></td>
   <td>Unet (PIN, Spatial samples)</td>
-  <td>Post-upsampling: deconvolution (DC)</td>
+  <td>Post-upsampling via deconvolution</td>
 </tr>
 <tr>
   <td></td>
@@ -118,13 +120,17 @@ dl4ds    </h1>
 </tbody>
 </table>
 
-<h2 id="extended-documentation">Extended documentation</h2>
+<p>In <code>DL4DS</code>, we implement a channel attention mechanism to exploit inter-channel relationship of features by providing a weight for each channel in order to enhance those that contribute the most to the optimizaiton and learning process. Aditionally, a Localized Convolutional Block (LCB) is located in the output module of the networks in <code>DL4DS</code>. With the LCB we learn location-specific information via a locally connected layer with biases. </p>
+
+<p><code>DL4DS</code> is built on top of Tensorflow/Keras and supports distributed GPU training (data parallelism) thanks to Horovod. </p>
+
+<h1 id="api-documentation">API documentation</h1>
 
 <p>Check out the API documentation <a href="https://carlos-gg.github.io/dl4ds/">here</a>.</p>
 
-<h2 id="examples">Examples</h2>
+<h1 id="example-notebooks">Example notebooks</h1>
 
-<p>Colab notebooks are WIP. Stay tuned!</p>
+<p>Colab notebooks are under construction. Stay tuned!</p>
 </div>
 
                         <details>
