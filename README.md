@@ -22,13 +22,15 @@ A wide variety of network architectures have been implemented in `DL4DS`. The ma
 |                               |                             |                |Unet (PIN, Spatial samples)  |Post-upsampling via deconvolution   |
 |                               |                             |                |Convnext (Spatial samples)   |                                      |
 
+In `DL4DS`, we implement a channel attention mechanism to exploit inter-channel relationship of features by providing a weight for each channel in order to enhance those that contribute the most to the optimizaiton and learning process. Aditionally, a Localized Convolutional Block (LCB) is located in the output module of the networks in `DL4DS`. With the LCB we learn location-specific information via a locally connected layer with biases. 
+
 `DL4DS` is built on top of Tensorflow/Keras and supports distributed GPU training (data parallelism) thanks to Horovod. 
 
 # API documentation 
 
 Check out the API documentation [here](https://carlos-gg.github.io/dl4ds/).
 
-# Examples
+# Example notebooks
 
 Colab notebooks are under construction. Stay tuned!
 
