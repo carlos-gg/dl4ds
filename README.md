@@ -6,7 +6,7 @@
 
 Python package implementing state-of-the-art and novel deep learning algorithms for empirical downscaling of gridded data. DL4DS is built on top of Tensorflow/Keras and supports distributed GPU training (data parallelism) thanks to Horovod. The training can be done from explicit pairs of HR and LR samples (e.g., HR observations and LR numerical weather prediction model output) or only with a HR dataset (e.g., HR observations or HR model output). All the models are able to handle multiple predictors and an arbitrary number of static variables (e.g., elevation or land-ocean mask).
 
-![workflow](./docs/img/fig_workflow.png)
+<img src="https://github.com/carlos-gg/dl4ds/raw/master/docs/img/fig_workflow.png" alt="drawing" width="800"/>
 
 A wide variety of network architectures have been implemented. The main modelling approaches can be combined into many different architectures:
 

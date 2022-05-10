@@ -65,6 +65,8 @@ dl4ds    </h1>
 
 <p>Python package implementing state-of-the-art and novel deep learning algorithms for empirical downscaling of gridded data. DL4DS is built on top of Tensorflow/Keras and supports distributed GPU training (data parallelism) thanks to Horovod. The training can be done from explicit pairs of HR and LR samples (e.g., HR observations and LR numerical weather prediction model output) or only with a HR dataset (e.g., HR observations or HR model output). All the models are able to handle multiple predictors and an arbitrary number of static variables (e.g., elevation or land-ocean mask).</p>
 
+<p><img src="https://github.com/carlos-gg/dl4ds/raw/master/docs/img/fig_workflow.png" alt="drawing" width="800"/></p>
+
 <p>A wide variety of network architectures have been implemented. The main modelling approaches can be combined into many different architectures:</p>
 
 <table>
@@ -131,7 +133,7 @@ dl4ds    </h1>
 </span><span id="L-1"><a href="#L-1"><span class="linenos"> 1</span></a><span class="sd">.. include:: ../README.md</span>
 </span><span id="L-2"><a href="#L-2"><span class="linenos"> 2</span></a><span class="sd">&quot;&quot;&quot;</span>
 </span><span id="L-3"><a href="#L-3"><span class="linenos"> 3</span></a>
-</span><span id="L-4"><a href="#L-4"><span class="linenos"> 4</span></a><span class="n">__version__</span> <span class="o">=</span> <span class="s2">&quot;1.6.3&quot;</span>
+</span><span id="L-4"><a href="#L-4"><span class="linenos"> 4</span></a><span class="n">__version__</span> <span class="o">=</span> <span class="s2">&quot;1.7.0&quot;</span>
 </span><span id="L-5"><a href="#L-5"><span class="linenos"> 5</span></a>
 </span><span id="L-6"><a href="#L-6"><span class="linenos"> 6</span></a><span class="n">BACKBONE_BLOCKS</span> <span class="o">=</span> <span class="p">[</span>
 </span><span id="L-7"><a href="#L-7"><span class="linenos"> 7</span></a>    <span class="s1">&#39;convnet&#39;</span><span class="p">,</span>          <span class="c1"># plain convolutional block w/o skip connections</span>
