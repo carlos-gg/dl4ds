@@ -2,29 +2,35 @@
 [![Python - Version](https://img.shields.io/badge/PYTHON-3.6+-red?style=flat&logo=python&logoColor=white)](https://github.com/carlgogo/dl4ds) 
 
 
-# DL4DS - Deep Learning for empirical DownScaling
+# Deep Learning for empirical DownScaling
 
-Python package implementing state-of-the-art and novel deep learning algorithms for empirical downscaling of gridded data. DL4DS is built on top of Tensorflow/Keras and supports distributed GPU training (data parallelism) thanks to Horovod. The training can be done from explicit pairs of HR and LR samples (e.g., HR observations and LR numerical weather prediction model output) or only with a HR dataset (e.g., HR observations or HR model output). All the models are able to handle multiple predictors and an arbitrary number of static variables (e.g., elevation or land-ocean mask).
+`DL4DS` (Deep Learning for empirical DownScaling) is a Python package that implements state-of-the-art and novel deep learning algorithms for empirical downscaling of gridded Earth science data. 
+
+The general architecture of `DL4DS` is shown on the image below. A low-resolution gridded dataset can be downscaled, with the help of (an arbitrary number of) auxiliary predictor and static variables, and a high-resolution reference dataset. The mapping between the low- and high-resolution data is learned with either a supervised or a conditional generative adversarial DL model.
 
 <img src="https://github.com/carlos-gg/dl4ds/raw/master/docs/img/fig_workflow.png" alt="drawing" width="800"/>
 
-A wide variety of network architectures have been implemented. The main modelling approaches can be combined into many different architectures:
+The training can be done from explicit pairs of HR and LR samples (MOS-style, e.g., HR observations and LR numerical weather prediction model output) or only with a HR dataset (PerfectProg-style, e.g., HR observations or HR model output).
 
-|Downscaling type               |Training (loss type)         |Sample type     |Backbone module              |Upsampling method   |
+A wide variety of network architectures have been implemented in `DL4DS`. The main modelling approaches can be combined into many different architectures:
+
+|Downscaling type               |Training (loss type)         |Sample type     |Backbone section              |Upsampling method   |
 |---                            |---                          |---             |---                          |---|
-|MOS (explicit pairs)           |Supervised (non-adversarial) |Spatial         |Plain convolutional          |Pre-upsampling: interpolation (PIN) |
-|PerfectProg (implicit pairs)   |Adversarial (conditional)    |Spatio-temporal |Residual                     |Post-upsampling: sub-pixel convolution (SPC)|
-|                               |                             |                |Dense                        |Post-upsampling: resize convolution (RC) |
-|                               |                             |                |Unet (PIN, Spatial samples)  |Post-upsampling: deconvolution (DC)   |
+|MOS (explicit pairs of HR and LR data)           |Supervised (non-adversarial) |Spatial         |Plain convolutional          |Pre-upsampling via interpolation |
+|PerfectProg (implicit pairs, only HR data)   |Conditional Adversarial    |Spatio-temporal |Residual                     |Post-upsampling via sub-pixel convolution |
+|                               |                             |                |Dense                        |Post-upsampling via resize convolution |
+|                               |                             |                |Unet (PIN, Spatial samples)  |Post-upsampling via deconvolution   |
 |                               |                             |                |Convnext (Spatial samples)   |                                      |
 
-## Extended documentation 
+`DL4DS` is built on top of Tensorflow/Keras and supports distributed GPU training (data parallelism) thanks to Horovod. 
+
+# API documentation 
 
 Check out the API documentation [here](https://carlos-gg.github.io/dl4ds/).
 
-## Examples
+# Examples
 
-Colab notebooks are WIP. Stay tuned!
+Colab notebooks are under construction. Stay tuned!
 
 
 
