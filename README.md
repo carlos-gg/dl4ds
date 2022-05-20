@@ -10,7 +10,7 @@ The general architecture of `DL4DS` is shown on the image below. A low-resolutio
 
 <img src="https://github.com/carlos-gg/dl4ds/raw/master/docs/img/fig_workflow.png" alt="drawing" width="800"/>
 
-The training can be done from explicit pairs of HR and LR samples (MOS-style, e.g., HR observations and LR numerical weather prediction model output) or only with a HR dataset (PerfectProg-style, e.g., HR observations or HR model output).
+The training can be done from explicit pairs of high- and low-resolution samples (MOS-style, e.g., high-res observations and low-res numerical weather prediction model output) or only with a HR dataset (PerfectProg-style, e.g., high-res observations or high-res model output).
 
 A wide variety of network architectures have been implemented in `DL4DS`. The main modelling approaches can be combined into many different architectures:
 
