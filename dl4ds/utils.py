@@ -391,6 +391,8 @@ def resize_array(array, newsize, interpolation='inter_area', squeezed=True,
         for i in range(n):
             ti = cv2.resize(array[i], (size_x, size_y), interpolation=intmethod)                
             resized_arr[i] = np.expand_dims(ti, -1) if n_ch ==1 else ti
+    else:
+        raise RuntimeError(f'Wrong dimensions, got {array.ndim}')
 
     if squeezed:
         resized_arr = np.squeeze(resized_arr)
