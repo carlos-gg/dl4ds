@@ -193,7 +193,8 @@ def compute_metrics(
     std_spatial_rmse = np.std(spatial_rmse)
     mean_temp_rmse = np.nanmean(temp_rmse_map)
     std_temp_rmse = np.nanstd(temp_rmse_map)
-    temp_rmse_map[np.where(mask == 0)] = 0
+    if mask is not None:
+        temp_rmse_map[np.where(mask == 0)] = 0
     subpti = f'RMSE map ($\mu$ = {mean_temp_rmse:.6f})'
     if save_path is not None:
         savepath = os.path.join(save_path, 'metrics_pergridpoint_rmse_map.png')
@@ -207,7 +208,8 @@ def compute_metrics(
     norm_temp_rmse_map = temp_rmse_map / (np.mean(y_test) * 100)
     norm_mean_temp_rmse = np.nanmean(norm_temp_rmse_map)
     norm_std_temp_rmse = np.nanstd(norm_temp_rmse_map)
-    norm_temp_rmse_map[np.where(mask == 0)] = 0
+    if mask is not None:
+        norm_temp_rmse_map[np.where(mask == 0)] = 0
     subpti = f'nRMSE map ($\mu$ = {norm_mean_temp_rmse:.6f})'
     if save_path is not None:
         savepath = os.path.join(save_path, 'metrics_pergridpoint_nrmse_map.png')
@@ -220,7 +222,8 @@ def compute_metrics(
     # Normalized mean bias
     nmeanbias = np.mean(y_test_hat - y_test, axis=0)
     nmeanbias /= np.mean(y_test) * 100
-    nmeanbias *= mask_nan
+    if mask is not None:
+        nmeanbias *= mask_nan
     mean_nmeanbias = np.nanmean(nmeanbias)
     nmeanbias[np.where(mask == 0)] = 0
     subpti = f'NMBias map ($\mu$ = {mean_nmeanbias:.6f})'
