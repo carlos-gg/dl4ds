@@ -61,21 +61,35 @@ class MinMaxScaler(TransformerMixin, BaseEstimator):
             del self.data_range_
 
     def fit(self, X, y=None):
-        """Compute the minimum and maximum to be used for later scaling.
+        """Calculate the minimum and maximum to be used for later scaling.
+
+        Parameters
+        ----------
+        X : xr.DataArray or np.ndarray
+            The data used to compute the minimum and maximum used for later 
+            scaling along the desired axis.
+        y : None
+            Ignored.
         """
         # Reset internal state before fitting
         self._reset()
         return self.partial_fit(X, y)
 
     def partial_fit(self, X, y=None):
-        """Computation of min and max on X for later scaling.
+        """Calculate the min and max on X for later scaling.
+
+        Parameters
+        ----------
+        X : xr.DataArray or np.ndarray
+            The data used to compute the minimum and maximum used for later 
+            scaling along the desired axis.
+        y : None
+            Ignored.
         """
+        X = np.squeeze(X)
         value_range = self.value_range
         if value_range[0] >= value_range[1]:
-            raise ValueError(
-                "Minimum of desired value_range must be smaller than maximum. Got %s."
-                % str(range)
-            )
+            raise ValueError("Minimum of desired value_range must be smaller than maximum. Got %s."% str(range))
 
         if sparse.issparse(X):
             raise TypeError("MinMaxScaler does not support sparse input.")
@@ -105,8 +119,14 @@ class MinMaxScaler(TransformerMixin, BaseEstimator):
 
     def transform(self, X):
         """Scale X according to range.
+
+        Parameters
+        ----------
+        X : xr.DataArray or np.ndarray
+            Input data that will be transformed.
         """
         check_is_fitted(self)
+        X = np.squeeze(X)
 
         if self.copy:
             X = X.copy()
@@ -124,8 +144,14 @@ class MinMaxScaler(TransformerMixin, BaseEstimator):
 
     def inverse_transform(self, X):
         """Undo the scaling of X according to range.
+
+        Parameters
+        ----------
+        X : xr.DataArray or np.ndarray
+            Input data that will be transformed.
         """
         check_is_fitted(self)
+        X = np.squeeze(X)
 
         if self.copy:
             X = X.copy()
@@ -204,15 +230,32 @@ class StandardScaler(TransformerMixin, BaseEstimator):
             del self.std_
 
     def fit(self, X, y=None):
-        """Compute the minimum and maximum to be used for later scaling.
+        """Calculate the mean and standard deviation of X for later scaling.
+
+        Parameters
+        ----------
+        X : xr.DataArray or np.ndarray
+            The data used to compute the mean and standard deviation
+            used for later scaling along the features axis.
+        y : None
+            Ignored.
         """
         # Reset internal state before fitting
         self._reset()
         return self.partial_fit(X, y)
 
     def partial_fit(self, X, y=None):
-        """Computation of mean and standard deviation of X for later scaling.
+        """Calculate the mean and standard deviation of X for later scaling.
+
+        Parameters
+        ----------
+        X : xr.DataArray or np.ndarray
+            The data used to compute the mean and standard deviation
+            used for later scaling along the desired axis.
+        y : None
+            Ignored.
         """
+        X = np.squeeze(X)
         ### creating a nan mask
         if np.any(np.isnan(X)):
             self.nan_mask = np.isnan(X)
@@ -238,9 +281,15 @@ class StandardScaler(TransformerMixin, BaseEstimator):
         return self
 
     def transform(self, X):
-        """Scale X according to range.
+        """ Perform standardization by centering and scaling.
+
+        Parameters
+        ----------
+        X : xr.DataArray or np.ndarray
+            The data used to scale along the desired axis.
         """
         check_is_fitted(self)
+        X = np.squeeze(X)
 
         if self.copy:
             X = X.copy()
@@ -259,9 +308,15 @@ class StandardScaler(TransformerMixin, BaseEstimator):
         return X
 
     def inverse_transform(self, X):
-        """Undo the scaling of X according to range.
+        """Scale back the data to the original representation.
+
+        Parameters
+        ----------
+        X : xr.DataArray or np.ndarray
+            The data used to scale along the desired axis.
         """
         check_is_fitted(self)
+        X = np.squeeze(X)
 
         if self.copy:
             X = X.copy()
