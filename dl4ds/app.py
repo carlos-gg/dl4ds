@@ -268,6 +268,7 @@ def dl4ds(argv):
                 predictors=DATA.inference_predictors, 
                 static_vars=DATA.static_vars, 
                 time_window=FLAGS.time_window, 
+                batch_size=FLAGS.batch_size,
                 scaler=inference_scaler,
                 save_path=FLAGS.save_path, 
                 save_fname=FLAGS.inference_save_fname,
