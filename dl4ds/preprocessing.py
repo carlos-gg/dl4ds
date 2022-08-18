@@ -100,11 +100,11 @@ class MinMaxScaler(TransformerMixin, BaseEstimator):
 
         ### data type validation
         if isinstance(X, np.ndarray):
-            data_min = np.nanmin(X, axis=self.axis)
-            data_max = np.nanmax(X, axis=self.axis)
+            data_min = np.nanmin(X, axis=self.axis, keepdims=True)
+            data_max = np.nanmax(X, axis=self.axis, keepdims=True)
         elif isinstance(X, xr.DataArray):
-            data_min = X.min(axis=self.axis, skipna=True).values
-            data_max = X.max(axis=self.axis, skipna=True).values
+            data_min = X.min(axis=self.axis, skipna=True, keepdims=True).values
+            data_max = X.max(axis=self.axis, skipna=True, keepdims=True).values
         else:
             raise TypeError('`X` is neither a np.ndarray or xr.DataArray')
 
