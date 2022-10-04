@@ -30,6 +30,12 @@ In `DL4DS`, we implement a channel attention mechanism to exploit inter-channel 
 
 Check out the API documentation [here](https://carlos-gg.github.io/dl4ds/).
 
+# Installation
+
+```
+pip install dl4ds
+```
+
 # Example notebooks
 
 Colab notebooks are under construction. Stay tuned!
