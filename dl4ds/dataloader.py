@@ -131,11 +131,12 @@ def create_pair_hr_lr(
                 # cropping first the predictors 
                 lr_array_predictors, crop_y, crop_x = crop_array(predictors, patch_size,
                                                                  yx=(crop_y, crop_x), position=True)
-            else:
-                lr_array_predictors = predictors
+            else:            
+                if is_spatiotemp:
+                    lr_array_predictors = checkarray_ndim(predictors, 4, -1)
+                else:
+                    lr_array_predictors = checkarray_ndim(predictors, 3, -1)
 
-            lr_array_predictors = checkarray_ndim(lr_array_predictors, 3, -1)
-            
             # concatenating the predictors to the lr image   
             lr_array = np.concatenate([lr_array, lr_array_predictors], axis=-1)
 
@@ -160,8 +161,6 @@ def create_pair_hr_lr(
             else:
                 lr_array_predictors = predictors 
 
-            lr_array_predictors = checkarray_ndim(lr_array_predictors, 3, -1)
-
             if patch_size is not None:
                 # cropping the lr predictors 
                 lr_array_predictors, crop_y, crop_x = crop_array(lr_array_predictors, patch_size_lr,
@@ -180,9 +179,11 @@ def create_pair_hr_lr(
             if is_spatiotemp:
                 hr_array = checkarray_ndim(hr_array, 4, -1)
                 lr_array = checkarray_ndim(lr_array, 4, -1)                
+                lr_array_predictors = checkarray_ndim(lr_array_predictors, 4, -1)
             else:
                 hr_array = checkarray_ndim(hr_array, 3, -1)
                 lr_array = checkarray_ndim(lr_array, 3, -1)
+                lr_array_predictors = checkarray_ndim(lr_array_predictors, 3, -1)
 
             # concatenating the predictors to the lr grid
             lr_array = np.concatenate([lr_array, lr_array_predictors], axis=-1)
