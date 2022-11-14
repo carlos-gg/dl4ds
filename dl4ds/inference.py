@@ -7,7 +7,6 @@ import keras
 
 from .utils import Timing, checkarray_ndim, resize_array, spatiotemporal_to_spatial_samples
 from .dataloader import create_batch_hr_lr
-from .training import CGANTrainer, SupervisedTrainer
 
 
 class Predictor():
@@ -163,11 +162,11 @@ def predict(
     """         
     timing = Timing()
 
-    if isinstance(trainer, SupervisedTrainer):
+    if hasattr(trainer, 'model'):
         model = trainer.model
-    elif isinstance(trainer, CGANTrainer):
+    elif hasattr(trainer, 'generator'):
         model = trainer.generator
-    elif isinstance(trainer, (tf.keras.Model, keras.engine.functional.Functional)):
+    else:
         model = trainer
 
     upsampling = model.name.split('_')[-1]
