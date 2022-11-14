@@ -1,6 +1,6 @@
 [![Tensorflow - Version](https://img.shields.io/badge/Tensorflow%2FKeras-2.6+-blue&logo=tensorflow)](https://github.com/carlgogo/dl4ds) 
 [![Python - Version](https://img.shields.io/badge/PYTHON-3.6+-red?style=flat&logo=python&logoColor=white)](https://github.com/carlgogo/dl4ds) 
-[![Open in Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://github.com/carlos-gg/dl4ds/notebooks/DL4DS_tutorial.ipynb)
+[![Open in Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/github/carlos-gg/dl4ds/blob/master/notebooks/DL4DS_tutorial.ipynb)
 
 # Deep Learning for empirical DownScaling
 
