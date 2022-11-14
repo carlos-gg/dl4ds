@@ -133,6 +133,8 @@ def create_pair_hr_lr(
                                                                  yx=(crop_y, crop_x), position=True)
             else:
                 lr_array_predictors = predictors
+
+            lr_array_predictors = checkarray_ndim(lr_array_predictors, 3, -1)
             
             # concatenating the predictors to the lr image   
             lr_array = np.concatenate([lr_array, lr_array_predictors], axis=-1)
@@ -157,6 +159,8 @@ def create_pair_hr_lr(
                 lr_array_predictors = resize_array(predictors, (lr_x, lr_y), interpolation) 
             else:
                 lr_array_predictors = predictors 
+
+            lr_array_predictors = checkarray_ndim(lr_array_predictors, 3, -1)
 
             if patch_size is not None:
                 # cropping the lr predictors 
