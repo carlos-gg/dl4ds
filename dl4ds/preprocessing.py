@@ -103,8 +103,8 @@ class MinMaxScaler(TransformerMixin, BaseEstimator):
             data_min = np.nanmin(X, axis=self.axis, keepdims=True)
             data_max = np.nanmax(X, axis=self.axis, keepdims=True)
         elif isinstance(X, xr.DataArray):
-            data_min = X.min(axis=self.axis, skipna=True, keepdims=True).values
-            data_max = X.max(axis=self.axis, skipna=True, keepdims=True).values
+            data_min = X.min(dim=self.axis, skipna=True, keepdims=True).values
+            data_max = X.max(dim=self.axis, skipna=True, keepdims=True).values
         else:
             raise TypeError('`X` is neither a np.ndarray or xr.DataArray')
 
@@ -268,9 +268,9 @@ class StandardScaler(TransformerMixin, BaseEstimator):
                 data_std = np.nanstd(X, axis=self.axis, keepdims=True)
         elif isinstance(X, xr.DataArray):
             if self.with_mean:
-                data_mean = X.mean(axis=self.axis, skipna=True, keepdims=True).values
+                data_mean = X.mean(dim=self.axis, skipna=True, keepdims=True).values
             if self.with_std:
-                data_std = X.std(axis=self.axis, skipna=True, keepdims=True).values
+                data_std = X.std(dim=self.axis, skipna=True, keepdims=True).values
         else:
             raise TypeError('`X` is neither a np.ndarray or xr.DataArray')
 
