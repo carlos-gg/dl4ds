@@ -2,7 +2,7 @@
 .. include:: ../README.md
 """
 
-__version__ = "1.7.0"
+__version__ = "1.8.0"
 
 BACKBONE_BLOCKS = [
     'convnet',          # plain convolutional block w/o skip connections

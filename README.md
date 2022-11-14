@@ -1,6 +1,6 @@
 [![Tensorflow - Version](https://img.shields.io/badge/Tensorflow%2FKeras-2.6+-blue&logo=tensorflow)](https://github.com/carlgogo/dl4ds) 
 [![Python - Version](https://img.shields.io/badge/PYTHON-3.6+-red?style=flat&logo=python&logoColor=white)](https://github.com/carlgogo/dl4ds) 
-
+[![Open in Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://github.com/carlos-gg/dl4ds/notebooks/DL4DS_tutorial.ipynb)
 
 # Deep Learning for empirical DownScaling
 
@@ -38,7 +38,7 @@ pip install dl4ds
 
 # Example notebooks
 
-Colab notebooks are under construction. Stay tuned!
+A first Colab notebook can be found in the notebooks folder. Click the badge at the top to open the notebook on Google Colab.
 
 
 
